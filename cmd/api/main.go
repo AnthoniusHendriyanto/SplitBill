@@ -1,97 +1,154 @@
 package main
 
 import (
-	"database/sql"
-	"encoding/json"
-	"fmt"
+	"context"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
 	"github.com/joho/godotenv"
 	"github.com/user/split-mate/internal/config"
-	"github.com/user/split-mate/internal/domain"
 	delivery "github.com/user/split-mate/internal/delivery/http"
-	"github.com/user/split-mate/internal/repository"
+	"github.com/user/split-mate/internal/delivery/http/middleware"
+	"github.com/user/split-mate/internal/domain"
+	"github.com/user/split-mate/internal/repository/memory"
+	"github.com/user/split-mate/internal/repository/postgres"
 	"github.com/user/split-mate/internal/usecase"
 )
 
 func main() {
 	if err := godotenv.Load(); err != nil {
-		log.Println("No .env file found")
+		log.Println("No .env file found, using environment variables")
 	}
 
 	cfg := config.LoadConfig()
-	
-	// DB Connection
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true", 
-		cfg.DBUser, cfg.DBPass, cfg.DBHost, cfg.DBPort, cfg.DBName)
-	dbConn, err := sql.Open("mysql", dsn)
-	if err != nil {
-		log.Println("DB Open Warning:", err)
-	}
-	if dbConn != nil {
-		err = dbConn.Ping()
-		if err != nil {
-			log.Println("DB Ping Warning:", err)
-		}
-	}
-	if dbConn != nil {
-		defer dbConn.Close()
-	}
-
-	// Layers
 	timeoutContext := time.Duration(10) * time.Second
-	var billRepo domain.BillRepository
 
-	if dbConn != nil && dbConn.Ping() == nil {
-		log.Println("Connected to MySQL Database")
-		billRepo = repository.NewMySQLBillRepository(dbConn)
-	} else {
-		log.Println("Warning: Falling back to Memory-Based Mock Repository")
-		billRepo = repository.NewMockBillRepository()
+	// Try PostgreSQL first, fall back to in-memory
+	pool, err := postgres.NewPostgresConnection(cfg)
+	if err != nil {
+		log.Printf("Warning: Could not connect to PostgreSQL: %v", err)
+		log.Println("Using in-memory storage")
+
+		repos := memory.NewRepositories()
+		ocrSvc := memory.NewOCRService()
+		startServer(cfg, repos, ocrSvc, timeoutContext)
+		return
+	}
+	defer pool.Close()
+	log.Println("Connected to PostgreSQL Database")
+
+	userRepo := postgres.NewUserRepository(pool)
+	billRepo := postgres.NewBillRepository(pool)
+	itemRepo := postgres.NewItemRepository(pool)
+	personRepo := postgres.NewPersonRepository(pool)
+	assignmentRepo := postgres.NewAssignmentRepository(pool)
+	paymentRepo := postgres.NewPaymentRepository(pool)
+	usageRepo := postgres.NewUsageRepository(pool)
+
+	authUsecase := usecase.NewAuthUsecase(userRepo, cfg)
+
+	ocrService := postgres.NewOCRService(pool)
+
+	billUsecase := usecase.NewBillUsecase(
+		billRepo,
+		itemRepo,
+		personRepo,
+		assignmentRepo,
+		paymentRepo,
+		usageRepo,
+		userRepo,
+		ocrService,
+		cfg.OCRMonthlyLimit,
+		timeoutContext,
+	)
+
+	authHandler := delivery.NewAuthHandler(authUsecase)
+	billHandler := delivery.NewBillHandler(billUsecase)
+
+	authMiddleware := middleware.NewAuthMiddleware(authUsecase)
+
+	router := delivery.NewRouter(authHandler, billHandler, authMiddleware)
+
+	server := &http.Server{
+		Addr:         ":" + cfg.Port,
+		Handler:      router,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
 	}
 
-	billUsecase := usecase.NewBillUsecase(billRepo, timeoutContext)
+	go func() {
+		log.Printf("SplitMate Server starting on port %s...\n", cfg.Port)
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Failed to start server: %v", err)
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	log.Println("Shutting down server...")
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		log.Fatalf("Server forced to shutdown: %v", err)
+	}
+
+	log.Println("Server exited")
+}
+
+func startServer(cfg *config.Config, repos *memory.Repositories, ocrSvc domain.OCRService, timeout time.Duration) {
+	authUsecase := usecase.NewAuthUsecase(repos.User, cfg)
+	billUsecase := usecase.NewBillUsecase(
+		repos.Bill,
+		repos.Item,
+		repos.Person,
+		repos.Assignment,
+		repos.Payment,
+		repos.Usage,
+		repos.User,
+		ocrSvc,
+		cfg.OCRMonthlyLimit,
+		timeout,
+	)
+
+	authHandler := delivery.NewAuthHandler(authUsecase)
 	billHandler := delivery.NewBillHandler(billUsecase)
-	
-	ocrService := repository.NewMockOCRService()
-	_ = timeoutContext
+	authMiddleware := middleware.NewAuthMiddleware(authUsecase)
+	router := delivery.NewRouter(authHandler, billHandler, authMiddleware)
 
-	// Routes
-	http.HandleFunc("/api/v1/bills", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-		
-		if r.Method == http.MethodGet {
-			billHandler.Fetch(w, r)
-		} else if r.Method == http.MethodPost {
-			billHandler.Store(w, r)
-		}
-	})
+	server := &http.Server{
+		Addr:         ":" + cfg.Port,
+		Handler:      router,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
 
-	http.HandleFunc("/api/v1/ocr", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusOK)
-			return
+	go func() {
+		log.Printf("SplitMate Server (in-memory) starting on port %s...\n", cfg.Port)
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Failed to start server: %v", err)
 		}
-		if r.Method == http.MethodPost {
-			// Basic OCR endpoint logic (using mock for now)
-			res, _ := ocrService.ExtractItems(r.Context(), nil)
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(res)
-		}
-	})
+	}()
 
-	fmt.Printf("SplitMate Server starting on port %s...\n", cfg.Port)
-	log.Fatal(http.ListenAndServe(":"+cfg.Port, nil))
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	log.Println("Shutting down server...")
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		log.Fatalf("Server forced to shutdown: %v", err)
+	}
+
+	log.Println("Server exited")
 }

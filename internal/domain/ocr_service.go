@@ -3,6 +3,7 @@ package domain
 import "context"
 
 type OCRResult struct {
+	Title         string    `json:"title"`
 	Items         []OCRItem `json:"items"`
 	ServiceCharge float64   `json:"service_charge"`
 	Tax           float64   `json:"tax"`
