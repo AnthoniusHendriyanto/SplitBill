@@ -8,6 +8,8 @@ import (
 	"github.com/user/split-mate/internal/domain"
 )
 
+var _ domain.BillUsecase = (*billUsecase)(nil)
+
 type billUsecase struct {
 	billRepo       domain.BillRepository
 	itemRepo       domain.ItemRepository
@@ -17,7 +19,6 @@ type billUsecase struct {
 	usageRepo      domain.UsageRepository
 	userRepo       domain.UserRepository
 	ocrService     domain.OCRService
-	ocrLimit       int
 	contextTimeout time.Duration
 }
 
@@ -30,7 +31,6 @@ func NewBillUsecase(
 	usageRepo domain.UsageRepository,
 	userRepo domain.UserRepository,
 	ocrService domain.OCRService,
-	ocrLimit int,
 	timeout time.Duration,
 ) domain.BillUsecase {
 	return &billUsecase{
@@ -42,7 +42,6 @@ func NewBillUsecase(
 		usageRepo:      usageRepo,
 		userRepo:       userRepo,
 		ocrService:     ocrService,
-		ocrLimit:       ocrLimit,
 		contextTimeout: timeout,
 	}
 }
@@ -453,40 +452,18 @@ func (bu *billUsecase) ProcessOCR(ctx context.Context, userID string, imageBytes
 	ctx, cancel := context.WithTimeout(ctx, bu.contextTimeout)
 	defer cancel()
 
-	user, err := bu.userRepo.GetByID(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-
-	month := time.Now().Format("2006-01")
-	if user.Tier != "premium" {
-		usage, _ := bu.usageRepo.GetMonthlyUsage(ctx, userID, "ocr_scan", month)
-		if usage.Count >= bu.ocrLimit {
-			return nil, domain.ErrOCRLimitExceeded
-		}
-	}
-
 	result, err := bu.ocrService.ExtractItems(ctx, imageBytes)
 	if err != nil {
 		return nil, err
-	}
-
-	if user.Tier != "premium" {
-		bu.usageRepo.IncrementUsage(ctx, userID, "ocr_scan", month)
 	}
 
 	return result, nil
 }
 
 func (bu *billUsecase) GetUsage(ctx context.Context, userID string) (*domain.UsageResponse, error) {
-	month := time.Now().Format("2006-01")
-	usage, _ := bu.usageRepo.GetMonthlyUsage(ctx, userID, "ocr_scan", month)
-
-	resetAt := time.Date(time.Now().Year(), time.Now().Month()+1, 1, 0, 0, 0, 0, time.UTC)
-
 	return &domain.UsageResponse{
-		Current: usage.Count,
-		Limit:   bu.ocrLimit,
-		ResetAt: resetAt,
+		Current: 0,
+		Limit:   0,
+		ResetAt: time.Now().AddDate(0, 1, 0),
 	}, nil
 }

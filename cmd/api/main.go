@@ -62,7 +62,6 @@ func main() {
 		usageRepo,
 		userRepo,
 		ocrService,
-		cfg.OCRMonthlyLimit,
 		timeoutContext,
 	)
 
@@ -114,7 +113,6 @@ func startServer(cfg *config.Config, repos *memory.Repositories, ocrSvc domain.O
 		repos.Usage,
 		repos.User,
 		ocrSvc,
-		cfg.OCRMonthlyLimit,
 		timeout,
 	)
 

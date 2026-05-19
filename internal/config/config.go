@@ -16,7 +16,6 @@ type Config struct {
 	RefreshTokenExpiry  int
 	StripeSecretKey     string
 	StripeWebhookSecret string
-	OCRMonthlyLimit     int
 	GeminiAPIKey        string
 }
 
@@ -33,7 +32,6 @@ func LoadConfig() *Config {
 		RefreshTokenExpiry:  7,
 		StripeSecretKey:     getEnv("STRIPE_SECRET_KEY", ""),
 		StripeWebhookSecret: getEnv("STRIPE_WEBHOOK_SECRET", ""),
-		OCRMonthlyLimit:     5,
 		GeminiAPIKey:        getEnv("GEMINI_API_KEY", ""),
 	}
 }

@@ -174,12 +174,8 @@ func (h *BillHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 func (h *BillHandler) ProcessOCR(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
-	if userID == "" {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
+	// OCR works without auth (returns results), but usage tracking only for authenticated users
 
-	// Accept both "image" and "receipt" field names for compatibility
 	file, _, err := r.FormFile("image")
 	if err != nil {
 		file, _, err = r.FormFile("receipt")
@@ -206,14 +202,6 @@ func (h *BillHandler) ProcessOCR(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.BillUsecase.ProcessOCR(r.Context(), userID, imageBytes)
 	if err != nil {
-		if err == domain.ErrOCRLimitExceeded {
-			w.WriteHeader(http.StatusTooManyRequests)
-			json.NewEncoder(w).Encode(domain.ErrorResponse{
-				Code:    "OCR_LIMIT_EXCEEDED",
-				Message: "You have reached your monthly OCR limit. Upgrade to Premium for unlimited scans.",
-			})
-			return
-		}
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(domain.ErrorResponse{
 			Code:    "OCR_ERROR",

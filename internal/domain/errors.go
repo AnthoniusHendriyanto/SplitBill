@@ -10,7 +10,6 @@ var (
 	ErrTokenExpired         = errors.New("token expired")
 	ErrTokenInvalid         = errors.New("invalid token")
 	ErrForbidden            = errors.New("forbidden")
-	ErrOCRLimitExceeded     = errors.New("OCR limit exceeded")
 	ErrInvalidInput         = errors.New("invalid input")
 	ErrInternalError        = errors.New("internal error")
 )

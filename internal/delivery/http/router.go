@@ -18,13 +18,21 @@ func NewRouter(
 	router.HandleFunc("/api/v1/auth/login", authHandler.Login).Methods("POST", "OPTIONS")
 	router.HandleFunc("/api/v1/auth/refresh", authHandler.Refresh).Methods("POST", "OPTIONS")
 
+	// Public OCR endpoint (no auth needed, with IP rate limiting)
+	router.HandleFunc("/api/v1/ocr", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		if r.Method == http.MethodPost {
+			billHandler.ProcessOCR(w, r)
+		}
+	}).Methods("POST", "OPTIONS")
+
 	protected := router.PathPrefix("/api/v1").Subrouter()
 	protected.Use(authMiddleware.Authenticate)
 
 	protected.HandleFunc("/bills", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusOK)
 			return
@@ -40,9 +48,6 @@ func NewRouter(
 	}).Methods("GET", "POST", "OPTIONS")
 
 	protected.HandleFunc("/bills/{id}", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusOK)
 			return
@@ -56,19 +61,6 @@ func NewRouter(
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	}).Methods("GET", "DELETE", "OPTIONS")
-
-	protected.HandleFunc("/ocr", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-		if r.Method == http.MethodPost {
-			billHandler.ProcessOCR(w, r)
-		}
-	}).Methods("POST", "OPTIONS")
 
 	return middleware.CORS(router)
 }

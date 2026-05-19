@@ -10,16 +10,24 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
+
+	gcvision "cloud.google.com/go/vision/apiv1"
+	visionpb "google.golang.org/genproto/googleapis/cloud/vision/v1"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/user/split-mate/internal/domain"
 )
 
+var _ domain.OCRService = (*ocrService)(nil)
+
 type ocrService struct {
-	pool   *pgxpool.Pool
-	apiKey string
+	pool     *pgxpool.Pool
+	apiKey   string
+	gcvReady bool
 }
 
 func NewOCRService(pool *pgxpool.Pool) domain.OCRService {
@@ -30,10 +38,98 @@ func NewOCRService(pool *pgxpool.Pool) domain.OCRService {
 		log.Println("AI OCR initialized with valid Gemini API Key. Live scans activated!")
 	}
 
-	return &ocrService{
-		pool:   pool,
-		apiKey: apiKey,
+	gcvReady := false
+	creds := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
+	if creds != "" {
+		if _, err := os.Stat(creds); err == nil {
+			gcvReady = true
+			log.Printf("Google Cloud Vision detected (credentials: %s)", creds)
+		} else {
+			log.Printf("GOOGLE_APPLICATION_CREDENTIALS set but file not found: %s", creds)
+		}
+	} else {
+		log.Println("GOOGLE_APPLICATION_CREDENTIALS not set. Google Cloud Vision unavailable. Set it for better OCR accuracy.")
 	}
+
+	return &ocrService{
+		pool:     pool,
+		apiKey:   apiKey,
+		gcvReady: gcvReady,
+	}
+}
+
+func (m *ocrService) extractWithGCV(ctx context.Context, imageBytes []byte) (*domain.OCRResult, error) {
+	if !m.gcvReady {
+		return nil, fmt.Errorf("Google Cloud Vision is not configured")
+	}
+
+	client, err := gcvision.NewImageAnnotatorClient(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create GCV client: %w", err)
+	}
+	defer client.Close()
+
+	image := &visionpb.Image{Content: imageBytes}
+	texts, err := client.DetectTexts(ctx, image, nil, 0)
+	if err != nil {
+		return nil, fmt.Errorf("GCV text detection failed: %w", err)
+	}
+
+	if len(texts) == 0 {
+		return nil, fmt.Errorf("Google Cloud Vision could not detect any text in the image")
+	}
+
+	fullText := texts[0].Description
+	log.Printf("[GCV] Raw text:\n%s", fullText)
+
+	lines := strings.Split(fullText, "\n")
+	priceRe := regexp.MustCompile(`(?:Rp\s*)?([\d,]+(?:\.\d{3})*(?:[,\.]\d{1,2})?)\s*$`)
+	var items []domain.OCRItem
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		line = strings.TrimLeft(line, "•-–—*")
+		line = strings.TrimPrefix(line, "Rp ")
+		line = strings.TrimSpace(line)
+
+		matches := priceRe.FindStringSubmatch(line)
+		if len(matches) < 2 {
+			continue
+		}
+
+		priceStr := matches[1]
+		priceStr = strings.ReplaceAll(priceStr, ".", "")
+		priceStr = strings.ReplaceAll(priceStr, ",", ".")
+		price, err := strconv.ParseFloat(priceStr, 64)
+		if err != nil || price <= 0 {
+			continue
+		}
+
+		name := strings.TrimRight(strings.TrimSuffix(line, matches[0]), " ")
+		name = strings.TrimSpace(name)
+		if name == "" {
+			name = "Item"
+		}
+
+		items = append(items, domain.OCRItem{
+			Name:  name,
+			Price: price,
+		})
+	}
+
+	if len(items) == 0 {
+		return nil, fmt.Errorf("GCV could not find any items with prices in the image")
+	}
+
+	log.Printf("[GCV SUCCESS] Parsed %d items via Google Cloud Vision!", len(items))
+	return &domain.OCRResult{
+		Title: "Receipt",
+		Items: items,
+	}, nil
 }
 
 // Request and Response structs for Gemini API
@@ -71,7 +167,20 @@ type GeminiResponse struct {
 }
 
 func (m *ocrService) ExtractItems(ctx context.Context, imageBytes []byte) (*domain.OCRResult, error) {
+	// Try Google Cloud Vision first (best accuracy, 1000 free units/month)
+	if m.gcvReady {
+		result, err := m.extractWithGCV(ctx, imageBytes)
+		if err == nil {
+			return result, nil
+		}
+		log.Printf("[OCR] GCV failed: %v. Trying Gemini API...", err)
+	}
+
+	// Fall back to Gemini API
 	if m.apiKey == "" {
+		if m.gcvReady {
+			return nil, fmt.Errorf("both Google Cloud Vision and Gemini API failed. Please enter items manually")
+		}
 		log.Println("[OCR] No Gemini API key provided. Cannot process receipt.")
 		return nil, fmt.Errorf("AI scanner is not configured. Please supply a valid GEMINI_API_KEY inside your .env file or enter receipt items manually")
 	}
