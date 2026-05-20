@@ -17,6 +17,7 @@ type Config struct {
 	StripeSecretKey     string
 	StripeWebhookSecret string
 	GeminiAPIKey        string
+	OpenRouterAPIKey    string
 }
 
 func LoadConfig() *Config {
@@ -33,6 +34,7 @@ func LoadConfig() *Config {
 		StripeSecretKey:     getEnv("STRIPE_SECRET_KEY", ""),
 		StripeWebhookSecret: getEnv("STRIPE_WEBHOOK_SECRET", ""),
 		GeminiAPIKey:        getEnv("GEMINI_API_KEY", ""),
+		OpenRouterAPIKey:    getEnv("OPENROUTER_API_KEY", ""),
 	}
 }
 

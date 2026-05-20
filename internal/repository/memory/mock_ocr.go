@@ -21,6 +21,8 @@ func (s *ocrService) ExtractItems(_ context.Context, _ []byte) (*domain.OCRResul
 			{Name: "Mineral Water", Price: 25000},
 		},
 		ServiceCharge: 10.0,
+		ServiceMode:   "percent",
 		Tax:           11.0,
+		TaxMode:       "percent",
 	}, nil
 }

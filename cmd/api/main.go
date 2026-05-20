@@ -25,7 +25,7 @@ func main() {
 	}
 
 	cfg := config.LoadConfig()
-	timeoutContext := time.Duration(10) * time.Second
+	timeoutContext := time.Duration(120) * time.Second
 
 	// Try PostgreSQL first, fall back to in-memory
 	pool, err := postgres.NewPostgresConnection(cfg)
@@ -75,9 +75,9 @@ func main() {
 	server := &http.Server{
 		Addr:         ":" + cfg.Port,
 		Handler:      router,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 180 * time.Second,
+		IdleTimeout:  120 * time.Second,
 	}
 
 	go func() {
@@ -124,9 +124,9 @@ func startServer(cfg *config.Config, repos *memory.Repositories, ocrSvc domain.O
 	server := &http.Server{
 		Addr:         ":" + cfg.Port,
 		Handler:      router,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 180 * time.Second,
+		IdleTimeout:  120 * time.Second,
 	}
 
 	go func() {
