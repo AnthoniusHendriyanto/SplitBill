@@ -1,156 +1,121 @@
-# SplitMate Frontend 💎
+# SplitMate Frontend
 
-SplitMate Frontend is a premium, high-end bill-splitting application designed with a "Fintech Luxury" aesthetic. Built on React 19 and Vite 8, it offers a seamless, animated experience for managing shared expenses with sophisticated "Scan-First" intelligence.
-
-## Vision
-
-SplitMate isn't just a utility; it's a financial companion. Our interface is designed to evoke confidence and clarity during the often-complex process of settling debts. With fluid animations, real-time derivation, and intuitive visualization, SplitMate turns a chore into a premium experience.
-
----
-
-## Key Features
-
-- **Poka-Yoke Wizard Flow**: A disciplined, 5-step sequential flow that guarantees data integrity (Scan → Review Ledger → Add People → Assign Shares → Settlement).
-- **Payment Intelligence Layer**: Real-time financial state derivation using `useMemo` for subtotal, tax, service charges, and grand totals.
-- **Glassmorphic UI**: A state-of-the-art design featuring smooth gradients, blur effects, and premium dark mode aesthetics.
-- **Micro-Animations**: Powered by Framer Motion, every interaction—from dragging items to switching steps—is buttery smooth.
-- **Zustand State Engine**: Centralized, high-performance state management for handling complex bill assignments.
-- **Backend Integration**: Full API integration with JWT authentication, auto-refresh, and guest mode support.
-- **Premium Tier System**: Gated features with upgrade modal ($2.99/month).
-- **Multi-Currency Support**: 9 currencies (IDR, USD, EUR, etc.) with proper formatting.
-
----
+Premium bill-splitting PWA built with React 19, Vite 8, Zustand 5, and Tailwind CSS 3.4 — featuring a "Scan-First" wizard flow and accessible fintech-luxury UI.
 
 ## Tech Stack
 
-- **Framework**: React 19 (Latest stable)
-- **Build Tool**: Vite 8
-- **State Management**: Zustand 5 (with persist middleware)
+- **Framework**: React 19.2
+- **Build Tool**: Vite 8.0
+- **State Management**: Zustand 5 (persist middleware)
 - **Animations**: Framer Motion 12
-- **Styling**: Tailwind CSS 3.4+ with `tailwind-merge` and `clsx`
+- **Styling**: Tailwind CSS 3.4 + tailwind-merge + clsx
 - **Icons**: Material Symbols Outlined
-- **API Client**: Centralized `src/lib/api.js` with JWT + auto-refresh
+- **API Client**: Centralized `src/lib/api.js` (AbortController, 30s timeout, auto-refresh)
+- **Routing**: React Router
 
----
+## Key Features
 
-## Prerequisites
-
-- **Node.js**: Version 20 or higher.
-- **Package Manager**: `npm` (v10+) or `pnpm` (recommended).
-
----
-
-## Getting Started
-
-### 1. Clone the Repository
-
-```bash
-git clone https://github.com/AnthoniusHendriyanto/splitbill_frontend.git
-cd splitbill_frontend
-```
-
-### 2. Install Dependencies
-
-```bash
-npm install
-```
-
-### 3. Environment Variables
-
-Create a `.env` file in the root directory:
-
-```env
-VITE_API_BASE_URL=http://localhost:8080/api/v1
-```
-
-### 4. Start Development Server
-
-```bash
-npm run dev
-```
-
-Open [http://localhost:5173](http://localhost:5173) to view the application.
-
----
+- **Scan-First Wizard**: 5-step sequential flow (Scan → Ledger → People → Shares → Settlement) with validation locks.
+- **AI Receipt Scanning**: Upload photo → backend PaddleOCR + OpenRouter + Gemini parsing.
+- **4 Split Types**: Equal, Custom (per-item), Percentage, Shared Items — with premium gating.
+- **Payment Intelligence**: Real-time `useMemo`-driven totals (subtotal, tax, service charge, grand total, per-person).
+- **Authentication**: JWT-based login/register with auto-refresh and guest mode.
+- **Premium Tier**: Freemium ($2.99/month) with feature gating and upgrade modals.
+- **Multi-Currency**: 9 currencies (IDR, USD, EUR, etc.) with formatting.
+- **Accessibility**: `focus-visible` rings, `aria-current`/`aria-label` on nav, `prefers-reduced-motion` support, typography hierarchy.
+- **PWA-Ready**: Manifest, theme-color, apple-mobile-web-app meta tags.
+- **Offline-First**: Guest mode works fully offline; authenticated mode syncs to backend.
 
 ## Architecture
 
-### Directory Structure
-
-```text
-├── src/
-│   ├── components/       # Primitive and composite UI components
-│   ├── store/            # Zustand stores (useBillStore.js, useAuthStore.js)
-│   ├── hooks/            # Custom hooks (e.g., useTheme)
-│   ├── utils/            # Formatting and calculation helpers
-│   ├── pages/            # Page components (Login, Register, BillDetail)
-│   ├── lib/              # API client and utilities
-│   ├── App.jsx           # Main Wizard Orchestrator
-│   └── main.jsx          # Application entry
-├── public/               # Static assets
-└── tailwind.config.js    # Design system configuration
+```
+src/
+├── components/             # UI components
+│   ├── Step1Scan.jsx       # OCR upload / camera / manual entry
+│   ├── Step2Ledger.jsx     # Edit items, service charge, tax
+│   ├── Step3People.jsx     # Add participants, select payer
+│   ├── Step4Shares.jsx     # Split method + assignment grid
+│   ├── Step5Settlement.jsx # Summary, DebtMap, save
+│   ├── Dashboard.jsx       # Bill list with skeleton loading, KPI cards
+│   ├── SettingsPage.jsx    # 7-tab settings (profile, tier, currency, etc.)
+│   ├── HelpCenterModal.jsx # Usage guide
+│   ├── BillDetailsModal.jsx# Completed bill breakdown
+│   ├── SideNavBar.jsx      # Desktop nav (with tier badge)
+│   ├── BottomTabBar.jsx    # Mobile nav
+│   ├── AuthOverlay.jsx     # Login/register overlay
+│   ├── DebtMap.jsx         # Debt visualization
+│   ├── FormattedPrice.jsx  # Currency-aware price
+│   └── ...                 # StepHeader, PremiumModal, etc.
+├── store/
+│   ├── useBillStore.js     # Bill data, UI step, calculations, API sync
+│   └── useAuthStore.js     # Auth state (uses centralized api.js)
+├── lib/
+│   └── api.js              # Centralized API client (AbortController, 30s timeout, auto-refresh)
+├── hooks/
+│   └── useIsMobile.js      # Responsive breakpoint hook
+├── utils/
+│   ├── currency.js         # 9-currency formatting
+│   └── ...                 # Calculations, formatters
+├── pages/
+│   ├── LoginPage.jsx
+│   ├── RegisterPage.jsx
+│   └── BillDetailPage.jsx
+├── config/
+│   └── api.js              # API base URL config
+├── App.jsx                 # Wizard orchestrator (~245 lines, extracted from 3381)
+├── main.jsx                # Entry + router setup
+└── index.css               # Global focus rings, reduced-motion, base styles
 ```
 
-### Wizard Flow Logic
+## Wizard Flow (Steps 1–5)
 
-The application uses an index-based wizard orchestrator (`step` 1–5):
+| Step | Component | Purpose |
+|------|-----------|---------|
+| 1 | `Step1Scan` | Camera / upload / manual entry → OCR |
+| 2 | `Step2Ledger` | Edit item names, prices, qty; adjust service charge & tax |
+| 3 | `Step3People` | Add people, mark who paid |
+| 4 | `Step4Shares` | Choose split type (Equal/Custom/Percentage) + assignment grid |
+| 5 | `Step5Settlement` | Review totals, DebtMap, save bill |
 
-1. **Step 1 (Scan Receipt)**: OCR processing with camera/upload/manual entry.
-2. **Step 2 (Review Ledger)**: Edit items, adjust service charge & tax.
-3. **Step 3 (Add People)**: Add participants, select payer.
-4. **Step 4 (Assign Shares)**: Equal/Custom/Percentage split (PremiumModal for free users).
-5. **Step 5 (Settlement)**: Review totals, view DebtMap, save bill.
+## Quality & Accessibility
 
----
+- **Extracted architecture**: `App.jsx` reduced from 3381→245 lines (9 standalone components).
+- **UI persistence**: Step/tab survives page refresh (Zustand `partialize`).
+- **Skeleton loading**: Dashboard shows skeleton UI while fetching bills, with error state handling.
+- **Focus indicators**: Global `*:focus-visible` ring on all interactive elements.
+- **Reduced motion**: `prefers-reduced-motion` media query disables all animations.
+- **Typography hierarchy**: `font-black` reduced to `font-bold`/`font-semibold` on all small label text.
+- **Nav accessibility**: `aria-current="page"` on active items, `aria-label` on icon-only buttons.
+- **Custom Tailwind shades**: 9 undefined colors defined (indigo-455/650, slate-350/355/360/850/905/955, emerald-450).
 
-## Authentication
+## Prerequisites
 
-- **Login/Register**: Full JWT-based authentication
-- **Guest Mode**: Use app without account (local-only)
-- **Auto-Refresh**: Token refresh handled automatically
-- **Tier System**: Free vs Premium badges in UI
+- **Node.js** 20+
+- **npm** 10+ or **pnpm**
 
----
+## Getting Started
 
-## UI Components
+```bash
+git clone <repo-url> splitbill_frontend
+cd splitbill_frontend
+npm install
+cp .env.example .env   # VITE_API_BASE_URL=http://localhost:8080/api/v1
+npm run dev             # → http://localhost:5173
+```
 
-| Component | Description |
-|-----------|-------------|
-| `StepHeader` | Handles navigation and sequential validation locks. |
-| `PriceInput` | Precision-control for financial entries. |
-| `DebtMap` | Visual architecture of who owes whom. |
-| `AssignmentGrid` | Multi-column assignment interface for high-density data. |
-| `PremiumModal` | Upgrade prompt for locked features ($2.99/month). |
+## Build & Deploy
 
----
+```bash
+npm run build           # Outputs to dist/
+```
 
-## Deployment
-
-### Vercel / Netlify
-
-This project is optimized for modern edge deployment. Simply connect your GitHub repository to Vercel or Netlify; it will automatically detect Vite and deploy.
-
-### Docker
+Optimized for Vercel / Netlify (auto-detect Vite). Also supports Docker:
 
 ```bash
 docker build -t splitmate-frontend .
 docker run -p 5173:5173 splitmate-frontend
 ```
 
----
-
-## Contributing
-
-We prioritize visual excellence. When contributing UI changes, ensure they align with the "Premium Fintech" design tokens.
-
-1. Fork the Project.
-2. Create your Feature Branch.
-3. Commit your Changes using Conventional Commits.
-4. Push to the Branch.
-5. Open a Pull Request.
-
----
-
 ## License
 
-Distributed under the MIT License.
+MIT

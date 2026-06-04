@@ -13,9 +13,9 @@
 | Register | ✅ | ✅ | useAuthStore + LoginPage |
 | Login | ✅ | ✅ | useAuthStore + RegisterPage |
 | Logout | ✅ | ✅ | Frontend clears local state, navigates to /login |
-| Token Refresh | 🟡 | ✅ | Centralized api.js has refresh logic |
+| Token Refresh | ✅ | ✅ | Centralized api.js with auto-refresh interceptor |
 | Guest Mode | ✅ | ❌ | Works offline without backend |
-| User Profile | ❌ | ✅ | `/users/me` endpoint not in backend router yet |
+| User Profile | ✅ | ✅ | Settings page shows user info + OCR usage |
 | Update Profile | ❌ | ❌ | Not in either side |
 | Show User Tier | ✅ | ✅ | SideNavBar shows tier badge (Free/Premium) |
 
@@ -43,8 +43,8 @@
 | Bill Detail Page | ✅ | ✅ | Fetches from backend when not found locally |
 | Bill List | ✅ | ✅ | Paginated fetch from backend |
 | Delete Bill | ✅ | ✅ | Works with API + local fallback |
-| Date Filter | ❌ | ✅ | Backend supports `from_date`/`to_date` |
-| Running Balance | 🟡 | ❌ | Calculated from local `completedBills` only |
+| Date Filter | 🟡 | ✅ | Backend supports — frontend UI not wired |
+| Running Balance | ✅ | ❌ | Calculated from local `completedBills` |
 
 ## 4. Split Types
 
@@ -53,7 +53,7 @@
 | Equal Split | ✅ | ✅ | Current default |
 | Custom Split (per-item) | ✅ | ✅ (Premium) | Step 4 UI exists, PremiumModal for free users |
 | Percentage Split | ✅ | ✅ (Premium) | Store logic exists, UI in progress |
-| Shared Items Split | ❌ | ✅ | No UI for this split type |
+| Shared Items Split | 🟡 | ✅ | Step 4 supports it but not prominently exposed |
 | Premium Gating | ✅ | ✅ (back) | PremiumModal shown to free users |
 
 ## 5. Premium / Tier System
@@ -99,25 +99,29 @@
 
 ## Summary: What MUST Be Built Next
 
-### Immediate (Blocking Integration)
-1. ✅ Fixed backend: `GetByID` and `Delete` handlers use `mux.Vars` instead of query params
-2. ✅ Fixed frontend: Send `image` field name (not `receipt`) in OCR upload
-3. ✅ Added auth header to OCR request via centralized API client
-4. ✅ Created centralized API client with auto-refresh
-5. ✅ POST bill to backend after Save & Finish
-6. ✅ Fetch bills list from backend for Dashboard
-7. ✅ Fetch bill detail from backend for BillDetailPage
-8. ✅ Add `/users/me` endpoint to backend router (still needed)
+### Completed
+- ✅ Fixed backend: `GetByID` and `Delete` handlers use `mux.Vars` instead of query params
+- ✅ Fixed frontend: Send `image` field name (not `receipt`) in OCR upload
+- ✅ OCR endpoint is public (no auth) — centralized api.js handles it
+- ✅ Created centralized API client with auto-refresh
+- ✅ POST bill to backend after Save & Finish
+- ✅ Fetch bills list from backend for Dashboard (with skeleton loading)
+- ✅ Fetch bill detail from backend for BillDetailPage
+- ✅ Premium upgrade UI + Stripe flow (UI done, backend needed)
+- ✅ Percentage split logic in store
+- ✅ Feature gating in Step 4 - PremiumModal for free users
+- ✅ Delete bill from dashboard
+- ✅ Token refresh interceptor in centralized api.js
+- ✅ 46 backend audit items resolved (env-driven config, TIMESTAMPTZ, CHECK constraints, deduplication)
+- ✅ App.jsx extracted 3381→245 lines, 9 standalone components
+- ✅ 9 undefined Tailwind color shades defined
+- ✅ UI state (step/tab) persists across refresh
+- ✅ Accessibility: focus-visible, aria attributes, reduced-motion, typography hierarchy
+- ✅ Skeleton loading + error states on Dashboard
 
-### Medium Priority
-9. ✅ Premium upgrade UI + Stripe flow (UI done, backend needed)
-10. ✅ Percentage split logic in store
-11. ✅ Feature gating in Step 4 - PremiumModal for free users
-12. ✅ Delete bill from dashboard
-13. 🟡 Token refresh interceptor (basic implementation)
-
-### Nice to Have
-14. Share via link
-15. PDF export
-16. WhatsApp sharing with transfer notes
-17. Payment settlement tracking
+### Remaining
+1. Share via link — backend endpoint not exposed
+2. PDF export — non-functional button
+3. WhatsApp sharing — non-functional button
+4. Payment settlement tracking — backend endpoint not wired
+5. Stripe checkout — frontend UI ready, backend not wired

@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
 
 @tailwind base;
@@ -7,9 +7,27 @@
 
 @layer base {
   :root {
-    --color-primary: #4F46E5;
-    --color-background: #FCF8FF;
-    --color-surface: #1B1B24;
+    --page-bg: #030712;
+    --card-bg: #070b19;
+    --card-alt-bg: #0b0f19;
+    --card-elevated-bg: #040813;
+    --gradient-start: #0c122c;
+    --gradient-end: #050714;
+    --table-hover-bg: #0c1228;
+    --toast-error-bg: #1c0d0d;
+    --toast-success-bg: #0d1c15;
+    --btn-success-hover-bg: #122e20;
+    --error-boundary-bg: #020617;
+  }
+  *:focus-visible {
+    @apply outline-none ring-2 ring-indigo-500/50 ring-offset-1 ring-offset-transparent;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
   }
   body {
     @apply bg-slate-50 dark:bg-slate-950 font-body-base text-slate-800 dark:text-slate-200 antialiased overflow-hidden h-screen;

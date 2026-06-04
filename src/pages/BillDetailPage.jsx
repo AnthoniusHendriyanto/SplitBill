@@ -1,79 +1,99 @@
-import { useMemo, useState, useEffect } from 'react';
+import { memo, useMemo, useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import useBillStore from '../store/useBillStore';
 import useAuthStore from '../store/useAuthStore';
 import Icon from '../components/Icon';
+import Skeleton from '../components/Skeleton';
 import useIsMobile from '../hooks/useIsMobile';
 import { api } from '../lib/api';
+import { cn } from '../utils/cn';
 
-function cn(...classes) {
-  return classes.filter(Boolean).join(' ');
-}
+const avatarColors = ["bg-indigo-600", "bg-teal-500", "bg-violet-500", "bg-rose-500", "bg-amber-500"];
 
-export default function BillDetailPage() {
+function BillDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
-  const { getCompletedBill } = useBillStore();
-  const { isAuthenticated } = useAuthStore();
+  const getCompletedBill = useBillStore((s) => s.getCompletedBill);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const [serverBill, setServerBill] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const localBill = useMemo(() => getCompletedBill(id), [id, getCompletedBill]);
 
   useEffect(() => {
-    if (isAuthenticated && !localBill) {
-      setLoading(true);
-      api.getBill(id)
-        .then(data => {
-          // Normalize server data to match local structure
-          const normalized = {
-            id: data.id,
-            title: data.title,
-            completedAt: data.created_at,
-            grandTotal: data.grand_total,
-            items: data.items || [],
-            persons: data.persons || [],
-            payerId: data.payer_id || data.payerId,
-            serviceCharge: data.service_charge,
-            tax: data.tax,
-            assignments: {},
-            // Build assignments from items' assigned_to
-            totals: data.persons?.map(p => {
-              const personItems = (data.items || []).filter(item => 
-                item.assigned_to?.includes(p.name)
-              );
-              const subtotal = personItems.reduce((sum, item) => sum + item.price, 0);
-              const serviceShare = (data.service_charge || 0) * (subtotal / (data.total_amount || 1));
-              const taxShare = (data.tax || 0) * (subtotal / (data.total_amount || 1));
-              return {
-                ...p,
-                subtotal,
-                tax: taxShare,
-                service: serviceShare,
-                total: subtotal + serviceShare + taxShare,
-              };
-            }) || [],
-            serverData: data,
-          };
-          setServerBill(normalized);
-        })
-        .catch(err => console.error('Failed to fetch bill:', err))
-        .finally(() => setLoading(false));
-    } else {
-      setLoading(false);
-    }
+    const timer = setTimeout(() => {
+      if (isAuthenticated && !localBill) {
+        setLoading(true);
+        api.getBill(id)
+          .then(data => {
+            const billData = data.bill || data;
+            const persons = billData.persons || [];
+            const items = billData.items || [];
+            const payer = persons.find(p => p.is_payer);
+
+            const normalized = {
+              id: billData.id,
+              title: billData.title,
+              completedAt: billData.created_at,
+              grandTotal: billData.grand_total,
+              items,
+              persons,
+              payerId: payer?.id || null,
+              serviceCharge: billData.service_charge,
+              tax: billData.tax,
+              assignments: {},
+              totals: persons.map(p => {
+                const personItems = items.filter(item =>
+                  item.assigned_to?.includes(p.name)
+                );
+                const subtotal = personItems.reduce((sum, item) => sum + item.price, 0);
+                const serviceShare = subtotal * ((billData.service_charge || 0) / 100);
+                const taxShare = subtotal * ((billData.tax || 0) / 100);
+                return {
+                  ...p,
+                  subtotal,
+                  tax: taxShare,
+                  service: serviceShare,
+                  total: subtotal + serviceShare + taxShare,
+                };
+              }),
+              serverData: billData,
+            };
+            setServerBill(normalized);
+          })
+          .catch(err => console.error('Failed to fetch bill:', err))
+          .finally(() => setLoading(false));
+      } else {
+        setLoading(false);
+      }
+    }, 0);
+    return () => clearTimeout(timer);
   }, [id, isAuthenticated, localBill]);
 
   const bill = localBill || serverBill;
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-4">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-slate-500">Loading bill...</p>
+      <div className="min-h-screen bg-page flex items-center justify-center p-4" aria-live="polite" aria-busy="true">
+        <div className="w-full max-w-4xl space-y-6">
+          <Skeleton className="w-32 h-8" />
+          <div className="flex justify-between">
+            <div className="space-y-2">
+              <Skeleton className="w-64 h-10" />
+              <Skeleton className="w-48 h-5" />
+            </div>
+            <div className="space-y-2 text-right">
+              <Skeleton className="w-24 h-4 ml-auto" />
+              <Skeleton className="w-36 h-10 ml-auto" />
+            </div>
+          </div>
+          <Skeleton className="w-full h-64" />
+          <div className="grid grid-cols-2 gap-4">
+            <Skeleton className="h-32" />
+            <Skeleton className="h-32" />
+          </div>
         </div>
       </div>
     );
@@ -81,10 +101,10 @@ export default function BillDetailPage() {
 
   if (!bill) {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-page flex items-center justify-center p-4">
         <div className="text-center">
-          <Icon name="receipt_long" className="text-6xl text-slate-300 dark:text-slate-700 mb-4" />
-          <h2 className="text-xl font-bold text-slate-600 dark:text-slate-400 mb-2">Bill not found</h2>
+          <Icon name="receipt_long" className="text-6xl text-slate-300 mb-4" />
+          <h2 className="text-xl font-bold text-slate-600 mb-2">Bill not found</h2>
           <button
             onClick={() => navigate('/')}
             className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all cursor-pointer"
@@ -172,7 +192,6 @@ export default function BillDetailPage() {
 
               <div className="space-y-3">
                 {totals.map((person, i) => {
-                  const avatarColors = ["bg-indigo-600", "bg-teal-500", "bg-violet-500", "bg-rose-500", "bg-amber-500"];
                   return (
                     <div key={person.id} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl">
                       <div className="flex items-center gap-3">
@@ -208,7 +227,6 @@ export default function BillDetailPage() {
             {/* Per-Person Breakdown */}
             <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
               {totals.map((person, i) => {
-                const avatarColors = ["bg-indigo-600", "bg-teal-500", "bg-violet-500", "bg-rose-500", "bg-amber-500"];
                 const assignedItems = items.filter(item => assignments[person.id]?.[item.id]);
                 return (
                   <div key={person.id} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
@@ -249,3 +267,5 @@ export default function BillDetailPage() {
     </div>
   );
 }
+
+export default memo(BillDetailPage);

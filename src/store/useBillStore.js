@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { v4 as uuidv4 } from 'uuid';
+const createId = () => crypto.randomUUID();
 import { api } from '../lib/api';
 import useAuthStore from './useAuthStore';
 
@@ -8,7 +8,7 @@ const useBillStore = create(
   persist(
     (set, get) => ({
       bill: {
-        id: uuidv4(),
+        id: createId(),
         title: '',
         imageUrl: '',
         items: [],
@@ -19,6 +19,9 @@ const useBillStore = create(
         serviceMode: 'percent',
         payerId: null,
         splitType: 'equal',
+        ocrConfidence: 0,
+        ocrSubtotal: 0,
+        ocrGrandTotal: 0,
       },
       
       updateBill: (data) => set((state) => ({ 
@@ -29,7 +32,7 @@ const useBillStore = create(
         bill: {
           ...state.bill,
           persons: [...state.bill.persons, { 
-            id: uuidv4(), 
+            id: createId(), 
             name: name || '', 
             paymentInfo: { bank: '', accountNumber: '', qrisData: '' } 
           }]
@@ -54,7 +57,8 @@ const useBillStore = create(
       })),
 
       removePerson: (id) => set((state) => {
-        const { [id]: removed, ...restAssignments } = state.assignments;
+        const restAssignments = { ...state.assignments };
+        delete restAssignments[id];
         return {
           bill: {
             ...state.bill,
@@ -67,7 +71,7 @@ const useBillStore = create(
       addItem: () => set((state) => ({
         bill: {
           ...state.bill,
-          items: [...state.bill.items, { id: uuidv4(), name: '', price: 0 }]
+          items: [...state.bill.items, { id: createId(), name: '', price: 0 }]
         }
       })),
 
@@ -87,7 +91,7 @@ const useBillStore = create(
 
       resetBill: () => set({
         bill: {
-          id: uuidv4(),
+          id: createId(),
           title: '',
           imageUrl: '',
           items: [],
@@ -104,9 +108,14 @@ const useBillStore = create(
 
       completedBills: [],
 
+      isLoadingBills: false,
+      billsError: null,
+      isSaving: false,
+
       fetchCompletedBills: async () => {
         const isAuth = useAuthStore.getState().isAuthenticated;
         if (!isAuth) return;
+        set({ isLoadingBills: true, billsError: null });
         try {
           const res = await api.getBills();
           if (res && res.data) {
@@ -124,13 +133,18 @@ const useBillStore = create(
             }));
             set({ completedBills: mapped });
           }
+          set({ isLoadingBills: false });
         } catch (err) {
           console.error('Failed to fetch bills from server:', err);
+          set({ isLoadingBills: false, billsError: err.message || 'Failed to load bills' });
         }
       },
 
       completeBill: async (customStatus = null) => {
         const state = get();
+        if (state.isSaving) return; // Prevent double-save
+        set({ isSaving: true });
+
         const totals = state.calculateTotals();
         const grandTotal = totals.reduce((sum, p) => sum + p.total, 0);
         const isAuth = useAuthStore.getState().isAuthenticated;
@@ -140,7 +154,7 @@ const useBillStore = create(
           title: state.bill.title || 'Untitled Bill',
           items: state.bill.items.map(item => ({ name: item.name, price: item.price })),
           persons: state.bill.persons.map(p => ({ name: p.name })),
-          split_type: 'custom', // Using custom for now (Step 4 assignments)
+          split_type: state.bill.splitType || 'custom',
           assignments: Object.entries(state.assignments).flatMap(([personId, items]) =>
             Object.entries(items)
               .filter(([, assigned]) => assigned)
@@ -177,15 +191,16 @@ const useBillStore = create(
           const finalStatus = customStatus || (isAllPaid ? 'completed' : 'pending');
 
           return {
+            isSaving: false,
             completedBills: [
               {
-                id: serverBill?.id || state.bill.id || uuidv4(),
+                id: serverBill?.id || state.bill.id || createId(),
                 title: state.bill.title || 'Untitled Bill',
                 completedAt: new Date().toISOString(),
                 imageUrl: state.bill.imageUrl || '',
                 items: state.bill.items.map(item => ({ ...item })),
                 persons: mappedPersons,
-                assignments: JSON.parse(JSON.stringify(state.assignments)),
+                assignments: structuredClone(state.assignments),
                 payerId: state.bill.payerId,
                 serviceCharge: state.bill.serviceCharge,
                 serviceMode: state.bill.serviceMode,
@@ -194,7 +209,6 @@ const useBillStore = create(
                 totals: totals,
                 grandTotal: grandTotal,
                 status: finalStatus,
-                // Store server data if available
                 serverData: serverBill || null,
               },
               ...state.completedBills.filter(b => b.id !== (serverBill?.id || state.bill.id)),
@@ -228,7 +242,7 @@ const useBillStore = create(
             payerId: billToLoad.payerId,
             splitType: 'equal',
           },
-          assignments: JSON.parse(JSON.stringify(billToLoad.assignments || {})),
+          assignments: structuredClone(billToLoad.assignments || {}),
         });
       },
 
@@ -295,58 +309,68 @@ const useBillStore = create(
       calculateTotals: () => {
         const { bill, assignments, settings } = get();
         const totalBillSubtotal = bill.items.reduce((sum, item) => sum + item.price, 0);
-        
-        // Convert percentages to absolute values based on mode
-        const totalTax = bill.taxMode === 'percent' 
-          ? totalBillSubtotal * (bill.tax / 100) 
+
+        const totalTax = bill.taxMode === 'percent'
+          ? totalBillSubtotal * (bill.tax / 100)
           : bill.tax;
-          
-        const totalService = bill.serviceMode === 'percent' 
-          ? totalBillSubtotal * (bill.serviceCharge / 100) 
+
+        const totalService = bill.serviceMode === 'percent'
+          ? totalBillSubtotal * (bill.serviceCharge / 100)
           : bill.serviceCharge;
 
         const grandTotal = totalBillSubtotal + totalTax + totalService;
+        const personCount = bill.persons.length || 1;
 
-        // Calculate percentage-based split
+        const taxAlloc = settings.taxAllocation || 'proportionate';
+        const svcAlloc = settings.serviceChargeHandling || 'proportionate';
+
+        const distributeTax = (shareRatio) =>
+          taxAlloc === 'even' ? totalTax / personCount : totalTax * shareRatio;
+
+        const distributeService = (shareRatio) =>
+          svcAlloc === 'even' ? totalService / personCount : totalService * shareRatio;
+
+        const round = (v) =>
+          settings.roundNumbers ? Math.round(v) : Number(v.toFixed(2));
+
+        // Percentage split
         if (bill.splitType === 'percentage') {
           return bill.persons.map((person) => {
-            const percentage = person.percentage || 0;
-            const personShare = grandTotal * (percentage / 100);
-            
-            // Distribute proportionally based on their share of the subtotal
-            const shareRatio = percentage / 100;
-            const personTax = totalTax * shareRatio;
-            const personService = totalService * shareRatio;
-            const personSubtotal = personShare - personTax - personService;
+            const ratio = (person.percentage || 0) / 100;
+            const personShare = grandTotal * ratio;
+            const personTax = distributeTax(ratio);
+            const personService = distributeService(ratio);
+            const personSubtotal = Math.max(0, personShare - personTax - personService);
 
             return {
               ...person,
-              subtotal: settings.roundNumbers ? Math.round(personSubtotal) : Number(personSubtotal.toFixed(2)),
-              tax: settings.roundNumbers ? Math.round(personTax) : Number(personTax.toFixed(2)),
-              service: settings.roundNumbers ? Math.round(personService) : Number(personService.toFixed(2)),
-              total: settings.roundNumbers ? Math.round(personShare) : Number(personShare.toFixed(2)),
+              subtotal: round(personSubtotal),
+              tax: round(personTax),
+              service: round(personService),
+              total: round(personShare),
             };
           });
         }
 
-        // Equal or custom split
+        // Custom split
         if (bill.splitType === 'custom') {
           return bill.persons.map((person) => {
-            const customSubtotal = person.customAmount || 0;
+            const customSubtotal = Math.max(0, person.customAmount || 0);
             const shareRatio = totalBillSubtotal > 0 ? customSubtotal / totalBillSubtotal : 0;
-            const personTax = totalTax * shareRatio;
-            const personService = totalService * shareRatio;
+            const personTax = distributeTax(shareRatio);
+            const personService = distributeService(shareRatio);
 
             return {
               ...person,
-              subtotal: settings.roundNumbers ? Math.round(customSubtotal) : Number(customSubtotal.toFixed(2)),
-              tax: settings.roundNumbers ? Math.round(personTax) : Number(personTax.toFixed(2)),
-              service: settings.roundNumbers ? Math.round(personService) : Number(personService.toFixed(2)),
-              total: settings.roundNumbers ? Math.round(customSubtotal + personTax + personService) : Number((customSubtotal + personTax + personService).toFixed(2)),
+              subtotal: round(customSubtotal),
+              tax: round(personTax),
+              service: round(personService),
+              total: round(customSubtotal + personTax + personService),
             };
           });
         }
 
+        // Equal / shared-items split
         return bill.persons.map((person) => {
           let subtotal = 0;
           bill.items.forEach((item) => {
@@ -359,15 +383,15 @@ const useBillStore = create(
           });
 
           const shareRatio = totalBillSubtotal > 0 ? subtotal / totalBillSubtotal : 0;
-          const personTax = totalTax * shareRatio;
-          const personService = totalService * shareRatio;
+          const personTax = distributeTax(shareRatio);
+          const personService = distributeService(shareRatio);
 
           return {
             ...person,
-            subtotal: settings.roundNumbers ? Math.round(subtotal) : Number(subtotal.toFixed(2)),
-            tax: settings.roundNumbers ? Math.round(personTax) : Number(personTax.toFixed(2)),
-            service: settings.roundNumbers ? Math.round(personService) : Number(personService.toFixed(2)),
-            total: settings.roundNumbers ? Math.round(subtotal + personTax + personService) : Number((subtotal + personTax + personService).toFixed(2))
+            subtotal: round(subtotal),
+            tax: round(personTax),
+            service: round(personService),
+            total: round(subtotal + personTax + personService),
           };
         });
       },
@@ -378,6 +402,8 @@ const useBillStore = create(
         currency: 'IDR',
         autoScan: true,
         roundNumbers: true,
+        taxAllocation: 'proportionate',
+        serviceChargeHandling: 'proportionate',
       },
 
       ui: {
@@ -395,11 +421,12 @@ const useBillStore = create(
     }),
     {
       name: 'splitmate-storage',
-      partialize: (state) => ({ 
-        settings: state.settings, 
-        completedBills: state.completedBills,
-        bill: state.bill,
+      partialize: (state) => ({
+        settings: state.settings,
+        completedBills: state.completedBills.map(b => ({ ...b, imageUrl: '' })),
+        bill: { ...state.bill, imageUrl: '' },
         assignments: state.assignments,
+        ui: state.ui,
       }),
     }
   )

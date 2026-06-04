@@ -28,7 +28,7 @@ Registration/Login
        │
        ├──► Equal Split (Free)
        ├──► Custom Split (Premium - shows PremiumModal for free users)
-       └──► Percentage Split (Premium - UI in progress)
+        └──► Percentage Split (Premium)
        │
        ▼
   Assign Items (if custom)
@@ -48,7 +48,7 @@ Registration/Login
 ## Free Tier
 
 ### Limits
-- **OCR Scans**: 5 per month (resets 1st of each month)
+- **OCR Scans**: Unlimited
 - **Split Methods**: Equal split only
 - **Bill History**: 30 days retention
 - **Custom Split**: ❌ Locked - shows PremiumModal
@@ -57,19 +57,17 @@ Registration/Login
 - **Export PDF**: ❌ Locked
 
 ### UI Behavior
-- Show usage banner after 3/5 OCR scans: "You've used 3 of 5 free scans this month"
-- On 5th scan: show "OCR limit reached. Upgrade to Premium."
-- On trying custom split: show modal "This is a Premium feature. Upgrade to unlock."
+- On trying custom split: show PremiumModal "This is a Premium feature. Upgrade to unlock."
 - On trying percentage split: same modal
 - Settings page shows tier badge: "FREE" with "Upgrade" button
 - SideNavBar shows tier badge (clickable to show PremiumModal)
+- Dashboard shows skeleton loading while fetching bills
 
 ---
 
 ## Premium Tier ($2.99/month)
 
 ### Features
-- Unlimited OCR scans
 - Custom split (per-item assignment)
 - Percentage split
 - Unlimited bill history (no 30-day limit)
@@ -91,7 +89,7 @@ Registration/Login
 ### 0. Authentication
 
 #### Screen: Login / Register
-**Frontend**: `LoginPage.jsx`, `RegisterPage.jsx`
+**Frontend**: `LoginPage.jsx`, `RegisterPage.jsx`, or `AuthOverlay.jsx`
 **Backend**: `POST /api/v1/auth/login`, `POST /api/v1/auth/register`
 
 **Flow**:

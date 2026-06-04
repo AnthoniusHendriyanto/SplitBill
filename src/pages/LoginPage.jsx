@@ -1,13 +1,19 @@
-import { useState, useEffect } from 'react';
+import { memo, useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import useAuthStore from '../store/useAuthStore';
 import useBillStore from '../store/useBillStore';
 import Icon from '../components/Icon';
 
-export default function LoginPage() {
+function LoginPage() {
   const navigate = useNavigate();
-  const { login, isLoggingIn, loginError, clearErrors, isAuthenticated, accessToken, setGuest } = useAuthStore();
+  const login = useAuthStore((s) => s.login);
+  const isLoggingIn = useAuthStore((s) => s.isLoggingIn);
+  const loginError = useAuthStore((s) => s.loginError);
+  const clearErrors = useAuthStore((s) => s.clearErrors);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const accessToken = useAuthStore((s) => s.accessToken);
+  const setGuest = useAuthStore((s) => s.setGuest);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
@@ -54,10 +60,11 @@ export default function LoginPage() {
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="relative group">
-              <label className="absolute -top-2 left-3 px-1 bg-white dark:bg-slate-900 text-[10px] font-bold text-indigo-600 uppercase tracking-wider z-10">
+              <label htmlFor="login-email" className="absolute -top-2 left-3 px-1 bg-white dark:bg-slate-900 text-[10px] font-bold text-indigo-600 uppercase tracking-wider z-10">
                 Email
               </label>
               <input
+                id="login-email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -69,10 +76,11 @@ export default function LoginPage() {
             </div>
 
             <div className="relative group">
-              <label className="absolute -top-2 left-3 px-1 bg-white dark:bg-slate-900 text-[10px] font-bold text-indigo-600 uppercase tracking-wider z-10">
+              <label htmlFor="login-password" className="absolute -top-2 left-3 px-1 bg-white dark:bg-slate-900 text-[10px] font-bold text-indigo-600 uppercase tracking-wider z-10">
                 Password
               </label>
               <input
+                id="login-password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -142,3 +150,5 @@ export default function LoginPage() {
     </div>
   );
 }
+
+export default memo(LoginPage);

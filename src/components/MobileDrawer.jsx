@@ -1,19 +1,17 @@
-import { useEffect } from 'react';
+import { memo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import useBillStore from '../store/useBillStore';
 import useAuthStore from '../store/useAuthStore';
 import Icon from './Icon';
-import { twMerge } from 'tailwind-merge';
-import { clsx } from 'clsx';
+import { cn } from '../utils/cn';
 
-function cn(...inputs) {
-  return twMerge(clsx(inputs));
-}
-
-export default function MobileDrawer({ open, onClose, onHelpOpen }) {
-  const { settings, updateSettings } = useBillStore();
-  const { user, isAuthenticated, logout } = useAuthStore();
+function MobileDrawer({ open, onClose, onHelpOpen }) {
+  const settings = useBillStore((s) => s.settings);
+  const updateSettings = useBillStore((s) => s.updateSettings);
+  const user = useAuthStore((s) => s.user);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const logout = useAuthStore((s) => s.logout);
 
   useEffect(() => {
     if (open) {
@@ -84,7 +82,7 @@ export default function MobileDrawer({ open, onClose, onHelpOpen }) {
               <p className="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Quick Actions</p>
               <button
                 onClick={() => { onClose(); onHelpOpen(); }}
-                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 text-sm font-medium"
+                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all cursor-pointer outline-none text-sm font-medium"
               >
                 <Icon name="help" className="text-lg" />
                 Help Center
@@ -116,7 +114,15 @@ export default function MobileDrawer({ open, onClose, onHelpOpen }) {
                   <Icon name={settings.darkMode ? "dark_mode" : "light_mode"} className="text-lg text-slate-500" />
                   <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Dark Mode</span>
                 </div>
-                <div
+                <div role="switch" tabIndex={0} aria-checked={settings.darkMode}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      const newMode = !settings.darkMode;
+                      updateSettings({ darkMode: newMode });
+                      document.documentElement.classList.toggle('dark', newMode);
+                    }
+                  }}
                   onClick={() => {
                     const newMode = !settings.darkMode;
                     updateSettings({ darkMode: newMode });
@@ -142,3 +148,5 @@ export default function MobileDrawer({ open, onClose, onHelpOpen }) {
     </AnimatePresence>
   );
 }
+
+export default memo(MobileDrawer);

@@ -1,12 +1,7 @@
-import { motion } from 'framer-motion';
+import { memo } from 'react';
 import useBillStore from '../store/useBillStore';
 import Icon from './Icon';
-import { twMerge } from 'tailwind-merge';
-import { clsx } from 'clsx';
-
-function cn(...inputs) {
-  return twMerge(clsx(inputs));
-}
+import { cn } from '../utils/cn';
 
 const steps = ["SCAN RECEIPT", "REVIEW LEDGER", "ADD PEOPLE", "ASSIGN SHARES", "SETTLEMENT"];
 
@@ -20,7 +15,7 @@ const getStepAccess = (idx, bill, isScanning) => {
       try {
         return useBillStore.getState().assignments[p.id]?.[item.id];
       } catch { return false; }
-    })), reason: 'Assign all items to participants first' };
+    })), reason: 'Assign all items to people first' };
     default: return { unlocked: false, reason: '' };
   }
 };
@@ -41,11 +36,11 @@ const stepSubtitles = [
   'Review the final individual breakdowns.',
 ];
 
-export default function StepHeader({ currentStep, setStep, nextLabel, onNext, onBack, showActions = true, nextDisabled = false, bill, isScanning, isMobile = false }) {
+function StepHeader({ currentStep, setStep, nextLabel, onNext, onBack, showActions = true, nextDisabled = false, bill, isScanning }) {
   return (
     <div className="flex flex-col gap-6 mb-8">
       {/* Premium Wizard Timeline Stepper */}
-      <div className="w-full bg-[#070b19] border border-slate-900 rounded-2xl p-5 relative overflow-hidden">
+      <div className="w-full bg-card border border-slate-900 rounded-2xl p-5 relative overflow-hidden">
         <div className="flex items-center justify-between relative z-10 w-full overflow-x-auto hide-scrollbar py-2">
           {steps.map((s, i) => {
             const { unlocked, reason } = getStepAccess(i, bill, isScanning);
@@ -66,7 +61,7 @@ export default function StepHeader({ currentStep, setStep, nextLabel, onNext, on
                   <div className="flex items-center gap-2">
                     {/* Circle Node */}
                     <div className={cn(
-                      "w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black transition-all border",
+                      "w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold transition-all border",
                       isCurrent 
                         ? "bg-indigo-600 border-indigo-500 text-white shadow-[0_0_10px_rgba(99,102,241,0.5)]" 
                         : isPast 
@@ -83,7 +78,7 @@ export default function StepHeader({ currentStep, setStep, nextLabel, onNext, on
                     </div>
                     {/* Step Name */}
                     <span className={cn(
-                      "text-[9px] font-black uppercase tracking-widest leading-none",
+                      "text-[9px] font-bold uppercase tracking-widest leading-none",
                       isCurrent ? "text-white" : isPast ? "text-indigo-400" : "text-slate-500"
                     )}>
                       {s}
@@ -158,3 +153,5 @@ export default function StepHeader({ currentStep, setStep, nextLabel, onNext, on
     </div>
   );
 }
+
+export default memo(StepHeader);

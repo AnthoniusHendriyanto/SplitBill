@@ -1,15 +1,11 @@
-import React from 'react';
+import { memo } from 'react';
 import { motion } from 'framer-motion';
 import useBillStore from '../store/useBillStore';
+import Icon from './Icon';
 
-const Icon = ({ name, className }) => (
-  <span className={`material-symbols-outlined ${className}`} style={{ fontSize: 'inherit' }}>
-    {name}
-  </span>
-);
-
-export default function DebtMap() {
-  const { bill, calculateTotals } = useBillStore();
+function DebtMap() {
+  const bill = useBillStore((s) => s.bill);
+  const calculateTotals = useBillStore((s) => s.calculateTotals);
   const totals = calculateTotals();
   const payer = bill.persons.find(p => p.id === bill.payerId) || bill.persons[0];
 
@@ -27,7 +23,7 @@ export default function DebtMap() {
         <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/40 border border-indigo-200 dark:border-indigo-800 flex items-center justify-center">
             <Icon name="account_tree" className="text-[16px] text-indigo-600 dark:text-indigo-400" />
         </div>
-        <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-widest">Debt Architecture</span>
+        <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-widest">Settlement Flow</span>
       </div>
 
       <div className="relative z-10 pl-2 w-full">
@@ -69,10 +65,10 @@ export default function DebtMap() {
                            <Icon name="account_balance_wallet" className="text-xl" />
                        </div>
                        <div>
-                           <div className="text-[9px] uppercase tracking-widest font-bold text-indigo-200 mb-0.5 flex items-center gap-1">
-                             <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></div>
-                             Treasurer (Receiver)
-                           </div>
+                            <div className="text-[9px] uppercase tracking-widest font-bold text-indigo-200 mb-0.5 flex items-center gap-1">
+                              <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></div>
+                              Payer
+                            </div>
                            <div className="font-extrabold text-sm tracking-wide">{payer.name || 'Payer'}</div>
                        </div>
                    </div>
@@ -120,3 +116,5 @@ export default function DebtMap() {
     </div>
   );
 }
+
+export default memo(DebtMap);

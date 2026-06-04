@@ -1,12 +1,8 @@
+import { memo } from 'react';
 import { motion } from 'framer-motion';
 import useBillStore from '../store/useBillStore';
 import Icon from './Icon';
-import { twMerge } from 'tailwind-merge';
-import { clsx } from 'clsx';
-
-function cn(...inputs) {
-  return twMerge(clsx(inputs));
-}
+import { cn } from '../utils/cn';
 
 const TABS = [
   { id: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
@@ -14,8 +10,9 @@ const TABS = [
   { id: 'settings', label: 'Settings', icon: 'settings' },
 ];
 
-export default function BottomTabBar() {
-  const { ui, updateUI } = useBillStore();
+function BottomTabBar() {
+  const ui = useBillStore((s) => s.ui);
+  const updateUI = useBillStore((s) => s.updateUI);
   const activeTab = ui?.activeTab ?? 'bills';
   const step = ui?.step ?? 1;
 
@@ -23,7 +20,7 @@ export default function BottomTabBar() {
   const setStep = (newStep) => updateUI({ step: typeof newStep === 'function' ? newStep(step) : newStep });
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 h-16 bg-white dark:bg-slate-900 border-t border-gray-200 dark:border-gray-800 flex items-center justify-around z-50 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
+    <nav aria-label="Bottom navigation" className="fixed bottom-0 left-0 right-0 h-16 bg-white dark:bg-slate-900 border-t border-gray-200 dark:border-gray-800 flex items-center justify-around z-50 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
       {TABS.map((tab) => {
         const isActive = activeTab === tab.id;
         return (
@@ -33,8 +30,10 @@ export default function BottomTabBar() {
               setActiveTab(tab.id);
               if (tab.id === 'bills') setStep(1);
             }}
+            aria-current={isActive ? 'page' : undefined}
+            aria-label={tab.label}
             className={cn(
-              "flex flex-col items-center justify-center gap-0.5 py-1 px-4 rounded-xl transition-all relative cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-indigo-500",
+              "flex flex-col items-center justify-center gap-0.5 py-1 px-4 rounded-xl transition-all relative cursor-pointer outline-none",
               isActive ? "text-indigo-600 dark:text-indigo-400" : "text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
             )}
           >
@@ -54,3 +53,5 @@ export default function BottomTabBar() {
     </nav>
   );
 }
+
+export default memo(BottomTabBar);

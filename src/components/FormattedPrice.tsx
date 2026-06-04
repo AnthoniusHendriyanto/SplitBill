@@ -1,7 +1,13 @@
+import { memo } from 'react';
 import useBillStore from '../store/useBillStore';
 import { formatCurrency } from '../utils/currency';
 
-export default function FormattedPrice({ value, className = '' }) {
+interface FormattedPriceProps {
+  value: number;
+  className?: string;
+}
+
+function FormattedPrice({ value, className = '' }: FormattedPriceProps) {
   const currency = useBillStore((s) => s.settings?.currency || 'IDR');
   return (
     <span className={className}>
@@ -9,3 +15,5 @@ export default function FormattedPrice({ value, className = '' }) {
     </span>
   );
 }
+
+export default memo(FormattedPrice);

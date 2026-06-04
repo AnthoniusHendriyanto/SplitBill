@@ -3,15 +3,10 @@ import { Link } from 'react-router-dom';
 import useAuthStore from '../store/useAuthStore';
 import useBillStore from '../store/useBillStore';
 import Icon from './Icon';
-import { twMerge } from 'tailwind-merge';
-import { clsx } from 'clsx';
-
-function cn(...inputs) {
-  return twMerge(clsx(inputs));
-}
+import { cn } from '../utils/cn';
 
 const TopNavBar = memo(() => {
-  const { ui, updateUI } = useBillStore();
+  const ui = useBillStore((s) => s.ui);
   const user = useAuthStore((state) => state.user);
   const accessToken = useAuthStore((state) => state.accessToken);
   const isAuthenticated = !!accessToken;
@@ -19,8 +14,8 @@ const TopNavBar = memo(() => {
   const sidebarCollapsed = ui?.sidebarCollapsed ?? false;
 
   return (
-    <header className={cn(
-      "fixed top-0 right-0 h-16 bg-[#070b19]/80 backdrop-blur-md border-b border-slate-900 flex justify-between items-center px-8 z-40 font-inter text-sm transition-all duration-300",
+    <header aria-label="Top navigation" className={cn(
+      "fixed top-0 right-0 h-16 bg-card/80 backdrop-blur-md border-b border-slate-900 flex justify-between items-center px-8 z-40 font-inter text-sm transition-all duration-300",
       sidebarCollapsed ? "w-[calc(100%-80px)]" : "w-[calc(100%-280px)]"
     )}>
       {/* Search Input */}

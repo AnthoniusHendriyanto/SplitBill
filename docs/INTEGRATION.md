@@ -26,6 +26,7 @@ Frontend (React + Vite, :5173)  ──HTTP──►  Backend (Go, :8080)
 - Every API call includes `Authorization: Bearer <accessToken>` header via centralized api.js
 - Auto-refresh interceptor in api.js handles 401s
 - Guest mode works without authentication
+- OCR endpoint is public (no auth needed) with IP rate limiting
 
 ### Endpoint: POST /api/v1/auth/register
 - **Request**: `{ email, password, name }`
@@ -69,40 +70,22 @@ Frontend (React + Vite, :5173)  ──HTTP──►  Backend (Go, :8080)
 ## OCR API
 
 ### Endpoint: POST /api/v1/ocr
-- **Auth**: Required
+- **Auth**: **Not required** (public endpoint)
+- **Rate Limit**: 10 requests/minute per IP
+
+### Endpoint: POST /api/v1/ocr
 - **FormData**: `image` field (multipart file) - also accepts `receipt` for compatibility
-- **Response**: `{ items: [{name, price}], service_charge, tax, total, confidence }`
-- **Frontend**: ✅ Uses centralized api.js with auth header
+- **Response**: `{ items: [{name, price, quantity}], service_charge, tax, total, confidence }`
+- **Frontend**: ✅ Uses centralized api.js (no auth header needed)
 
-## Fixed Backend Bugs
-
-1. ✅ **GetByID uses correct param source**
-   - File: `bill_handler.go`
-   - Now uses `mux.Vars(r)["id"]`
-
-2. ✅ **Delete uses correct param source**
-   - File: `bill_handler.go`
-   - Now uses `mux.Vars(r)["id"]`
-
-3. ✅ **OCR form field name**
-   - Backend accepts both `image` and `receipt` for compatibility
-
-4. ⚠️ **CORS handling is manual in each handler**
-   - Currently CORS headers set per-route inline. Could use global CORS middleware.
-
-## Missing Backend Endpoints (needed for full functionality)
+## Missing Backend Endpoints
 
 | Endpoint | Priority | Notes |
 |----------|----------|-------|
-| PUT /api/v1/bills/{id} | Medium | Update bill |
-| GET /api/v1/users/me | High | User profile + OCR usage (needed for Settings) |
-| PUT /api/v1/users/me | Medium | Update profile |
-| POST /api/v1/auth/logout | Medium | Invalidate refresh token |
-| GET /api/v1/payments/{bill_id} | Low | Payment settlement view |
-| POST /api/v1/payments/{bill_id}/settle | Low | Mark payment as paid |
 | POST /api/v1/premium/subscribe | Medium | Stripe checkout - frontend UI ready |
 | POST /api/v1/premium/webhook | Medium | Stripe webhook |
-| GET /api/v1/shares/{token} | Low | Share bill view |
+| GET /api/v1/bills/{id}/share | Low | Share bill view |
+| POST /api/v1/payments/{bill_id}/settle | Low | Mark payment as paid |
 
 ## Frontend API Client Implementation
 

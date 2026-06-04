@@ -1,12 +1,7 @@
-import React from 'react';
-import { twMerge } from 'tailwind-merge';
-import { clsx } from 'clsx';
+import { memo } from 'react';
+import { cn } from '../utils/cn';
 
-function cn(...inputs) {
-  return twMerge(clsx(inputs));
-}
-
-const PriceInput = ({ 
+const PriceInput = memo(({ 
   value, 
   onChange, 
   className, 
@@ -19,10 +14,9 @@ const PriceInput = ({
   };
 
   const handleInputChange = (e) => {
-    const rawValue = e.target.value.replace(/\./g, '');
-    // Poka-Yoke: Ensure only numbers are entered
-    if (/^\d*$/.test(rawValue)) {
-      onChange(rawValue === '' ? 0 : parseInt(rawValue, 10));
+    const rawValue = e.target.value.replace(/[^0-9.]/g, '');
+    if (/^\d*\.?\d*$/.test(rawValue)) {
+      onChange(rawValue === '' ? 0 : parseFloat(rawValue) || 0);
     }
   };
 
@@ -53,6 +47,6 @@ const PriceInput = ({
       />
     </div>
   );
-};
+});
 
 export default PriceInput;

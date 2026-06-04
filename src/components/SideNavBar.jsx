@@ -4,12 +4,7 @@ import { motion } from 'framer-motion';
 import useBillStore from '../store/useBillStore';
 import useAuthStore from '../store/useAuthStore';
 import Icon from './Icon';
-import { twMerge } from 'tailwind-merge';
-import { clsx } from 'clsx';
-
-function cn(...inputs) {
-  return twMerge(clsx(inputs));
-}
+import { cn } from '../utils/cn';
 
 const NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
@@ -18,7 +13,8 @@ const NAV_ITEMS = [
 ];
 
 const SideNavBar = memo(({ onHelpOpen }) => {
-  const { ui, updateUI } = useBillStore();
+  const ui = useBillStore((s) => s.ui);
+  const updateUI = useBillStore((s) => s.updateUI);
   const user = useAuthStore((state) => state.user);
   const accessToken = useAuthStore((state) => state.accessToken);
   const isAuthenticated = !!accessToken;
@@ -32,8 +28,8 @@ const SideNavBar = memo(({ onHelpOpen }) => {
   const setStep = (newStep) => updateUI({ step: typeof newStep === 'function' ? newStep(step) : newStep });
 
   return (
-    <aside className={cn(
-      "fixed left-0 top-0 h-full border-r bg-[#070b19] border-slate-900 flex flex-col py-6 font-inter antialiased text-sm font-medium z-50 shadow-2xl transition-all duration-300",
+    <aside aria-label="Sidebar" className={cn(
+      "fixed left-0 top-0 h-full border-r bg-card border-slate-900 flex flex-col py-6 font-inter antialiased text-sm font-medium z-50 shadow-2xl transition-all duration-300",
       sidebarCollapsed ? "w-20" : "w-[280px]"
     )}>
       {/* Brand Header */}
@@ -48,7 +44,7 @@ const SideNavBar = memo(({ onHelpOpen }) => {
           </motion.div>
           {!sidebarCollapsed && (
             <div className="flex flex-col">
-              <span className="text-lg font-black tracking-tight bg-gradient-to-r from-white via-indigo-200 to-indigo-400 bg-clip-text text-transparent">SplitMate</span>
+              <span className="text-indigo-300 text-lg font-black tracking-tight"><span className="bg-gradient-to-r from-white via-indigo-200 to-indigo-400 bg-clip-text text-transparent">SplitMate</span></span>
               <span className="text-[9px] text-indigo-400/70 font-bold uppercase tracking-widest leading-none">Financial Ledger</span>
             </div>
           )}
@@ -56,7 +52,7 @@ const SideNavBar = memo(({ onHelpOpen }) => {
       </div>
 
       {/* Main Nav Items */}
-      <nav className="flex-1 space-y-1.5 px-3">
+      <nav aria-label="Main navigation" className="flex-1 space-y-1.5 px-3">
         {NAV_ITEMS.map((item) => {
           const isActive = activeTab === item.id;
           return (
@@ -64,6 +60,7 @@ const SideNavBar = memo(({ onHelpOpen }) => {
               key={item.id}
               onClick={() => setActiveTab(item.id)}
               title={sidebarCollapsed ? item.label : undefined}
+              aria-current={isActive ? 'page' : undefined}
               className={cn(
                 "w-full flex items-center gap-3.5 px-4 py-3 rounded-xl transition-all relative group cursor-pointer focus:border-none outline-none border-none",
                 isActive 
@@ -133,6 +130,7 @@ const SideNavBar = memo(({ onHelpOpen }) => {
       <div className="mt-auto border-t border-slate-900 pt-4 px-3 space-y-1">
         <button 
           onClick={onHelpOpen}
+          aria-label="Help Center"
           title={sidebarCollapsed ? "Help Center" : undefined}
           className={cn(
             "w-full flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-slate-200 hover:bg-slate-900/40 rounded-xl transition-all cursor-pointer border-none outline-none",
@@ -140,7 +138,7 @@ const SideNavBar = memo(({ onHelpOpen }) => {
           )}
         >
           <Icon name="help" className="text-lg" />
-          {!sidebarCollapsed && <span>Help Center</span>}
+          {!sidebarCollapsed && <span className="text-sm">Help Center</span>}
         </button>
 
         {isAuthenticated ? (
@@ -181,7 +179,7 @@ const SideNavBar = memo(({ onHelpOpen }) => {
             name={sidebarCollapsed ? "keyboard_double_arrow_right" : "keyboard_double_arrow_left"} 
             className="text-lg" 
           />
-          {!sidebarCollapsed && <span className="text-[11px] font-black uppercase tracking-widest text-slate-500">Collapse</span>}
+          {!sidebarCollapsed && <span className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Collapse</span>}
         </button>
       </div>
     </aside>

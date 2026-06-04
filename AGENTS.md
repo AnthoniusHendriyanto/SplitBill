@@ -1,86 +1,127 @@
 # Project Context
 
-## Project Structure
-- **Frontend**: `/home/je22z/Desktop/Project Split Bill/splitbill_frontend` (React + Vite + Tailwind + Zustand)
-- **Backend**: `/home/je22z/Desktop/Project Split Bill/splitbill_backend` (Go + gorilla/mux + PostgreSQL)
+## Repositories
+- **Frontend**: `/splitbill_frontend` (React 19 + Vite 8 + Zustand 5 + Tailwind 3.4 + Framer Motion 12)
+- **Backend**: `/splitbill_backend` (Go 1.26 + gorilla/mux + PostgreSQL + PaddleOCR + OpenRouter + Gemini)
 
-## Frontend Key Files
-- `src/App.jsx` - Main app with all step components (Step1-Step5, Dashboard, Settings, StepHeader, PremiumModal)
-- `src/store/useBillStore.js` - Zustand store for bill data (items, persons, assignments, calculations, completeBill)
-- `src/store/useAuthStore.js` - Zustand store for auth (login, register, logout, JWT, guest mode)
-- `src/config/api.js` - API base URL configuration
-- `src/lib/api.js` - Centralized API client with JWT + auto-refresh
-- `src/components/DebtMap.jsx` - Debt visualization component
-- `src/components/FormattedPrice.jsx` - Currency-aware price display
-- `src/utils/currency.js` - Currency conversion utilities (9 currencies)
-- `src/pages/LoginPage.jsx` - Login page with guest mode option
-- `src/pages/RegisterPage.jsx` - Register page
-- `src/pages/BillDetailPage.jsx` - Completed bill detail view (fetches from backend)
-- `src/main.jsx` - Router setup (/, /login, /register, /bill/:id)
-- `docs/INTEGRATION.md` - Backend integration plan
-- `docs/FEATURES.md` - Feature gap analysis
-- `docs/USER_FLOW.md` - Complete user flow documentation
+---
 
-## Backend Key Files
-- `cmd/api/main.go` - Entry point, dependency injection
-- `internal/delivery/http/router.go` - Route definitions
-- `internal/delivery/http/auth_handler.go` - Auth HTTP handlers
-- `internal/delivery/http/bill_handler.go` - Bill HTTP handlers
-- `internal/usecase/bill_usecase.go` - Business logic, split calculations
-- `internal/usecase/auth_usecase.go` - Auth business logic
-- `internal/repository/postgres/ocr_service.go` - Mock OCR service
-- `internal/domain/bill.go` - Data models (Bill, Item, Person, Assignment, Payment)
-- `migrations/001-009` - Database schema
+## Frontend — Key Files
 
-## Current Status
-- Frontend bill creation flow works locally (Steps 1-5 with local Zustand store)
-- Auth UI built (login/register/logout) with useAuthStore
-- Guest mode available (no account required)
-- OCR upload uses centralized API client with auth header
-- Dashboard shows bills from both local store AND backend API
-- BillDetailPage fetches from backend when local bill not found
-- completeBill now POSTs to backend when user is authenticated
-- Delete bill functionality works (API + local fallback)
-- Premium upgrade modal UI exists (shows $2.99/month)
-- Settings page shows tier badge (Free/Premium)
-- Percentage split logic exists in store (calculateTotals handles split_type: 'percentage')
-- Feature gating: free users see PremiumModal when using custom split
-- Login/Register redirect to Dashboard (not Bills tab)
+| File | Purpose |
+|------|---------|
+| `src/App.jsx` | Wizard orchestrator (~245 lines, extracted from 3381) |
+| `src/components/Step1Scan.jsx` | Camera/upload/manual → OCR |
+| `src/components/Step2Ledger.jsx` | Edit items, service charge, tax |
+| `src/components/Step3People.jsx` | Add people, select payer |
+| `src/components/Step4Shares.jsx` | Split method + assignment grid + premium gating |
+| `src/components/Step5Settlement.jsx` | Summary + DebtMap + save |
+| `src/components/Dashboard.jsx` | Bill list (API + local), skeleton loading, KPI cards |
+| `src/components/SettingsPage.jsx` | 7-tab settings (profile, tier, currency, subscription) |
+| `src/components/HelpCenterModal.jsx` | Usage guide modal |
+| `src/components/BillDetailsModal.jsx` | Completed bill breakdown |
+| `src/components/SideNavBar.jsx` | Desktop nav with tier badge |
+| `src/components/BottomTabBar.jsx` | Mobile nav |
+| `src/components/AuthOverlay.jsx` | Login/register overlay |
+| `src/store/useBillStore.js` | Bill data, UI step (persisted), calculations, API sync |
+| `src/store/useAuthStore.js` | Auth state (uses centralized api.js) |
+| `src/lib/api.js` | Centralized API client (AbortController, 30s, auto-refresh) |
+| `src/utils/currency.js` | 9-currency formatting |
+| `src/pages/LoginPage.jsx` | Login page + guest mode |
+| `src/pages/RegisterPage.jsx` | Register page |
+| `src/pages/BillDetailPage.jsx` | Backend-bill detail view |
+| `tailwind.config.js` | 9 custom color shades defined |
 
-## Fixed Backend Bugs
-1. ✅ GetByID now uses `mux.Vars(r)["id"]` instead of query params
-2. ✅ Delete now uses `mux.Vars(r)["id"]` instead of query params
-3. ✅ OCR accepts both `image` and `receipt` field names
+## Backend — Key Files
 
-## Completed Frontend Integration
-1. ✅ Created centralized API client (`src/lib/api.js`) with JWT + auto-refresh
-2. ✅ OCR upload now sends auth header
-3. ✅ completeBill POSTs to backend when authenticated
-4. ✅ Dashboard fetches from backend when authenticated
-5. ✅ BillDetailPage fetches from backend when not found locally
-6. ✅ Delete bill functionality with API + local fallback
-7. ✅ Added PremiumModal component with $2.99/month upgrade UI
-8. ✅ Added tier badge in SideNavBar (shows Free/Premium, clickable for free users)
-9. ✅ Added Subscription section in Settings with OCR usage display
-10. ✅ Added feature gating in Step 4 - free users see PremiumModal when using custom split
-11. ✅ Fixed login/register to redirect to Dashboard instead of Bills tab
-12. ✅ Fixed hydration race condition - App redirects after hydration completes
+| File | Purpose |
+|------|---------|
+| `cmd/api/main.go` | Entry point, DI, `runServer()` deduplicated |
+| `internal/config/config.go` | All env-driven settings (JWT, pool, timeouts, CORS, SSL) |
+| `internal/delivery/http/router.go` | Route definitions |
+| `internal/delivery/http/auth_handler.go` | Auth handlers |
+| `internal/delivery/http/bill_handler.go` | Bill + OCR handlers |
+| `internal/delivery/http/middleware/auth.go` | JWT middleware |
+| `internal/delivery/http/middleware/cors.go` | Configurable CORS |
+| `internal/delivery/http/middleware/ratelimit.go` | IP rate limiter (10/min OCR) |
+| `internal/usecase/bill_usecase.go` | Business logic, 4 split types, OCR, shares |
+| `internal/usecase/auth_usecase.go` | Auth business logic |
+| `internal/repository/postgres/ocr_service.go` | PaddleOCR → OpenRouter → Gemini pipeline |
+| `internal/repository/postgres/paddle_ocr.py` | PaddleOCR Python wrapper |
+| `internal/domain/bill.go` | Data models (Bill, Item, Person with is_payer, Payment) |
+| `internal/domain/ocr_service.go` | OCRItem with Quantity, OCRResult |
+| `migrations/001-012` | Database schema (12 migrations) |
+| `run_migrations.sh` | Idempotent migration runner |
 
-## Remaining Features to Build
-- Stripe checkout flow (frontend + backend)
-- Share via link (backend endpoint + frontend)
-- PDF export
-- WhatsApp sharing with transfer notes
-- OCR usage display + limit UX improvements
+---
 
-## Key Technical Decisions
-- Used Zustand persist for auth state persistence in localStorage
-- Hydration check uses useState with useEffect to prevent race conditions
-- Guest mode allows using app without authentication
-- AccessToken directly used for auth check (not getter) to avoid selector issues
+## Current Integration Status
+
+### Frontend → Backend (Working)
+| Feature | Status |
+|---------|--------|
+| Auth (register/login/refresh/logout) | ✅ Centralized api.js with auto-refresh |
+| OCR upload (public endpoint, no auth) | ✅ IP rate limited (10/min) |
+| Bill CRUD (create, list, detail, delete) | ✅ POSTs to backend when authenticated |
+| Dashboard fetches from backend | ✅ Skeleton loading + error states |
+| Bill detail from backend | ✅ Fallback to local store |
+| Guest mode (no auth, local-only) | ✅ |
+| Premium feature gating | ✅ PremiumModal on custom/percentage split |
+| Tier badge + upgrade prompts | ✅ SideNavBar + Settings |
+
+### Remaining Features
+| Feature | Status |
+|---------|--------|
+| Stripe checkout flow | ❌ Backend + frontend needed |
+| Share via link | ❌ Backend doesn't expose endpoint |
+| PDF export | ❌ Non-functional button |
+| WhatsApp sharing | ❌ Non-functional button |
+| Payment settlement (mark paid) | ❌ Backend endpoint not wired |
+| Multi-currency in backend | ❌ Schema lacks currency field |
+
+---
+
+## Quality Improvements Applied
+
+### Architecture
+- `App.jsx` extracted from 3381→245 lines into 9 standalone components
+- UI state (step/tab) persists via Zustand `partialize`
+- Auth store uses centralized `api.js` (AbortController, 30s timeout, auto-refresh)
+- Unused deps removed: `axios`, `lucide-react`
+
+### Accessibility
+- Global `*:focus-visible` ring on all elements
+- `prefers-reduced-motion` disables animations
+- `aria-current="page"` on nav items
+- `aria-label` on icon-only buttons
+
+### Visual
+- 9 undefined Tailwind color shades defined
+- `font-black` → `font-bold`/`font-semibold` on small labels
+- Skeleton loading states on Dashboard
+- Empty/error states for all data views
+
+### Backend
+- All config values env-driven (46 audit items resolved)
+- `runServer()` deduplicated (~50 lines)
+- TIMESTAMP → TIMESTAMPTZ, CHECK constraint on payments
+- OCR public endpoint with IP rate limiting
+- PaddleOCR → OpenRouter Free → Gemini Free pipeline
+- No regex fallback, no paid AI, no monthly scan limit
+
+---
 
 ## Commands
-- Frontend dev: `npm run dev` (port 5173)
-- Frontend build: `npm run build`
-- Backend: `go run cmd/api/main.go` (port 8080)
-- Backend requires PostgreSQL + .env file
+
+```bash
+# Frontend
+npm run dev       # Dev server (:5173)
+npm run build     # Production build
+npm run preview   # Preview production build
+
+# Backend
+go run ./cmd/api/main.go    # Dev server (:8080)
+go build ./...              # Compile check
+go vet ./...                # Static analysis
+./run_migrations.sh         # Apply DB migrations
+```

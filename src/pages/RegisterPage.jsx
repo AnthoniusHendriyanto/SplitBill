@@ -1,13 +1,18 @@
-import { useState, useEffect } from 'react';
+import { memo, useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import useAuthStore from '../store/useAuthStore';
 import useBillStore from '../store/useBillStore';
 import Icon from '../components/Icon';
 
-export default function RegisterPage() {
+function RegisterPage() {
   const navigate = useNavigate();
-  const { register, isRegistering, registerError, clearErrors, isAuthenticated, accessToken } = useAuthStore();
+  const register = useAuthStore((s) => s.register);
+  const isRegistering = useAuthStore((s) => s.isRegistering);
+  const registerError = useAuthStore((s) => s.registerError);
+  const clearErrors = useAuthStore((s) => s.clearErrors);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const accessToken = useAuthStore((s) => s.accessToken);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -64,10 +69,11 @@ export default function RegisterPage() {
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="relative group">
-              <label className="absolute -top-2 left-3 px-1 bg-white dark:bg-slate-900 text-[10px] font-bold text-indigo-600 uppercase tracking-wider z-10">
+              <label htmlFor="reg-name" className="absolute -top-2 left-3 px-1 bg-white dark:bg-slate-900 text-[10px] font-bold text-indigo-600 uppercase tracking-wider z-10">
                 Name
               </label>
               <input
+                id="reg-name"
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -81,10 +87,11 @@ export default function RegisterPage() {
             </div>
 
             <div className="relative group">
-              <label className="absolute -top-2 left-3 px-1 bg-white dark:bg-slate-900 text-[10px] font-bold text-indigo-600 uppercase tracking-wider z-10">
+              <label htmlFor="reg-email" className="absolute -top-2 left-3 px-1 bg-white dark:bg-slate-900 text-[10px] font-bold text-indigo-600 uppercase tracking-wider z-10">
                 Email
               </label>
               <input
+                id="reg-email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -96,10 +103,11 @@ export default function RegisterPage() {
             </div>
 
             <div className="relative group">
-              <label className="absolute -top-2 left-3 px-1 bg-white dark:bg-slate-900 text-[10px] font-bold text-indigo-600 uppercase tracking-wider z-10">
+              <label htmlFor="reg-password" className="absolute -top-2 left-3 px-1 bg-white dark:bg-slate-900 text-[10px] font-bold text-indigo-600 uppercase tracking-wider z-10">
                 Password
               </label>
               <input
+                id="reg-password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -112,10 +120,11 @@ export default function RegisterPage() {
             </div>
 
             <div className="relative group">
-              <label className="absolute -top-2 left-3 px-1 bg-white dark:bg-slate-900 text-[10px] font-bold text-indigo-600 uppercase tracking-wider z-10">
+              <label htmlFor="reg-confirm-password" className="absolute -top-2 left-3 px-1 bg-white dark:bg-slate-900 text-[10px] font-bold text-indigo-600 uppercase tracking-wider z-10">
                 Confirm Password
               </label>
               <input
+                id="reg-confirm-password"
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
@@ -185,3 +194,5 @@ export default function RegisterPage() {
     </div>
   );
 }
+
+export default memo(RegisterPage);

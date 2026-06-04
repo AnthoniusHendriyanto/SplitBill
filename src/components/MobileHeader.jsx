@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import Icon from './Icon';
 import MobileDrawer from './MobileDrawer';
 
-export default function MobileHeader({ onHelpOpen }) {
+function MobileHeader({ onHelpOpen }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   return (
@@ -10,7 +10,7 @@ export default function MobileHeader({ onHelpOpen }) {
       <header className="h-14 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 flex items-center justify-between px-4 z-40 font-inter text-sm">
         <button
           onClick={() => setDrawerOpen(true)}
-          className="p-2 -ml-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+          className="p-2 -ml-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer outline-none"
           aria-label="Open menu"
         >
           <Icon name="menu" className="text-2xl text-slate-700 dark:text-slate-300" />
@@ -24,7 +24,7 @@ export default function MobileHeader({ onHelpOpen }) {
         </div>
 
         <button
-          className="p-2 -mr-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+          className="p-2 -mr-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer outline-none"
           aria-label="Notifications"
         >
           <Icon name="notifications" className="text-2xl text-slate-600 dark:text-slate-400" />
@@ -35,4 +35,6 @@ export default function MobileHeader({ onHelpOpen }) {
     </>
   );
 }
+
+export default memo(MobileHeader);
 

@@ -1,25 +1,18 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { api } from '../lib/api';
 import { API } from '../config/api';
-import { getErrorMessage } from '../utils/errors';
-
-const authBase = `${API.base}/api/v1/auth`;
+import useBillStore from './useBillStore';
 
 const resetActiveBill = () => {
   try {
-    import('./useBillStore').then((module) => {
-      if (module && module.default && typeof module.default.getState === 'function') {
-        const store = module.default.getState();
-        if (typeof store.resetBill === 'function') {
-          store.resetBill();
-        }
-        if (typeof store.updateUI === 'function') {
-          store.updateUI({ activeTab: 'dashboard', step: 1 });
-        }
-      }
-    }).catch(err => {
-      console.warn('Failed to dynamically load useBillStore:', err);
-    });
+    const store = useBillStore.getState();
+    if (typeof store.resetBill === 'function') {
+      store.resetBill();
+    }
+    if (typeof store.updateUI === 'function') {
+      store.updateUI({ activeTab: 'dashboard', step: 1 });
+    }
   } catch (err) {
     console.warn('Error trying to reset active bill store:', err);
   }
@@ -51,16 +44,7 @@ const useAuthStore = create(
       login: async (email, password) => {
         set({ isLoggingIn: true, loginError: null });
         try {
-          const res = await fetch(`${authBase}/login`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password }),
-          });
-          if (!res.ok) {
-            const err = await res.json();
-            throw new Error(getErrorMessage(err));
-          }
-          const data = await res.json();
+          const data = await api.login(email, password);
           set({
             user: data.user,
             accessToken: data.access_token,
@@ -79,16 +63,7 @@ const useAuthStore = create(
       register: async (name, email, password) => {
         set({ isRegistering: true, registerError: null });
         try {
-          const res = await fetch(`${authBase}/register`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, email, password }),
-          });
-          if (!res.ok) {
-            const err = await res.json();
-            throw new Error(getErrorMessage(err));
-          }
-          const data = await res.json();
+          const data = await api.register(name, email, password);
           set({
             user: data.user,
             accessToken: data.access_token,
@@ -107,13 +82,7 @@ const useAuthStore = create(
       logout: async () => {
         const { refreshToken } = get();
         try {
-          if (refreshToken) {
-            await fetch(`${authBase}/logout`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ refresh_token: refreshToken }),
-            });
-          }
+          if (refreshToken) await api.logout(refreshToken);
         } catch {
           // ignore logout errors
         }
@@ -123,13 +92,41 @@ const useAuthStore = create(
 
       setTokens: (accessToken, refreshToken) => set({ accessToken, refreshToken }),
 
+      silentRefresh: async () => {
+        const state = get();
+        if (!state.refreshToken) {
+          set({ user: null, accessToken: null, refreshToken: null, isGuest: false });
+          return false;
+        }
+        try {
+          const res = await fetch(`${API.base}/api/v1/auth/refresh`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ refresh_token: state.refreshToken }),
+          });
+          if (!res.ok) {
+            set({ user: null, accessToken: null, refreshToken: null, isGuest: false });
+            return false;
+          }
+          const body = await res.json();
+          const data = body.data || body;
+          set({
+            user: data.user || state.user,
+            accessToken: data.access_token,
+            refreshToken: data.refresh_token,
+          });
+          return true;
+        } catch {
+          set({ user: null, accessToken: null, refreshToken: null, isGuest: false });
+          return false;
+        }
+      },
+
       clearErrors: () => set({ loginError: null, registerError: null }),
     }),
     {
       name: 'splitmate-auth',
       partialize: (state) => ({
-        user: state.user,
-        accessToken: state.accessToken,
         refreshToken: state.refreshToken,
         isGuest: state.isGuest,
       }),
