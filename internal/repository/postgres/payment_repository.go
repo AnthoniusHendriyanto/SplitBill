@@ -50,6 +50,9 @@ func (r *paymentRepository) GetByBillID(ctx context.Context, billID string) ([]d
 		}
 		payments = append(payments, p)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return payments, nil
 }
 

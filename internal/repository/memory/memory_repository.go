@@ -34,8 +34,14 @@ func NewRepositories() *Repositories {
 		assignmentRepo: ar,
 	}
 	return &Repositories{
-		User:       &userRepository{users: make(map[string]*domain.User)},
-		Bill:       &billRepository{bills: make(map[string]*domain.Bill)},
+		User: &userRepository{users: make(map[string]*domain.User), refreshTokens: make(map[string]bool)},
+		Bill: &billRepository{
+			bills:          make(map[string]*domain.Bill),
+			itemRepo:       ir,
+			personRepo:     &personRepository{persons: make(map[string]*domain.Person)},
+			assignmentRepo: ar,
+			paymentRepo:    &paymentRepository{payments: make(map[string]*domain.Payment)},
+		},
 		Item:       ir,
 		Person:     &personRepository{persons: make(map[string]*domain.Person)},
 		Assignment: ar,
@@ -48,8 +54,9 @@ func NewRepositories() *Repositories {
 // ---- User Repository ----
 
 type userRepository struct {
-	mu    sync.Mutex
-	users map[string]*domain.User
+	mu           sync.Mutex
+	users        map[string]*domain.User
+	refreshTokens map[string]bool
 }
 
 func (r *userRepository) Create(_ context.Context, user *domain.User) error {
@@ -128,11 +135,37 @@ func (r *userRepository) Delete(_ context.Context, id string) error {
 	return nil
 }
 
+func (r *userRepository) SaveRefreshToken(_ context.Context, userID, token string, _ int64) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.refreshTokens[token] = true
+	return nil
+}
+
+func (r *userRepository) DeleteRefreshToken(_ context.Context, token string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.refreshTokens, token)
+	return nil
+}
+
+func (r *userRepository) ReplaceRefreshToken(_ context.Context, oldToken, newToken, userID string, expiresAt int64) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.refreshTokens, oldToken)
+	r.refreshTokens[newToken] = true
+	return nil
+}
+
 // ---- Bill Repository ----
 
 type billRepository struct {
-	mu    sync.Mutex
-	bills map[string]*domain.Bill
+	mu             sync.Mutex
+	bills          map[string]*domain.Bill
+	itemRepo       *itemRepository
+	personRepo     *personRepository
+	assignmentRepo *assignmentRepository
+	paymentRepo    *paymentRepository
 }
 
 func (r *billRepository) Create(_ context.Context, bill *domain.Bill) error {
@@ -230,6 +263,40 @@ func (r *billRepository) Delete(_ context.Context, id string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	delete(r.bills, id)
+	return nil
+}
+
+func (r *billRepository) CreateFull(ctx context.Context, bill *domain.Bill, items []domain.Item, persons []domain.Person, assignments []domain.ItemAssignment) error {
+	if err := r.Create(ctx, bill); err != nil {
+		return err
+	}
+	for i := range items {
+		items[i].BillID = bill.ID
+		if err := r.itemRepo.Create(ctx, &items[i]); err != nil {
+			return err
+		}
+	}
+	for i := range persons {
+		persons[i].BillID = bill.ID
+		if err := r.personRepo.Create(ctx, &persons[i]); err != nil {
+			return err
+		}
+	}
+	for i := range assignments {
+		if err := r.assignmentRepo.Create(ctx, &assignments[i]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *billRepository) CreatePayments(ctx context.Context, billID string, payments []domain.Payment) error {
+	for i := range payments {
+		payments[i].BillID = billID
+		if err := r.paymentRepo.Create(ctx, &payments[i]); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -520,7 +587,7 @@ func (r *usageRepository) GetMonthlyUsage(_ context.Context, userID, action, mon
 	defer r.mu.Unlock()
 	u, ok := r.usage[usageKey(userID, action, month)]
 	if !ok {
-		return domain.UsageTracking{}, domain.ErrNotFound
+		return domain.UsageTracking{}, nil
 	}
 	return *u, nil
 }

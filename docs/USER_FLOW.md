@@ -617,11 +617,12 @@ She taps "Mark as Paid" → status updated
 ## Premium User Flows
 
 ### Upgrade Prompt (Free User)
-- Show upgrade banner after 3rd OCR scan
-- "You've used 3 of 5 free scans. Upgrade for unlimited!"
+- On trying custom split: show PremiumModal
+- On trying percentage split: show PremiumModal
 
 ### Premium Features
-- Unlimited OCR scans
+- Custom split (per-item assignment)
+- Percentage split
 - Share bill via link (read-only)
 - Export to PDF
 - Custom split available

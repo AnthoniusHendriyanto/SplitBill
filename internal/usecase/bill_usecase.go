@@ -2,7 +2,8 @@ package usecase
 
 import (
 	"context"
-	"errors"
+	"fmt"
+	"log"
 	"time"
 
 	"github.com/user/split-mate/internal/domain"
@@ -20,6 +21,7 @@ type billUsecase struct {
 	userRepo       domain.UserRepository
 	ocrService     domain.OCRService
 	contextTimeout time.Duration
+	usageLimit     int
 }
 
 func NewBillUsecase(
@@ -32,6 +34,7 @@ func NewBillUsecase(
 	userRepo domain.UserRepository,
 	ocrService domain.OCRService,
 	timeout time.Duration,
+	usageLimit int,
 ) domain.BillUsecase {
 	return &billUsecase{
 		billRepo:       billRepo,
@@ -43,6 +46,7 @@ func NewBillUsecase(
 		userRepo:       userRepo,
 		ocrService:     ocrService,
 		contextTimeout: timeout,
+		usageLimit:     usageLimit,
 	}
 }
 
@@ -55,9 +59,16 @@ func (bu *billUsecase) Create(ctx context.Context, userID string, req *domain.Cr
 		return nil, err
 	}
 
+	isPremium := user.Tier == "premium" && user.PremiumExpiresAt != nil && user.PremiumExpiresAt.After(time.Now())
+	if !isPremium && user.Tier == "premium" {
+		if err := bu.userRepo.UpdateTier(ctx, user.ID, "free", nil); err != nil {
+			log.Printf("failed to downgrade expired premium for user %s: %v", user.ID, err)
+		}
+	}
+
 	if req.SplitType == string(domain.SplitTypeCustom) || req.SplitType == string(domain.SplitTypePercentage) {
-		if user.Tier != "premium" {
-			return nil, errors.New("custom and percentage split are premium features")
+		if !isPremium {
+			return nil, domain.ErrPremiumRequired
 		}
 	}
 
@@ -74,112 +85,113 @@ func (bu *billUsecase) Create(ctx context.Context, userID string, req *domain.Cr
 		UpdatedAt:     now,
 	}
 
-	if err := bu.billRepo.Create(ctx, bill); err != nil {
-		return nil, err
-	}
-
-	for _, itemReq := range req.Items {
-		item := &domain.Item{
-			ID:      "",
-			BillID:  bill.ID,
-			Name:    itemReq.Name,
-			Price:   itemReq.Price,
+	items := make([]domain.Item, len(req.Items))
+	for i, itemReq := range req.Items {
+		items[i] = domain.Item{
+			BillID:    bill.ID,
+			Name:      itemReq.Name,
+			Price:     itemReq.Price,
 			CreatedAt: now,
 		}
-		if err := bu.itemRepo.Create(ctx, item); err != nil {
-			return nil, err
-		}
-		bill.Items = append(bill.Items, *item)
 		bill.TotalAmount += itemReq.Price
 	}
 
-	for _, personReq := range req.Persons {
-		person := &domain.Person{
-			ID:          "",
-			BillID:      bill.ID,
-			Name:        personReq.Name,
-			IsPayer:     personReq.IsPayer,
-			Percentage:  personReq.Percentage,
-			CreatedAt:   now,
+	persons := make([]domain.Person, len(req.Persons))
+	for i, personReq := range req.Persons {
+		persons[i] = domain.Person{
+			BillID:     bill.ID,
+			Name:       personReq.Name,
+			IsPayer:    personReq.IsPayer,
+			Percentage: personReq.Percentage,
+			CreatedAt:  now,
 		}
-		if err := bu.personRepo.Create(ctx, person); err != nil {
-			return nil, err
-		}
-		bill.Persons = append(bill.Persons, *person)
 	}
 
+	assignments := make([]domain.ItemAssignment, 0)
 	if req.SplitType == string(domain.SplitTypeCustom) {
 		for _, assignment := range req.Assignments {
-			a := &domain.ItemAssignment{
-				ID:        "",
+			assignments = append(assignments, domain.ItemAssignment{
 				ItemID:    assignment.ItemID,
 				PersonID:  assignment.PersonID,
 				CreatedAt: now,
-			}
-			if err := bu.assignmentRepo.Create(ctx, a); err != nil {
-				return nil, err
-			}
+			})
 		}
 	}
 
-	bu.calculatePayments(ctx, bill)
+	if err := bu.billRepo.CreateFull(ctx, bill, items, persons, assignments); err != nil {
+		return nil, err
+	}
 
-	bill.GrandTotal = bill.TotalAmount + (bill.TotalAmount * bill.ServiceCharge / 100) + (bill.TotalAmount * bill.Tax / 100)
+	bill.Items = items
+	bill.Persons = persons
+
+	payments := bu.calculatePayments(ctx, bill)
+	if err := bu.billRepo.CreatePayments(ctx, bill.ID, payments); err != nil {
+		return nil, err
+	}
+	bill.Payments = payments
+
+	bill.GrandTotal = bill.CalculateGrandTotal()
 	bu.billRepo.Update(ctx, bill)
+
+	bu.usageRepo.IncrementUsage(ctx, userID, "create_bill", now.Format("2006-01"))
 
 	return bill, nil
 }
 
-func (bu *billUsecase) calculatePayments(ctx context.Context, bill *domain.Bill) {
+func (bu *billUsecase) calculatePayments(ctx context.Context, bill *domain.Bill) []domain.Payment {
 	switch bill.SplitType {
 	case string(domain.SplitTypeEqual):
-		bu.calculateEqualSplit(ctx, bill)
+		return bu.calculateEqualSplit(ctx, bill)
 	case string(domain.SplitTypeCustom):
-		bu.calculateCustomSplit(ctx, bill)
+		return bu.calculateCustomSplit(ctx, bill)
 	case string(domain.SplitTypePercentage):
-		bu.calculatePercentageSplit(ctx, bill)
+		return bu.calculatePercentageSplit(ctx, bill)
 	case string(domain.SplitTypeSharedItems):
-		bu.calculateSharedItemsSplit(ctx, bill)
+		return bu.calculateSharedItemsSplit(ctx, bill)
 	}
+	return nil
 }
 
-func (bu *billUsecase) calculateEqualSplit(ctx context.Context, bill *domain.Bill) {
+func (bu *billUsecase) calculateEqualSplit(ctx context.Context, bill *domain.Bill) []domain.Payment {
 	if len(bill.Persons) == 0 {
-		return
+		return nil
 	}
 
-	subtotal := bill.TotalAmount
-	serviceCharge := subtotal * bill.ServiceCharge / 100
-	tax := subtotal * bill.Tax / 100
-	grandTotal := subtotal + serviceCharge + tax
-
+	grandTotal := bill.CalculateGrandTotal()
 	perPerson := grandTotal / float64(len(bill.Persons))
 
+	var payments []domain.Payment
 	for i, fromPerson := range bill.Persons {
 		for j, toPerson := range bill.Persons {
 			if i == j {
 				continue
 			}
-			payment := &domain.Payment{
-				ID:            "",
-				BillID:        bill.ID,
-				FromPersonID:  fromPerson.ID,
-				ToPersonID:    toPerson.ID,
-				FromPerson:    fromPerson.Name,
-				ToPerson:      toPerson.Name,
-				Amount:        perPerson,
-				IsPaid:        false,
-				CreatedAt:     time.Now(),
-			}
-			bu.paymentRepo.Create(ctx, payment)
-			bill.Payments = append(bill.Payments, *payment)
+			payments = append(payments, domain.Payment{
+				BillID:       bill.ID,
+				FromPersonID: fromPerson.ID,
+				ToPersonID:   toPerson.ID,
+				FromPerson:   fromPerson.Name,
+				ToPerson:     toPerson.Name,
+				Amount:       perPerson,
+				IsPaid:       false,
+				CreatedAt:    time.Now(),
+			})
 		}
 	}
+	return payments
 }
 
-func (bu *billUsecase) calculateCustomSplit(ctx context.Context, bill *domain.Bill) {
-	assignments, _ := bu.assignmentRepo.GetByBillID(ctx, bill.ID)
-	items, _ := bu.itemRepo.GetByBillID(ctx, bill.ID)
+func (bu *billUsecase) calculateCustomSplit(ctx context.Context, bill *domain.Bill) []domain.Payment {
+	var payments []domain.Payment
+	assignments, err := bu.assignmentRepo.GetByBillID(ctx, bill.ID)
+	if err != nil {
+		log.Printf("failed to get assignments for custom split: %v", err)
+	}
+	items, err := bu.itemRepo.GetByBillID(ctx, bill.ID)
+	if err != nil {
+		log.Printf("failed to get items for custom split: %v", err)
+	}
 
 	itemPersonMap := make(map[string][]string)
 	for _, a := range assignments {
@@ -202,11 +214,13 @@ func (bu *billUsecase) calculateCustomSplit(ctx context.Context, bill *domain.Bi
 	tax := bill.TotalAmount * bill.Tax / 100
 	additionalCost := serviceCharge + tax
 
+	toPerson := findPayer(bill.Persons)
+
 	for personID, amount := range personAmounts {
 		proportion := amount / bill.TotalAmount
 		personShare := additionalCost * proportion
 
-		var personName string
+		personName := ""
 		for _, p := range bill.Persons {
 			if p.ID == personID {
 				personName = p.Name
@@ -214,54 +228,56 @@ func (bu *billUsecase) calculateCustomSplit(ctx context.Context, bill *domain.Bi
 			}
 		}
 
-		payment := &domain.Payment{
-			ID:           "",
+		payments = append(payments, domain.Payment{
 			BillID:       bill.ID,
 			FromPersonID: personID,
-			ToPersonID:   "",
+			ToPersonID:   toPerson.ID,
 			FromPerson:   personName,
-			ToPerson:     "Bill",
+			ToPerson:     toPerson.Name,
 			Amount:       amount + personShare,
 			IsPaid:       false,
 			CreatedAt:    time.Now(),
-		}
-		bu.paymentRepo.Create(ctx, payment)
-		bill.Payments = append(bill.Payments, *payment)
+		})
 	}
+	return payments
 }
 
-func (bu *billUsecase) calculatePercentageSplit(ctx context.Context, bill *domain.Bill) {
-	subtotal := bill.TotalAmount
-	serviceCharge := subtotal * bill.ServiceCharge / 100
-	tax := subtotal * bill.Tax / 100
-	grandTotal := subtotal + serviceCharge + tax
+func (bu *billUsecase) calculatePercentageSplit(ctx context.Context, bill *domain.Bill) []domain.Payment {
+	grandTotal := bill.CalculateGrandTotal()
+	toPerson := findPayer(bill.Persons)
 
+	var payments []domain.Payment
 	for _, person := range bill.Persons {
 		personAmount := grandTotal * person.Percentage / 100
 
-		payment := &domain.Payment{
-			ID:           "",
+		payments = append(payments, domain.Payment{
 			BillID:       bill.ID,
 			FromPersonID: person.ID,
-			ToPersonID:   "",
+			ToPersonID:   toPerson.ID,
 			FromPerson:   person.Name,
-			ToPerson:     "Bill",
+			ToPerson:     toPerson.Name,
 			Amount:       personAmount,
 			IsPaid:       false,
 			CreatedAt:    time.Now(),
-		}
-		bu.paymentRepo.Create(ctx, payment)
-		bill.Payments = append(bill.Payments, *payment)
+		})
 	}
+	return payments
 }
 
-func (bu *billUsecase) calculateSharedItemsSplit(ctx context.Context, bill *domain.Bill) {
+func (bu *billUsecase) calculateSharedItemsSplit(ctx context.Context, bill *domain.Bill) []domain.Payment {
+	var payments []domain.Payment
 	if len(bill.Persons) == 0 || len(bill.Items) == 0 {
-		return
+		return nil
 	}
 
-	assignments, _ := bu.assignmentRepo.GetByBillID(ctx, bill.ID)
-	items, _ := bu.itemRepo.GetByBillID(ctx, bill.ID)
+	assignments, err := bu.assignmentRepo.GetByBillID(ctx, bill.ID)
+	if err != nil {
+		log.Printf("failed to get assignments for shared items split: %v", err)
+	}
+	items, err := bu.itemRepo.GetByBillID(ctx, bill.ID)
+	if err != nil {
+		log.Printf("failed to get items for shared items split: %v", err)
+	}
 
 	itemPersonMap := make(map[string][]string)
 	for _, a := range assignments {
@@ -295,6 +311,8 @@ func (bu *billUsecase) calculateSharedItemsSplit(ctx context.Context, bill *doma
 	}
 	totalAssigned += sharedItemTotal
 
+	toPerson := findPayer(bill.Persons)
+
 	for _, person := range bill.Persons {
 		individualShare := individualItemTotals[person.ID]
 		sharedShare := sharedPerPerson
@@ -308,20 +326,18 @@ func (bu *billUsecase) calculateSharedItemsSplit(ctx context.Context, bill *doma
 
 		totalPayment := subtotal + personExtraCost
 
-		payment := &domain.Payment{
-			ID:           "",
+		payments = append(payments, domain.Payment{
 			BillID:       bill.ID,
 			FromPersonID: person.ID,
-			ToPersonID:   "",
+			ToPersonID:   toPerson.ID,
 			FromPerson:   person.Name,
-			ToPerson:     "Bill",
+			ToPerson:     toPerson.Name,
 			Amount:       totalPayment,
 			IsPaid:       false,
 			CreatedAt:    time.Now(),
-		}
-		bu.paymentRepo.Create(ctx, payment)
-		bill.Payments = append(bill.Payments, *payment)
+		})
 	}
+	return payments
 }
 
 func (bu *billUsecase) GetByID(ctx context.Context, userID, billID string) (*domain.BillDetailResponse, error) {
@@ -333,10 +349,22 @@ func (bu *billUsecase) GetByID(ctx context.Context, userID, billID string) (*dom
 		return nil, err
 	}
 
-	items, _ := bu.itemRepo.GetByBillID(ctx, billID)
-	persons, _ := bu.personRepo.GetByBillID(ctx, billID)
-	payments, _ := bu.paymentRepo.GetByBillID(ctx, billID)
-	assignments, _ := bu.assignmentRepo.GetByBillID(ctx, billID)
+	items, err := bu.itemRepo.GetByBillID(ctx, billID)
+	if err != nil {
+		log.Printf("failed to fetch items for bill %s: %v", billID, err)
+	}
+	persons, err := bu.personRepo.GetByBillID(ctx, billID)
+	if err != nil {
+		log.Printf("failed to fetch persons for bill %s: %v", billID, err)
+	}
+	payments, err := bu.paymentRepo.GetByBillID(ctx, billID)
+	if err != nil {
+		log.Printf("failed to fetch payments for bill %s: %v", billID, err)
+	}
+	assignments, err := bu.assignmentRepo.GetByBillID(ctx, billID)
+	if err != nil {
+		log.Printf("failed to fetch assignments for bill %s: %v", billID, err)
+	}
 
 	itemPersonMap := make(map[string][]string)
 	for _, a := range assignments {
@@ -362,7 +390,7 @@ func (bu *billUsecase) GetByID(ctx context.Context, userID, billID string) (*dom
 	bill.Items = items
 	bill.Persons = persons
 	bill.Payments = payments
-	bill.GrandTotal = bill.TotalAmount + (bill.TotalAmount*bill.ServiceCharge/100) + (bill.TotalAmount*bill.Tax/100)
+	bill.GrandTotal = bill.CalculateGrandTotal()
 
 	settlement := bu.calculateSettlement(payments)
 
@@ -404,7 +432,7 @@ func (bu *billUsecase) Fetch(ctx context.Context, userID string, page, limit int
 	summaries := make([]domain.BillSummary, len(bills))
 	for i, bill := range bills {
 		persons, _ := bu.personRepo.GetByBillID(ctx, bill.ID)
-		grandTotal := bill.TotalAmount + (bill.TotalAmount*bill.ServiceCharge/100) + (bill.TotalAmount*bill.Tax/100)
+		grandTotal := bill.CalculateGrandTotal()
 
 		summaries[i] = domain.BillSummary{
 			ID:          bill.ID,
@@ -440,10 +468,18 @@ func (bu *billUsecase) Delete(ctx context.Context, userID, billID string) error 
 		return err
 	}
 
-	bu.assignmentRepo.DeleteByBillID(ctx, billID)
-	bu.paymentRepo.DeleteByBillID(ctx, billID)
-	bu.itemRepo.DeleteByBillID(ctx, billID)
-	bu.personRepo.DeleteByBillID(ctx, billID)
+	if err := bu.assignmentRepo.DeleteByBillID(ctx, billID); err != nil {
+		return fmt.Errorf("delete assignments: %w", err)
+	}
+	if err := bu.paymentRepo.DeleteByBillID(ctx, billID); err != nil {
+		return fmt.Errorf("delete payments: %w", err)
+	}
+	if err := bu.itemRepo.DeleteByBillID(ctx, billID); err != nil {
+		return fmt.Errorf("delete items: %w", err)
+	}
+	if err := bu.personRepo.DeleteByBillID(ctx, billID); err != nil {
+		return fmt.Errorf("delete persons: %w", err)
+	}
 
 	return bu.billRepo.Delete(ctx, billID)
 }
@@ -461,9 +497,27 @@ func (bu *billUsecase) ProcessOCR(ctx context.Context, userID string, imageBytes
 }
 
 func (bu *billUsecase) GetUsage(ctx context.Context, userID string) (*domain.UsageResponse, error) {
+	now := time.Now()
+	month := now.Format("2006-01")
+	usage, err := bu.usageRepo.GetMonthlyUsage(ctx, userID, "create_bill", month)
+	if err != nil {
+		return nil, err
+	}
 	return &domain.UsageResponse{
-		Current: 0,
-		Limit:   0,
-		ResetAt: time.Now().AddDate(0, 1, 0),
+		Current: usage.Count,
+		Limit:   bu.usageLimit,
+		ResetAt: time.Date(now.Year(), now.Month()+1, 1, 0, 0, 0, 0, now.Location()),
 	}, nil
+}
+
+func findPayer(persons []domain.Person) domain.Person {
+	for _, p := range persons {
+		if p.IsPayer {
+			return p
+		}
+	}
+	if len(persons) > 0 {
+		return persons[0]
+	}
+	return domain.Person{}
 }

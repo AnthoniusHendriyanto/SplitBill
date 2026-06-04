@@ -49,6 +49,9 @@ func (r *assignmentRepository) GetByBillID(ctx context.Context, billID string) (
 		}
 		assignments = append(assignments, a)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return assignments, nil
 }
 

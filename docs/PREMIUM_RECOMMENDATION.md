@@ -33,7 +33,7 @@ This document outlines a **Freemium Model** for SplitMate, balancing user acquis
 | Bill history | 30 days | Auto-delete older |
 | Share via link | ❌ | Premium only |
 | Export PDF | ❌ | Premium only |
-| Unlimited OCR | ❌ | 5/month limit |
+| Unlimited OCR | ✅ | Unlimited for all tiers |
 
 ### Premium Tier Features
 

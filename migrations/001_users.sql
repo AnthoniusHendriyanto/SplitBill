@@ -7,9 +7,9 @@ CREATE TABLE IF NOT EXISTS users (
     tier VARCHAR(20) NOT NULL DEFAULT 'free' CHECK (tier IN ('free', 'premium')),
     stripe_customer_id VARCHAR(255),
     stripe_subscription_id VARCHAR(255),
-    premium_expires_at TIMESTAMP,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    premium_expires_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX idx_users_email ON users(email);

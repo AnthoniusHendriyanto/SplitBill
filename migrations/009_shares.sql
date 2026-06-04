@@ -7,8 +7,8 @@ CREATE TABLE IF NOT EXISTS shares (
     allow_edit BOOLEAN NOT NULL DEFAULT FALSE,
     max_views INTEGER DEFAULT NULL,
     current_views INTEGER NOT NULL DEFAULT 0,
-    expires_at TIMESTAMP,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    expires_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX idx_shares_bill_id ON shares(bill_id);

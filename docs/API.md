@@ -33,9 +33,12 @@ Authorization: Bearer <access_token>
 | DELETE | /bills/:id | Delete bill | Yes |
 | POST | /bills/:id/share | Generate shareable link | Yes |
 | GET | /shared/:token | View shared bill (no auth) | No |
-| POST | /ocr/process | Process receipt image | Yes |
+| POST | /ocr | Process receipt image | No (public, IP rate limited) |
 | GET | /payments/:bill_id | Get payment summary | Yes |
 | POST | /payments/:bill_id/settle | Mark payment as paid | Yes |
+| POST | /auth/logout | Invalidate refresh token | No (uses body token) |
+| GET | /users/me | Get current user profile | Yes |
+| PUT | /users/me | Update user profile | Yes |
 | POST | /premium/subscribe | Subscribe to premium | Yes |
 | POST | /premium/webhook | Stripe webhook handler | No |
 
@@ -232,9 +235,9 @@ Authorization: Bearer <access_token>
 {
   "title": "Dinner at Restaurant",
   "items": [
-    {"name": "Burger", "price": 50000},
-    {"name": "Fries", "price": 25000},
-    {"name": "Coke", "price": 15000}
+    {"name": "Burger", "price": 50000, "quantity": 2},
+    {"name": "Fries", "price": 25000, "quantity": 1},
+    {"name": "Coke", "price": 15000, "quantity": 3}
   ],
   "service_charge": 10.0,
   "tax": 11.0,
@@ -247,14 +250,16 @@ Authorization: Bearer <access_token>
 }
 ```
 
+> Items can optionally include `quantity` (default 1). Frontend computes total = price × quantity per item.
+
 **Request (with custom split)**
 ```json
 {
   "title": "Dinner at Restaurant",
   "items": [
-    {"name": "Burger", "price": 50000},
-    {"name": "Fries", "price": 25000},
-    {"name": "Coke", "price": 15000}
+    {"name": "Burger", "price": 50000, "quantity": 2},
+    {"name": "Fries", "price": 25000, "quantity": 1},
+    {"name": "Coke", "price": 15000, "quantity": 3}
   ],
   "service_charge": 10.0,
   "tax": 11.0,
@@ -403,58 +408,63 @@ Authorization: Bearer <access_token>
 **Response (200 OK)**
 ```json
 {
-  "id": "uuid",
-  "title": "Dinner at Restaurant",
-  "total_amount": 100000,
-  "service_charge": 10000,
-  "tax": 11000,
-  "grand_total": 121000,
-  "items": [
-    {
-      "id": "item-uuid-1",
-      "name": "Burger",
-      "price": 50000,
-      "assigned_to": ["Alice"]
-    },
-    {
-      "id": "item-uuid-2",
-      "name": "Fries",
-      "price": 25000,
-      "assigned_to": ["Alice"]
-    },
-    {
-      "id": "item-uuid-3",
-      "name": "Coke",
-      "price": 15000,
-      "assigned_to": ["Bob"]
-    }
-  ],
-  "persons": [
-    {"id": "person-uuid-1", "name": "Alice"},
-    {"id": "person-uuid-2", "name": "Bob"}
-  ],
-  "split_type": "custom",
-  "payments": [
-    {
-      "id": "payment-uuid-1",
-      "from_person": "Alice",
-      "to_person": "Bob",
-      "amount": 15000,
-      "is_paid": false
-    },
-    {
-      "id": "payment-uuid-2",
-      "from_person": "Bob",
-      "to_person": "Alice",
-      "amount": 45000,
-      "is_paid": true
-    }
-  ],
-  "settlement_summary": {
-    "Alice owes Bob": 15000
+  "bill": {
+    "id": "uuid",
+    "title": "Dinner at Restaurant",
+    "total_amount": 100000,
+    "service_charge": 10.0,
+    "tax": 11.0,
+    "grand_total": 121000,
+    "items": [
+      {
+        "id": "item-uuid-1",
+        "name": "Burger",
+        "price": 50000,
+        "quantity": 1,
+        "assigned_to": ["Alice"]
+      },
+      {
+        "id": "item-uuid-2",
+        "name": "Fries",
+        "price": 25000,
+        "quantity": 1,
+        "assigned_to": ["Alice"]
+      },
+      {
+        "id": "item-uuid-3",
+        "name": "Coke",
+        "price": 15000,
+        "quantity": 2,
+        "assigned_to": ["Bob"]
+      }
+    ],
+    "persons": [
+      {"id": "person-uuid-1", "name": "Alice", "is_payer": true},
+      {"id": "person-uuid-2", "name": "Bob", "is_payer": false}
+    ],
+    "split_type": "custom",
+    "payments": [
+      {
+        "id": "payment-uuid-1",
+        "from_person": "Alice",
+        "to_person": "Alice",
+        "amount": 15000,
+        "is_paid": true
+      },
+      {
+        "id": "payment-uuid-2",
+        "from_person": "Bob",
+        "to_person": "Alice",
+        "amount": 45000,
+        "is_paid": false
+      }
+    ],
+    "created_at": "2024-01-15T12:00:00Z",
+    "updated_at": "2024-01-15T12:00:00Z"
   },
-  "created_at": "2024-01-15T12:00:00Z",
-  "updated_at": "2024-01-15T12:00:00Z"
+  "settlement_summary": {
+    "Bob owes Alice": 45000
+  }
 }
 ```
 
@@ -594,45 +604,44 @@ View shared bill via link (no authentication required).
 
 ### POST /ocr/process
 
-Process receipt image and extract items.
+Process receipt image and extract items. **Public endpoint** — no auth required. Rate limited to 10 requests/minute per IP address.
 
 **Request Headers**
 ```
-Authorization: Bearer <access_token>
 Content-Type: multipart/form-data
 ```
 
 **Form Data**
 | Field | Type | Description |
 |-------|------|-------------|
-| image | file | Receipt image (JPEG, PNG, WebP) |
+| image | file | Receipt image (JPEG, PNG, WebP) — also accepts `receipt` for compatibility |
 
 **Response (200 OK)**
 ```json
 {
+  "title": "Restaurant Name",
   "items": [
-    {"name": "Burger", "price": 50000},
-    {"name": "Fries", "price": 25000},
-    {"name": "Coke", "price": 15000}
+    {"name": "Burger", "price": 50000, "quantity": 2},
+    {"name": "Fries", "price": 25000, "quantity": 1},
+    {"name": "Coke", "price": 15000, "quantity": 3}
   ],
   "service_charge": 10.0,
+  "service_mode": "amount",
   "tax": 11.0,
-  "total": 100000,
-  "confidence": 0.95
+  "tax_mode": "amount",
+  "total": 185000
 }
 ```
 
-**Error (429 Too Many Requests)** - Free tier limit exceeded
+> `quantity` is the number of units. Frontend computes total = price × quantity per item.
+> `total` = sum(items) + service_charge + tax.
+
+**Error (429 Too Many Requests)** — IP rate limit exceeded
 ```json
 {
   "error": {
-    "code": "OCR_LIMIT_EXCEEDED",
-    "message": "You have reached your monthly OCR limit (5). Upgrade to Premium for unlimited scans.",
-    "details": {
-      "current": 5,
-      "limit": 5,
-      "upgrade_url": "/premium"
-    }
+    "code": "RATE_LIMITED",
+    "message": "Too many requests. Please try again later."
   }
 }
 ```
@@ -755,29 +764,28 @@ Handle Stripe webhooks.
 | Code | HTTP Status | Description |
 |------|-------------|-------------|
 | INVALID_CREDENTIALS | 401 | Email or password incorrect |
-| USER_ALREADY_EXISTS | 422 | Email already registered |
+| USER_ALREADY_EXISTS | 409 | Email already registered |
 | TOKEN_EXPIRED | 401 | JWT access token expired |
+| TOKEN_MISSING | 401 | Missing authorization header |
 | TOKEN_INVALID | 401 | JWT token is invalid |
 | BILL_NOT_FOUND | 404 | Bill ID doesn't exist |
-| UNAUTHORIZED | 403 | Not owner of the resource |
+| UNAUTHORIZED | 401 | Not authenticated |
 | PREMIUM_REQUIRED | 403 | Feature requires premium subscription |
-| OCR_LIMIT_EXCEEDED | 429 | Free tier OCR limit reached |
-| SHARE_NOT_FOUND | 404 | Share link invalid or expired |
-| INVALID_FILE_FORMAT | 422 | Unsupported image format |
-| FILE_TOO_LARGE | 422 | Image exceeds 10MB limit |
-| VALIDATION_ERROR | 422 | Invalid input data |
+| MISSING_ID | 400 | Bill ID is required |
+| INVALID_INPUT | 400 | Invalid request body |
+| VALIDATION_ERROR | 400 | Invalid request data |
+| INVALID_FILE | 400 | Image file is required |
+| INVALID_FILE_FORMAT | 422 | Unsupported image format or file too large |
+| RATE_LIMITED | 429 | IP rate limit hit |
 | INTERNAL_ERROR | 500 | Server error |
 
 ---
 
 ## Rate Limits
 
-| Endpoint | Limit |
-|----------|-------|
-| /auth/* | 10 requests/minute |
-| /ocr/* | 5 requests/minute |
-| /bills/* | 60 requests/minute |
-| /users/* | 30 requests/minute |
+| Endpoint | Limit | Scope |
+|----------|-------|-------|
+| /ocr/* | 10 requests/minute | Per IP (public endpoint) |
 
 ---
 

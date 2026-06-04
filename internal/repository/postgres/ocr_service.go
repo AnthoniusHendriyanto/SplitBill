@@ -14,44 +14,39 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/user/split-mate/internal/domain"
 )
 
 var _ domain.OCRService = (*ocrService)(nil)
 
 type ocrService struct {
-	pool            *pgxpool.Pool
-	geminiKey       string
-	openRouterKey   string
-	paddleReady     bool
+	geminiKey   string
+	groqKey     string
+	paddleReady bool
+	httpClient  *http.Client
+	pythonPath  string
 }
 
-func NewOCRService(pool *pgxpool.Pool) domain.OCRService {
-	geminiKey := os.Getenv("GEMINI_API_KEY")
-	openRouterKey := os.Getenv("OPENROUTER_API_KEY")
-
+func NewOCRService(geminiKey, groqKey, pythonPath string) domain.OCRService {
 	if geminiKey == "" {
-		log.Println("Warning: GEMINI_API_KEY not set. Gemini structuring will be unavailable.")
+		log.Println("Warning: GEMINI_API_KEY not set. Gemini fallback will be unavailable.")
 	} else {
-		log.Println("Gemini API key detected. Text structuring available!")
+		log.Println("Gemini API key detected. Free tier structuring available.")
 	}
 
-	if openRouterKey == "" {
-		log.Println("Warning: OPENROUTER_API_KEY not set. OpenRouter fallback will be unavailable.")
+	if groqKey == "" {
+		log.Println("Warning: GROQ_API_KEY not set. Groq free tier unavailable.")
 	} else {
-		log.Println("OpenRouter API key detected. Fallback structuring available!")
+		log.Println("Groq API key detected. Free tier available!")
 	}
 
 	paddleReady := false
 	scriptPath := filepath.Join("internal", "repository", "postgres", "paddle_ocr.py")
 	if _, err := os.Stat(scriptPath); err == nil {
-		if exec.Command("python3", "--version").Run() == nil {
+		if exec.Command(pythonPath, "--version").Run() == nil {
 			paddleReady = true
 			log.Println("PaddleOCR script detected. Local OCR extraction available.")
 		} else {
@@ -60,10 +55,11 @@ func NewOCRService(pool *pgxpool.Pool) domain.OCRService {
 	}
 
 	return &ocrService{
-		pool:          pool,
-		geminiKey:     geminiKey,
-		openRouterKey: openRouterKey,
-		paddleReady:   paddleReady,
+		geminiKey:   geminiKey,
+		groqKey:     groqKey,
+		paddleReady: paddleReady,
+		httpClient:  &http.Client{Timeout: 30 * time.Second},
+		pythonPath:  pythonPath,
 	}
 }
 
@@ -83,11 +79,11 @@ type paddleOutput struct {
 }
 
 type paddleResult struct {
-	RawText string        // joined text for Gemini
-	Lines   []paddleLine  // per-line data for regex fallback
+	RawText string       // joined text for AI
+	Lines   []paddleLine // per-line data
 }
 
-func (m *ocrService) extractTextWithPaddle(imageBytes []byte) (*paddleResult, error) {
+func (m *ocrService) extractTextWithPaddle(ctx context.Context, imageBytes []byte) (*paddleResult, error) {
 	if !m.paddleReady {
 		return nil, fmt.Errorf("PaddleOCR is not available")
 	}
@@ -104,9 +100,9 @@ func (m *ocrService) extractTextWithPaddle(imageBytes []byte) (*paddleResult, er
 	}
 
 	scriptPath := filepath.Join("internal", "repository", "postgres", "paddle_ocr.py")
-	paddleCtx, paddleCancel := context.WithTimeout(context.Background(), 60*time.Second)
+	paddleCtx, paddleCancel := context.WithTimeout(ctx, 60*time.Second)
 	defer paddleCancel()
-	cmd := exec.CommandContext(paddleCtx, "python3", scriptPath, tmpFile)
+	cmd := exec.CommandContext(paddleCtx, m.pythonPath, scriptPath, tmpFile)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return nil, fmt.Errorf("paddle script failed: %w, output: %s", err, string(output))
@@ -144,7 +140,230 @@ func (m *ocrService) extractTextWithPaddle(imageBytes []byte) (*paddleResult, er
 	}, nil
 }
 
-// ------- Gemini: structures raw text into receipt JSON -------
+// ------- Shared receipt parsing logic (used by both AI providers) -------
+
+type geminiStructuredResult struct {
+	Error          string `json:"error"`
+	RestaurantName string `json:"restaurant_name"`
+	Date           string `json:"date"`
+	Items          []struct {
+		Name      string   `json:"name"`
+		Quantity  int      `json:"quantity"`
+		Modifiers []string `json:"modifiers"`
+		Price     float64  `json:"price"`
+	} `json:"items"`
+	Subtotal      float64 `json:"subtotal"`
+	ServiceCharge float64 `json:"service_charge"`
+	Tax           float64 `json:"tax"`
+	GrandTotal    float64 `json:"grand_total"`
+	AiConfidence  float64 `json:"ai_confidence"`
+}
+
+const structurePrompt = `Extract receipt fields as JSON. Output ONLY the JSON object.
+
+Receipts may be in Indonesian, English, Chinese, Japanese, Korean, or mixed languages.
+
+SCHEMA:
+{
+  "restaurant_name": "",
+  "date": "YYYY-MM-DD",
+  "items": [{"name": "", "quantity": 1, "modifiers": [], "price": 0.0}],
+  "subtotal": 0.0,
+  "service_charge": 0.0,
+  "tax": 0.0,
+  "grand_total": 0.0,
+  "ai_confidence": 90.0
+}
+
+RULES:
+- restaurant_name: from receipt top. "" if not visible.
+- date: YYYY-MM-DD. "" if not visible. Use printed date, not today.
+- items: only MAIN menu items with prices. Exclude headers, address, phone, cashier, table, payment info, change, tip, barcodes, QR data.
+  - Sub-lines under a main item (even with prices like toppings, add-ons, extras) are MODIFIERS — attach name with " + " and include in the parent item's price. Do NOT list as separate items.
+  - CRITICAL ANTI-PATTERN: "Topping - Soya Bean Curd Rp 8.000" under "Milk Tea Rp 36.000" → modifier, not a separate item. The 36.000 already includes the topping.
+  - Modifier lines with no price below an item: attach name with " + ".
+  - "Rp 25.000" -> 25000. Remove Rp, dots, commas. Numeric only.
+  - "2x Kopi Rp 30.000" -> quantity=2, price=30000. Default quantity=1.
+  - If a price is unclear or missing -> price=0. Do NOT guess or invent any price.
+  - CRITICAL: ONLY use items that appear verbatim. NEVER add items not in the OCR text.
+- subtotal: the printed subtotal on the receipt. Authoritative — prefer this over summing items.
+- service_charge: rupiah. Look for "Service Charge"/"Service"/"Svc"/"Layanan"/"Service Charge (x%)". 0 if absent.
+- tax: rupiah. Look for "PPN"/"PB1"/"Pajak"/"Tax"/"GST"/"VAT". 0 if absent.
+  - WARNING: OCR may merge columns, placing grand_total number next to the "Pajak"
+    keyword. If the number near "Pajak"/"Tax" matches grand_total or exceeds subtotal,
+    the real tax is missing. Set tax=0 and calculate: tax = grand_total - subtotal.
+- grand_total: the FINAL total printed on the receipt. Authoritative — use this over your own calculation.
+- ai_confidence: 0-100. Rate overall extraction quality. Be conservative: if prices are unclear, items might be missing, subtotal and items don't align, or numbers seem contradictory -> lower score below 70.
+
+If the text is NOT a receipt -> {"error": "Not a receipt."}
+
+STRICT: Start with {. End with }. No other text, no markdown, no explanation.`
+
+func (m *ocrService) parseStructuredJSON(rawJSON string) (*geminiStructuredResult, error) {
+	rawJSON = strings.TrimSpace(rawJSON)
+	rawJSON = strings.TrimPrefix(rawJSON, "```json")
+	rawJSON = strings.TrimPrefix(rawJSON, "```")
+	rawJSON = strings.TrimSuffix(rawJSON, "```")
+	rawJSON = strings.TrimSpace(rawJSON)
+
+	start := strings.Index(rawJSON, "{")
+	end := strings.LastIndex(rawJSON, "}")
+	if start >= 0 && end > start {
+		rawJSON = rawJSON[start : end+1]
+	}
+
+	var parsed geminiStructuredResult
+	if err := json.Unmarshal([]byte(rawJSON), &parsed); err != nil {
+		return nil, fmt.Errorf("failed to parse structured JSON: %w, raw: %s", err, rawJSON)
+	}
+	if parsed.Error != "" {
+		return nil, fmt.Errorf("%s", parsed.Error)
+	}
+	return &parsed, nil
+}
+
+func (m *ocrService) buildOCRResult(parsed *geminiStructuredResult) *domain.OCRResult {
+	title := parsed.RestaurantName
+	if title == "" {
+		title = "Receipt"
+	}
+
+	date := parsed.Date
+	if date == "" {
+		date = time.Now().Format("2006-01-02")
+	}
+
+	items := make([]domain.OCRItem, 0, len(parsed.Items))
+	for _, item := range parsed.Items {
+		name := item.Name
+		if len(item.Modifiers) > 0 {
+			name += " + " + strings.Join(item.Modifiers, " + ")
+		}
+		if item.Quantity < 1 {
+			item.Quantity = 1
+		}
+		items = append(items, domain.OCRItem{
+			Name:     name,
+			Price:    item.Price,
+			Quantity: item.Quantity,
+		})
+	}
+
+	var itemsTotal float64
+	for _, item := range items {
+		qty := item.Quantity
+		if qty < 1 {
+			qty = 1
+		}
+		itemsTotal += item.Price * float64(qty)
+	}
+
+	confidence := parsed.AiConfidence
+	if confidence < 0 || confidence > 100 {
+		confidence = 0
+	}
+
+	total := parsed.GrandTotal
+	if total <= 0 {
+		total = itemsTotal + parsed.ServiceCharge + parsed.Tax
+	}
+
+	return &domain.OCRResult{
+		Title:         title,
+		Date:          date,
+		Items:         items,
+		ServiceCharge: parsed.ServiceCharge,
+		ServiceMode:   "amount",
+		Tax:           parsed.Tax,
+		TaxMode:       "amount",
+		Total:         total,
+		Confidence:    confidence,
+	}
+}
+
+// ------- Groq (OpenAI-compatible API, free tier) -------
+
+type chatMessage struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
+type chatChoice struct {
+	Message chatMessage `json:"message"`
+}
+
+type chatResponse struct {
+	Choices []chatChoice `json:"choices"`
+}
+
+func (m *ocrService) structureWithGroq(ctx context.Context, rawText string) (*domain.OCRResult, error) {
+	if m.groqKey == "" {
+		return nil, fmt.Errorf("Groq API key not configured")
+	}
+
+	userMsg := "Here is the raw OCR text from a receipt image:\n\n" + rawText
+
+	reqBody := map[string]interface{}{
+		"model": "llama-3.3-70b-versatile",
+		"messages": []chatMessage{
+			{Role: "system", Content: structurePrompt},
+			{Role: "user", Content: userMsg},
+		},
+		"temperature":    0,
+		"response_format": map[string]string{"type": "json_object"},
+	}
+
+	jsonBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	client := m.httpClient
+	req, err := http.NewRequestWithContext(ctx, "POST", "https://api.groq.com/openai/v1/chat/completions", bytes.NewBuffer(jsonBytes))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+m.groqKey)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Printf("[OCR] Groq HTTP request failed: %v", err)
+		return nil, fmt.Errorf("Groq API failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("[OCR] Groq API error: status=%d body=%s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("Groq returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var groqResp chatResponse
+	if err := json.Unmarshal(body, &groqResp); err != nil {
+		log.Printf("[OCR] Groq response parse error: %v, body=%s", err, string(body))
+		return nil, fmt.Errorf("failed to parse Groq response: %w", err)
+	}
+
+	if len(groqResp.Choices) == 0 {
+		log.Printf("[OCR] Groq returned empty choices, body=%s", string(body))
+		return nil, fmt.Errorf("Groq returned empty response")
+	}
+
+	parsed, err := m.parseStructuredJSON(groqResp.Choices[0].Message.Content)
+	if err != nil {
+		log.Printf("[OCR] Groq structured JSON parse error: %v, raw=%s", err, groqResp.Choices[0].Message.Content)
+		return nil, fmt.Errorf("Groq result parse error: %w", err)
+	}
+
+	return m.buildOCRResult(parsed), nil
+}
+
+// ------- Gemini Flash Free (Google AI free tier) -------
 
 type geminiPart struct {
 	Text string `json:"text,omitempty"`
@@ -169,53 +388,7 @@ type geminiResponse struct {
 	} `json:"candidates"`
 }
 
-type geminiStructuredResult struct {
-	Error         string `json:"error"`
-	RestaurantName string `json:"restaurant_name"`
-	Items         []struct {
-		Name      string   `json:"name"`
-		Quantity  int      `json:"quantity"`
-		Modifiers []string `json:"modifiers"`
-		Price     float64  `json:"price"`
-	} `json:"items"`
-	Subtotal      float64 `json:"subtotal"`
-	ServiceCharge float64 `json:"service_charge"`
-	Tax           float64 `json:"tax"`
-	GrandTotal    float64 `json:"grand_total"`
-}
-
-const structurePrompt = `You are a precise receipt parser for Indonesian restaurant receipts.
-
-INSTRUCTIONS:
-1. Extract the restaurant name from the top of the receipt.
-2. Extract address, date, and time if present.
-3. Do NOT include address, phone number, cashier name, table number, date, or receipt metadata as menu items.
-4. Menu items are located between the first separator after header info and the subtotal section.
-5. A valid item usually has quantity on the left and price on the right.
-6. Lines without prices under an item — like "Soy Milk" or "Oat Milk" — are modifiers/add-ons. Attach them to the previous item, do NOT create new items.
-7. Tax labels may be "PB1", "PPN", "Tax", or "Pajak".
-8. Service charge labels may be "Service Charge", "Service", or "Svc".
-9. Do NOT make up or hallucinate any items, prices, or names.
-10. If the text is not a receipt, respond with: {"error": "The provided text does not appear to be a receipt."}
-
-EXPECTED JSON FORMAT:
-{
-  "restaurant_name": "",
-  "address": "",
-  "date": "",
-  "time": "",
-  "items": [
-    {"name": "", "quantity": 1, "modifiers": [], "price": 0}
-  ],
-  "subtotal": 0,
-  "service_charge": 0,
-  "tax": 0,
-  "grand_total": 0
-}
-
-Respond with ONLY the raw JSON object. No markdown, no explanation.`
-
-func (m *ocrService) structureWithGemini(ctx context.Context, rawText string) (*domain.OCRResult, error) {
+func (m *ocrService) structureWithGeminiFree(ctx context.Context, rawText string) (*domain.OCRResult, error) {
 	if m.geminiKey == "" {
 		return nil, fmt.Errorf("Gemini API key not configured")
 	}
@@ -237,7 +410,7 @@ func (m *ocrService) structureWithGemini(ctx context.Context, rawText string) (*
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	client := &http.Client{Timeout: 15 * time.Second}
+	client := m.httpClient
 	apiURL := "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + m.geminiKey
 
 	req, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewBuffer(jsonBytes))
@@ -248,7 +421,7 @@ func (m *ocrService) structureWithGemini(ctx context.Context, rawText string) (*
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("Gemini text API failed: %w", err)
+		return nil, fmt.Errorf("Gemini API failed: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -270,364 +443,46 @@ func (m *ocrService) structureWithGemini(ctx context.Context, rawText string) (*
 		return nil, fmt.Errorf("Gemini returned empty response")
 	}
 
-	rawJSON := strings.TrimSpace(geminiResp.Candidates[0].Content.Parts[0].Text)
-	rawJSON = strings.TrimPrefix(rawJSON, "```json")
-	rawJSON = strings.TrimPrefix(rawJSON, "```")
-	rawJSON = strings.TrimSuffix(rawJSON, "```")
-	rawJSON = strings.TrimSpace(rawJSON)
-
-	var parsed geminiStructuredResult
-	if err := json.Unmarshal([]byte(rawJSON), &parsed); err != nil {
-		return nil, fmt.Errorf("failed to parse structured JSON: %w, raw: %s", err, rawJSON)
+	parsed, err := m.parseStructuredJSON(geminiResp.Candidates[0].Content.Parts[0].Text)
+	if err != nil {
+		return nil, fmt.Errorf("Gemini result parse error: %w", err)
 	}
 
-	if parsed.Error != "" {
-		return nil, fmt.Errorf("%s", parsed.Error)
-	}
-
-	title := parsed.RestaurantName
-	if title == "" {
-		title = "Receipt"
-	}
-
-	items := make([]domain.OCRItem, 0, len(parsed.Items))
-	for _, item := range parsed.Items {
-		name := item.Name
-		if len(item.Modifiers) > 0 {
-			name += " + " + strings.Join(item.Modifiers, " + ")
-		}
-		totalPrice := item.Price
-		if item.Quantity > 1 {
-			totalPrice = item.Price * float64(item.Quantity)
-		}
-		items = append(items, domain.OCRItem{
-			Name:  name,
-			Price: totalPrice,
-		})
-	}
-
-	log.Printf("[GEMINI STRUCTURE] Parsed %d items from raw OCR text", len(items))
-	return &domain.OCRResult{
-		Title:         title,
-		Items:         items,
-		ServiceCharge: parsed.ServiceCharge,
-		ServiceMode:   "amount",
-		Tax:           parsed.Tax,
-		TaxMode:       "amount",
-	}, nil
-}
-
-// ------- OpenRouter: backup AI structuring (tries multiple models) -------
-
-var openRouterModels = []string{
-	"openrouter/owl-alpha",
-	"z-ai/glm-5.1",
-	"nvidia/nemotron-3-super-120b-a12b:free",
-	"poolside/laguna-m.1:free",
-	"openai/gpt-oss-120b:free",
-	"qwen/qwen-2.5-7b-instruct:free",
-}
-
-type openRouterMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
-}
-
-type openRouterChoice struct {
-	Message openRouterMessage `json:"message"`
-}
-
-type openRouterResponse struct {
-	Choices []openRouterChoice `json:"choices"`
-}
-
-func (m *ocrService) structureWithOpenRouter(ctx context.Context, rawText string) (*domain.OCRResult, error) {
-	if m.openRouterKey == "" {
-		return nil, fmt.Errorf("OpenRouter API key not configured")
-	}
-
-	userMsg := "Here is the raw OCR text from a receipt image:\n\n" + rawText
-	lastErr := fmt.Errorf("no models tried")
-
-	for _, model := range openRouterModels {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		default:
-		}
-
-		reqBody := map[string]interface{}{
-			"model": model,
-			"messages": []openRouterMessage{
-				{Role: "system", Content: structurePrompt},
-				{Role: "user", Content: userMsg},
-			},
-		}
-
-		jsonBytes, err := json.Marshal(reqBody)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal request: %w", err)
-		}
-
-		client := &http.Client{Timeout: 10 * time.Second}
-		apiURL := "https://openrouter.ai/api/v1/chat/completions"
-
-		req, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewBuffer(jsonBytes))
-		if err != nil {
-			return nil, fmt.Errorf("failed to create request: %w", err)
-		}
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("Authorization", "Bearer "+m.openRouterKey)
-		req.Header.Set("HTTP-Referer", "https://splitmate.app")
-
-		resp, err := client.Do(req)
-		if err != nil {
-			log.Printf("[OPENROUTER] Model %q failed (request): %v. Trying next...", model, err)
-			lastErr = err
-			continue
-		}
-
-		body, readErr := io.ReadAll(resp.Body)
-		resp.Body.Close()
-
-		if resp.StatusCode != http.StatusOK {
-			log.Printf("[OPENROUTER] Model %q returned %d. Trying next...", model, resp.StatusCode)
-			lastErr = fmt.Errorf("%s returned status %d", model, resp.StatusCode)
-			continue
-		}
-
-		if readErr != nil {
-			log.Printf("[OPENROUTER] Model %q read error: %v. Trying next...", model, readErr)
-			lastErr = readErr
-			continue
-		}
-
-		var orResp openRouterResponse
-		if err := json.Unmarshal(body, &orResp); err != nil {
-			log.Printf("[OPENROUTER] Model %q parse error: %v. Trying next...", model, err)
-			lastErr = err
-			continue
-		}
-
-		if len(orResp.Choices) == 0 {
-			log.Printf("[OPENROUTER] Model %q returned empty choices. Trying next...", model)
-			lastErr = fmt.Errorf("%s returned empty choices", model)
-			continue
-		}
-
-		rawJSON := strings.TrimSpace(orResp.Choices[0].Message.Content)
-		rawJSON = strings.TrimPrefix(rawJSON, "```json")
-		rawJSON = strings.TrimPrefix(rawJSON, "```")
-		rawJSON = strings.TrimSuffix(rawJSON, "```")
-		rawJSON = strings.TrimSpace(rawJSON)
-
-		var parsed geminiStructuredResult
-		if err := json.Unmarshal([]byte(rawJSON), &parsed); err != nil {
-			log.Printf("[OPENROUTER] Model %q JSON parse: %v. Trying next...", model, err)
-			lastErr = err
-			continue
-		}
-
-		if parsed.Error != "" {
-			log.Printf("[OPENROUTER] Model %q returned error: %s. Trying next...", model, parsed.Error)
-			lastErr = fmt.Errorf("%s: %s", model, parsed.Error)
-			continue
-		}
-
-		title := parsed.RestaurantName
-		if title == "" {
-			title = "Receipt"
-		}
-
-		items := make([]domain.OCRItem, 0, len(parsed.Items))
-		for _, item := range parsed.Items {
-			name := item.Name
-			if len(item.Modifiers) > 0 {
-				name += " + " + strings.Join(item.Modifiers, " + ")
-			}
-			totalPrice := item.Price
-			if item.Quantity > 1 {
-				totalPrice = item.Price * float64(item.Quantity)
-			}
-			items = append(items, domain.OCRItem{
-				Name:  name,
-				Price: totalPrice,
-			})
-		}
-
-		log.Printf("[OPENROUTER SUCCESS] Model %q parsed %d items", model, len(items))
-		return &domain.OCRResult{
-			Title:         title,
-			Items:         items,
-			ServiceCharge: parsed.ServiceCharge,
-			ServiceMode:   "amount",
-			Tax:           parsed.Tax,
-			TaxMode:       "amount",
-		}, nil
-	}
-
-	return nil, fmt.Errorf("all OpenRouter models failed: %w", lastErr)
-}
-
-// ------- Regex fallback: parses per-line Paddle data into items locally -------
-
-// Lines matching any of these patterns are treated as receipt metadata, not items.
-var metadataPatterns = []*regexp.Regexp{
-	regexp.MustCompile(`(?i)^\s*(?:telp?|hp|phone|no\.?\s*(?:hp|telp?|phone|invoice|order|nota|faktur|bon|meja|table))`),
-	regexp.MustCompile(`(?i)^\s*(?:kasir|cashier|cs|server|pramusaji|waiter|waitress)`),
-	regexp.MustCompile(`(?i)^\s*(?:meja|table)\s*\d`),
-	regexp.MustCompile(`(?i)^\s*(?:tanggal|date|tgl|waktu|time|jam)`),
-	regexp.MustCompile(`(?i)^\s*(?:npwp|nik|alamat|address|jln?\.?|jalan)`),
-	regexp.MustCompile(`(?i)^\s*(?:total|sub\s*total|grand\s*total|jumlah|pembayaran|kembali|change|service\s*charge|ppn|pb1|pajak|discount|diskon|bayar|tunai|cash|kartu|debit|kredit|qris|gopay|ovo)`),
-	regexp.MustCompile(`(?i)^\s*(?:terima\s*kasih|thank\s*you|matur\s*nuwun|semoga\s*puas)`),
-	regexp.MustCompile(`^\s*[-=*]{3,}\s*$`),
-	regexp.MustCompile(`^\d{1,2}[/-]\d{1,2}[/-]\d{2,4}$`),
-	regexp.MustCompile(`^\d{1,2}:\d{2}(?::\d{2})?\s*$`),
-}
-
-func (m *ocrService) extractWithRegex(lines []paddleLine) *domain.OCRResult {
-	priceRe := regexp.MustCompile(`(?:Rp\s*)?([\d,]+(?:\.\d{3})*(?:[,\.]\d{1,2})?)\s*$`)
-	var items []domain.OCRItem
-
-	for _, pl := range lines {
-		text := strings.TrimSpace(pl.Text)
-		if text == "" {
-			continue
-		}
-
-		isMeta := false
-		for _, pat := range metadataPatterns {
-			if pat.MatchString(text) {
-				isMeta = true
-				break
-			}
-		}
-		if isMeta {
-			continue
-		}
-
-		text = strings.TrimLeft(text, "•-–—*")
-		text = strings.TrimPrefix(text, "Rp ")
-		text = strings.TrimSpace(text)
-
-		matches := priceRe.FindStringSubmatch(text)
-		if len(matches) < 2 {
-			continue
-		}
-
-		priceStr := matches[1]
-		priceStr = strings.ReplaceAll(priceStr, ".", "")
-		priceStr = strings.ReplaceAll(priceStr, ",", ".")
-		price, err := strconv.ParseFloat(priceStr, 64)
-		if err != nil || price <= 0 {
-			continue
-		}
-
-		name := strings.TrimRight(strings.TrimSuffix(text, matches[0]), " ")
-		name = strings.TrimSpace(name)
-		if name == "" {
-			name = "Item"
-		}
-
-		items = append(items, domain.OCRItem{
-			Name:       name,
-			Price:      price,
-			Confidence: pl.Confidence,
-			X:          pl.X,
-			Y:          pl.Y,
-		})
-	}
-
-	if len(items) == 0 {
-		return nil
-	}
-
-	return &domain.OCRResult{
-		Title:         "Receipt",
-		Items:         items,
-		ServiceMode:   "percent",
-		TaxMode:       "percent",
-	}
+	return m.buildOCRResult(parsed), nil
 }
 
 // ------- Main entry point -------
 
 func (m *ocrService) ExtractItems(ctx context.Context, imageBytes []byte) (*domain.OCRResult, error) {
 	// Step 1: PaddleOCR extracts raw text from image
-	paddleRes, err := m.extractTextWithPaddle(imageBytes)
+	paddleRes, err := m.extractTextWithPaddle(ctx, imageBytes)
 	if err != nil {
 		return nil, fmt.Errorf("PaddleOCR extraction failed: %w", err)
 	}
 
 	log.Printf("[OCR] Raw text extracted (%d chars)", len(paddleRes.RawText))
 
-	// Step 2: Gemini structures the raw text into receipt JSON
+	log.Printf("[OCR] Raw text (%d chars):\n%s", len(paddleRes.RawText), paddleRes.RawText)
+
+	// Step 2: Groq free tier (fast, 60 RPM, OpenAI-compatible)
+	if m.groqKey != "" {
+		result, err := m.structureWithGroq(ctx, paddleRes.RawText)
+		if err == nil {
+			log.Printf("[OCR SUCCESS] Structured %d items via PaddleOCR -> Groq (confidence=%.1f%%)", len(result.Items), result.Confidence)
+			return result, nil
+		}
+		log.Printf("[OCR] Groq failed: %v. Trying Gemini free...", err)
+	}
+
+	// Step 3: Gemini Flash Free (Google free tier fallback)
 	if m.geminiKey != "" {
-		result, err := m.structureWithGemini(ctx, paddleRes.RawText)
+		result, err := m.structureWithGeminiFree(ctx, paddleRes.RawText)
 		if err == nil {
-			log.Printf("[OCR SUCCESS] Structured %d items via PaddleOCR -> Gemini", len(result.Items))
-			if m.pool != nil && result.Title != "" && strings.ToLower(result.Title) != "receipt" {
-				go m.saveVenueData(result.Title, result.Items)
-			}
+			log.Printf("[OCR SUCCESS] Structured %d items via PaddleOCR -> Gemini Free", len(result.Items))
 			return result, nil
 		}
-		log.Printf("[OCR] Gemini failed: %v. Trying OpenRouter...", err)
+		log.Printf("[OCR] Gemini Free failed: %v.", err)
 	}
 
-	// Step 3: OpenRouter as second AI fallback
-	if m.openRouterKey != "" {
-		result, err := m.structureWithOpenRouter(ctx, paddleRes.RawText)
-		if err == nil {
-			log.Printf("[OCR SUCCESS] Structured %d items via PaddleOCR -> OpenRouter", len(result.Items))
-			if m.pool != nil && result.Title != "" && strings.ToLower(result.Title) != "receipt" {
-				go m.saveVenueData(result.Title, result.Items)
-			}
-			return result, nil
-		}
-		log.Printf("[OCR] OpenRouter failed: %v. Falling back to regex...", err)
-	}
-
-	// Step 4: Regex fallback with metadata filtering and confidence
-	result := m.extractWithRegex(paddleRes.Lines)
-	if result != nil {
-		log.Printf("[OCR] Parsed %d items via regex fallback", len(result.Items))
-		return result, nil
-	}
-
-	return nil, fmt.Errorf("could not extract any items with prices from the image")
-}
-
-func (m *ocrService) saveVenueData(title string, items []domain.OCRItem) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	cleanTitle := strings.TrimSpace(title)
-
-	var venueID string
-	err := m.pool.QueryRow(ctx, `INSERT INTO venues (name) VALUES ($1) ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name RETURNING id`, cleanTitle).Scan(&venueID)
-	if err != nil {
-		log.Printf("[DB ERROR] Failed to record venue: %v", err)
-		return
-	}
-
-	for _, item := range items {
-		cleanName := strings.TrimSpace(item.Name)
-		if cleanName == "" || item.Price <= 0 {
-			continue
-		}
-		_, err = m.pool.Exec(ctx, `
-			INSERT INTO venue_menu_items (venue_id, item_name, last_known_price, times_scanned, updated_at)
-			VALUES ($1, $2, $3, 1, NOW())
-			ON CONFLICT (venue_id, item_name)
-			DO UPDATE SET 
-				last_known_price = EXCLUDED.last_known_price,
-				times_scanned = venue_menu_items.times_scanned + 1,
-				updated_at = NOW()`,
-			venueID, cleanName, item.Price,
-		)
-		if err != nil {
-			log.Printf("[DB ERROR] Failed to record menu item '%s': %v", cleanName, err)
-		}
-	}
-	log.Printf("[DB SUCCESS] Saved %d items for '%s'", len(items), cleanTitle)
+	return nil, fmt.Errorf("all AI structuring methods failed")
 }

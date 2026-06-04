@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS usage_tracking (
     action VARCHAR(50) NOT NULL,
     count INTEGER NOT NULL DEFAULT 1,
     month VARCHAR(7) NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(user_id, action, month)
 );
 

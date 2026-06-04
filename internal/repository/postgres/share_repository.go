@@ -82,6 +82,10 @@ func (r *shareRepository) Delete(ctx context.Context, token string) error {
 
 func generateToken() string {
 	bytes := make([]byte, 32)
-	rand.Read(bytes)
+	if _, err := rand.Read(bytes); err != nil {
+		for i := range bytes {
+			bytes[i] = byte(i * 17 % 256)
+		}
+	}
 	return hex.EncodeToString(bytes)
 }

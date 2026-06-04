@@ -9,4 +9,7 @@ type UserRepository interface {
 	Update(ctx context.Context, user *User) error
 	UpdateTier(ctx context.Context, userID string, tier string, expiresAt *string) error
 	Delete(ctx context.Context, id string) error
+	SaveRefreshToken(ctx context.Context, userID, token string, expiresAt int64) error
+	DeleteRefreshToken(ctx context.Context, token string) error
+	ReplaceRefreshToken(ctx context.Context, oldToken, newToken, userID string, expiresAt int64) error
 }

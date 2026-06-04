@@ -27,16 +27,15 @@ func main() {
 	cfg := config.LoadConfig()
 	timeoutContext := time.Duration(120) * time.Second
 
-	// Try PostgreSQL first, fall back to in-memory
 	pool, err := postgres.NewPostgresConnection(cfg)
 	if err != nil {
 		log.Printf("Warning: Could not connect to PostgreSQL: %v", err)
 		log.Println("Using in-memory storage")
 
-		repos := memory.NewRepositories()
-		ocrSvc := memory.NewOCRService()
-		startServer(cfg, repos, ocrSvc, timeoutContext)
-		return
+	repos := memory.NewRepositories()
+	ocrSvc := memory.NewOCRService()
+	runServer(cfg, repos.User, repos.Bill, repos.Item, repos.Person, repos.Assignment, repos.Payment, repos.Usage, ocrSvc, timeoutContext, true)
+	return
 	}
 	defer pool.Close()
 	log.Println("Connected to PostgreSQL Database")
@@ -49,88 +48,55 @@ func main() {
 	paymentRepo := postgres.NewPaymentRepository(pool)
 	usageRepo := postgres.NewUsageRepository(pool)
 
-	authUsecase := usecase.NewAuthUsecase(userRepo, cfg)
-
-	ocrService := postgres.NewOCRService(pool)
-
-	billUsecase := usecase.NewBillUsecase(
-		billRepo,
-		itemRepo,
-		personRepo,
-		assignmentRepo,
-		paymentRepo,
-		usageRepo,
-		userRepo,
-		ocrService,
-		timeoutContext,
-	)
-
-	authHandler := delivery.NewAuthHandler(authUsecase)
-	billHandler := delivery.NewBillHandler(billUsecase)
-
-	authMiddleware := middleware.NewAuthMiddleware(authUsecase)
-
-	router := delivery.NewRouter(authHandler, billHandler, authMiddleware)
-
-	server := &http.Server{
-		Addr:         ":" + cfg.Port,
-		Handler:      router,
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 180 * time.Second,
-		IdleTimeout:  120 * time.Second,
-	}
-
-	go func() {
-		log.Printf("SplitMate Server starting on port %s...\n", cfg.Port)
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Failed to start server: %v", err)
-		}
-	}()
-
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
-	log.Println("Shutting down server...")
-
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	if err := server.Shutdown(shutdownCtx); err != nil {
-		log.Fatalf("Server forced to shutdown: %v", err)
-	}
-
-	log.Println("Server exited")
+	runServer(cfg, userRepo, billRepo, itemRepo, personRepo, assignmentRepo, paymentRepo, usageRepo, postgres.NewOCRService(cfg.GeminiAPIKey, cfg.GroqAPIKey, cfg.PythonPath), timeoutContext, false)
 }
 
-func startServer(cfg *config.Config, repos *memory.Repositories, ocrSvc domain.OCRService, timeout time.Duration) {
-	authUsecase := usecase.NewAuthUsecase(repos.User, cfg)
-	billUsecase := usecase.NewBillUsecase(
-		repos.Bill,
-		repos.Item,
-		repos.Person,
-		repos.Assignment,
-		repos.Payment,
-		repos.Usage,
-		repos.User,
-		ocrSvc,
-		timeout,
-	)
+func runServer(
+	cfg *config.Config,
+	userRepo domain.UserRepository,
+	billRepo domain.BillRepository,
+	itemRepo domain.ItemRepository,
+	personRepo domain.PersonRepository,
+	assignmentRepo domain.AssignmentRepository,
+	paymentRepo domain.PaymentRepository,
+	usageRepo domain.UsageRepository,
+	ocrSvc domain.OCRService,
+	timeout time.Duration,
+	isMemory bool,
+) {
+	authUsecase := usecase.NewAuthUsecase(userRepo, cfg)
+	billUsecase := usecase.NewBillUsecase(billRepo, itemRepo, personRepo, assignmentRepo, paymentRepo, usageRepo, userRepo, ocrSvc, timeout, cfg.UsageLimit)
+	premiumUsecase := usecase.NewPremiumUsecase(userRepo, cfg)
 
 	authHandler := delivery.NewAuthHandler(authUsecase)
 	billHandler := delivery.NewBillHandler(billUsecase)
+	premiumHandler := delivery.NewPremiumHandler(premiumUsecase)
+	usageHandler := delivery.NewUsageHandler(billUsecase)
 	authMiddleware := middleware.NewAuthMiddleware(authUsecase)
-	router := delivery.NewRouter(authHandler, billHandler, authMiddleware)
+	ocrRateLimiter := middleware.NewRateLimiter(10, time.Minute)
+	authRateLimiter := middleware.NewRateLimiter(5, time.Minute)
+	router := delivery.NewRouter(authHandler, billHandler, premiumHandler, usageHandler, authMiddleware, ocrRateLimiter, authRateLimiter, cfg.FrontendURL)
+
+	mode := ""
+	if isMemory {
+		mode = " (in-memory)"
+	}
 
 	server := &http.Server{
 		Addr:         ":" + cfg.Port,
 		Handler:      router,
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 180 * time.Second,
-		IdleTimeout:  120 * time.Second,
+		ReadTimeout:  time.Duration(cfg.ReadTimeout) * time.Second,
+		WriteTimeout: time.Duration(cfg.WriteTimeout) * time.Second,
+		IdleTimeout:  time.Duration(cfg.IdleTimeout) * time.Second,
 	}
 
 	go func() {
-		log.Printf("SplitMate Server (in-memory) starting on port %s...\n", cfg.Port)
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("Server panic recovered: %v", r)
+			}
+		}()
+		log.Printf("SplitMate Server%s starting on port %s...\n", mode, cfg.Port)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Failed to start server: %v", err)
 		}

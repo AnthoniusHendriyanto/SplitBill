@@ -40,7 +40,7 @@ SplitMate follows **Clean Architecture** with clear separation between layers, e
 ├─────────────────────────────────────────────────────────────┤
 │  Repository Layer                                           │
 │  ├── PostgreSQL Repositories (bills, users, items, shares)  │
-│  ├── OCR Service (Google Gemini Flash 2.5 API)             │
+│  ├── OCR Service (PaddleOCR → OpenRouter Free → Gemini Free)│
 │  └── Cache (Redis - optional for scaling)                  │
 └─────────────────────────────────────────────────────────────┘
                               │
@@ -76,7 +76,7 @@ SplitMate follows **Clean Architecture** with clear separation between layers, e
 ### 4. Repository Layer (Data Access)
 - Implement repository interfaces
 - Handle database operations (PostgreSQL)
-- Handle external services (Google Gemini Flash OCR)
+- Handle external services (PaddleOCR, OpenRouter, Gemini)
 
 ---
 
@@ -213,7 +213,7 @@ db.SetConnMaxLifetime(5 * time.Minute)
 └─────────────────────────────────────────────────────────────┘
 
 User uploads image
-        │
+        │ (public endpoint, no auth required)
         ▼
 ┌───────────────────┐
 │  Validate image   │ ──► Check file type, size (<10MB)
@@ -222,26 +222,49 @@ User uploads image
          │
          ▼
 ┌───────────────────┐
-│  Check user tier  │ ──► Count OCR usage this month
-│  & usage limits   │     If free tier & >= 5, reject
+│  IP Rate Limit    │ ──► 10 requests/minute per IP
+│     Check         │     (middleware/ratelimit.go)
 └────────┬──────────┘
          │
          ▼ (if allowed)
 ┌───────────────────┐
-│  Google Gemini    │ ──► Send image to Gemini Flash API
-│  API call         │     Validate and extract structure
+│  PaddleOCR        │ ──► Local Python OCR (paddle_ocr.py)
+│  (text extraction)│     Returns raw text lines
 └────────┬──────────┘
          │
          ▼
+┌───────────────────────┐
+│  OpenRouter Free      │ ──► Send raw OCR text to
+│  (structured parsing) │     openrouter/free (auto-failover
+│                       │     across free models)
+└───────────┬───────────┘
+            │
+       ┌────┴────┐
+       ▼         ▼
+    Success   OpenRouter fails
+       │         │
+       │         ▼
+       │  ┌───────────────────┐
+       │  │  Gemini Flash Free│ ──► Fallback parse
+       │  │  (Gemini 2.5)     │
+       │  └────────┬──────────┘
+       │           │
+       │      ┌────┴────┐
+       │      ▼         ▼
+       │   Success   Both fail
+       │      │         │
+       │      │         ▼
+       │      │    Return 500 error
+       ▼      ▼
+┌──────────────────────────┐
+│  Parse & validate result │ ──► Extract items, prices,
+│  (parseStructuredJSON)   │     quantities, totals
+└───────────┬──────────────┘
+            │
+            ▼
 ┌───────────────────┐
-│  Parse response   │ ──► Extract items, prices, totals
-│  & extract data   │
-└────────┬──────────┘
-         │
-         ▼
-┌───────────────────┐
-│  Increment usage  │ ──► Update usage_tracking table
-│  counter          │
+│  Build OCRResult  │ ──► Items with name, price, quantity
+│  (buildOCRResult) │     + service_charge, tax, confidence
 └────────┬──────────┘
          │
          ▼
@@ -339,11 +362,12 @@ Algorithm (Greedy):
 ## Security Measures
 
 1. **Password**: bcrypt with cost factor 12
-2. **JWT**: HS256, 15min access, 7 day refresh
+2. **JWT**: HS256, configurable expiry (default 15min access, 7 day refresh)
 3. **HTTPS**: TLS 1.3 in production
-4. **Rate Limiting**: 100 req/min per IP (auth: 10 req/min)
-5. **CORS**: Strict origin whitelist
+4. **Rate Limiting**: Auth 10 req/min (global), OCR 10 req/min (per IP), Bills 60 req/min (per user), Users 30 req/min (per user)
+5. **CORS**: Configurable origin whitelist (env var `CORS_ORIGIN`)
 6. **Input Sanitization**: No raw SQL, parameterized queries only
+7. **Refresh Token Persistence**: Refresh tokens stored in DB, enabling revocation
 
 ---
 
@@ -425,7 +449,9 @@ internal/
 ├── delivery/
 │   └── http/
 │       ├── middleware/
-│       │   └── auth.go         # JWT authentication middleware
+│       │   ├── auth.go         # JWT authentication middleware
+│       │   ├── cors.go         # Configurable CORS origin
+│       │   └── ratelimit.go    # IP-based rate limiter (10 req/min for OCR)
 │       ├── auth_handler.go     # Auth HTTP handlers
 │       ├── bill_handler.go     # Bill + OCR HTTP handlers
 │       └── router.go           # Route registration
@@ -444,7 +470,8 @@ internal/
         ├── payment_repository.go
         ├── share_repository.go
         ├── usage_repository.go
-        └── ocr_service.go      # Mock OCR (returns line items)
+        ├── ocr_service.go      # PaddleOCR → OpenRouter → Gemini pipeline
+        └── paddle_ocr.py       # PaddleOCR Python wrapper
 
 migrations/
 ├── 001_users.sql
@@ -455,5 +482,10 @@ migrations/
 ├── 006_payments.sql
 ├── 007_usage_tracking.sql
 ├── 008_refresh_tokens.sql
-└── 009_shares.sql              # shareable links table
+├── 009_shares.sql              # shareable links table
+├── 010_venue_intelligence.sql
+├── 011_split_type.sql
+└── 012_timestamptz_checks.sql  # TIMESTAMPTZ + CHECK constraints
+
+run_migrations.sh               # Idempotent migration runner
 ```

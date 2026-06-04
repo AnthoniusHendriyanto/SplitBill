@@ -1,9 +1,7 @@
 #!/bin/bash
 set -e
 
-# Load environment variables if .env exists
 if [ -f .env ]; then
-  # export only actual non-empty, non-comment key-value pairs
   export $(grep -v '^#' .env | xargs)
 fi
 
@@ -21,15 +19,28 @@ echo "Target Host:     ${DB_HOST}:${DB_PORT}"
 echo "Database User:   ${DB_USER}"
 echo "=================================================="
 
-# Set PGPASSWORD so psql doesn't prompt for password
 export PGPASSWORD=$DB_PASS
 
-# Run each migration file in alphabetical/numerical order
+# Create migration tracking table (idempotent)
+psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -c "
+CREATE TABLE IF NOT EXISTS _migrations (
+    name VARCHAR(255) PRIMARY KEY,
+    applied_at TIMESTAMPTZ DEFAULT NOW()
+);
+"
+
 for file in $(ls migrations/*.sql | sort); do
-  echo "Applying: $file ..."
-  psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -f "$file"
+  name=$(basename "$file")
+  already_applied=$(psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -tAc "SELECT 1 FROM _migrations WHERE name = '$name'")
+  if [ "$already_applied" = "1" ]; then
+    echo "Skipping $name (already applied)"
+    continue
+  fi
+  echo "Applying: $name ..."
+  psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" --set ON_ERROR_STOP=on -f "$file"
+  psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -c "INSERT INTO _migrations (name) VALUES ('$name') ON CONFLICT DO NOTHING"
   echo "Success!"
   echo "--------------------------------------------------"
 done
 
-echo "🎉 All migrations applied successfully!"
+echo "All migrations applied successfully!"

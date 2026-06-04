@@ -44,6 +44,9 @@ func (r *itemRepository) GetByBillID(ctx context.Context, billID string) ([]doma
 		}
 		items = append(items, item)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return items, nil
 }
 
@@ -100,6 +103,9 @@ func (r *personRepository) GetByBillID(ctx context.Context, billID string) ([]do
 			return nil, err
 		}
 		persons = append(persons, person)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 	return persons, nil
 }

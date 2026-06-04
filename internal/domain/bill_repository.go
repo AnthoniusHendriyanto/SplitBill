@@ -9,6 +9,8 @@ type BillRepository interface {
 	Update(ctx context.Context, bill *Bill) error
 	Delete(ctx context.Context, id string) error
 	GetByUserIDAndID(ctx context.Context, userID, billID string) (Bill, error)
+	CreateFull(ctx context.Context, bill *Bill, items []Item, persons []Person, assignments []ItemAssignment) error
+	CreatePayments(ctx context.Context, billID string, payments []Payment) error
 }
 
 type ItemRepository interface {

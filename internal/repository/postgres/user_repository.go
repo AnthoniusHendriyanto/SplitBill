@@ -55,7 +55,7 @@ func (r *userRepository) GetByEmail(ctx context.Context, email string) (domain.U
 		       COALESCE(stripe_customer_id, ''), 
 		       COALESCE(stripe_subscription_id, ''), 
 		       premium_expires_at, created_at, updated_at
-		FROM users WHERE email = $1
+		FROM users WHERE LOWER(email) = LOWER($1)
 	`
 	var user domain.User
 	err := r.Pool.QueryRow(ctx, query, email).Scan(
@@ -98,4 +98,36 @@ func (r *userRepository) Delete(ctx context.Context, id string) error {
 	query := `DELETE FROM users WHERE id = $1`
 	_, err := r.Pool.Exec(ctx, query, id)
 	return err
+}
+
+func (r *userRepository) SaveRefreshToken(ctx context.Context, userID, token string, expiresAt int64) error {
+	query := `
+		INSERT INTO refresh_tokens (user_id, token, expires_at, created_at)
+		VALUES ($1, $2, to_timestamp($3), NOW())
+	`
+	_, err := r.Pool.Exec(ctx, query, userID, token, expiresAt)
+	return err
+}
+
+func (r *userRepository) DeleteRefreshToken(ctx context.Context, token string) error {
+	query := `DELETE FROM refresh_tokens WHERE token = $1`
+	_, err := r.Pool.Exec(ctx, query, token)
+	return err
+}
+
+func (r *userRepository) ReplaceRefreshToken(ctx context.Context, oldToken, newToken, userID string, expiresAt int64) error {
+	tx, err := r.Pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	if _, err := tx.Exec(ctx, `DELETE FROM refresh_tokens WHERE token = $1`, oldToken); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO refresh_tokens (user_id, token, expires_at, created_at) VALUES ($1, $2, to_timestamp($3), NOW())`, userID, newToken, expiresAt); err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
 }

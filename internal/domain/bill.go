@@ -18,11 +18,16 @@ type Bill struct {
 	UpdatedAt     time.Time `json:"updated_at"`
 }
 
+func (b Bill) CalculateGrandTotal() float64 {
+	return b.TotalAmount + (b.TotalAmount*b.ServiceCharge/100) + (b.TotalAmount*b.Tax/100)
+}
+
 type Item struct {
 	ID          string     `json:"id"`
 	BillID      string     `json:"bill_id"`
 	Name        string     `json:"name"`
 	Price       float64    `json:"price"`
+	Quantity    int        `json:"quantity,omitempty"`
 	AssignedTo  []string   `json:"assigned_to,omitempty"`
 	CreatedAt   time.Time  `json:"created_at"`
 }
@@ -76,9 +81,10 @@ type CreateBillRequest struct {
 }
 
 type ItemRequest struct {
-	ID    string  `json:"id,omitempty"`
-	Name  string  `json:"name" validate:"required"`
-	Price float64 `json:"price" validate:"required,min=0"`
+	ID       string  `json:"id,omitempty"`
+	Name     string  `json:"name" validate:"required"`
+	Price    float64 `json:"price" validate:"required,min=0"`
+	Quantity int     `json:"quantity,omitempty"`
 }
 
 type PersonRequest struct {

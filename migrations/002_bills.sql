@@ -6,8 +6,9 @@ CREATE TABLE IF NOT EXISTS bills (
     total_amount DECIMAL(15,2) NOT NULL DEFAULT 0,
     service_charge DECIMAL(15,2) NOT NULL DEFAULT 0,
     tax DECIMAL(15,2) NOT NULL DEFAULT 0,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    split_type VARCHAR(50) NOT NULL DEFAULT 'equal',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX idx_bills_user_id ON bills(user_id);

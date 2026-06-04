@@ -25,7 +25,7 @@
 
 | Method | Description |
 |--------|-------------|
-| **Photo Capture** | Take photo with device camera → upload for OCR |
+| **Photo Capture** | Take photo with device camera → upload for OCR (PaddleOCR → OpenRouter → Gemini) |
 | **Manual Upload** | Select existing image from gallery → OCR processing |
 | **Manual Entry** | Form-based input (item name + price manually) |
 
@@ -66,7 +66,7 @@
 | **Debts to Bank** | Everyone else owes their share to the person who paid |
 | **Mark Settled** | Each person marks their debt to the bank as paid |
 
-### 5. Settlement Tracking
+### Settlement Tracking
 
 | Feature | Description |
 |---------|-------------|
@@ -80,7 +80,7 @@
 
 | Feature | Free Tier | Premium Tier |
 |---------|-----------|--------------|
-| OCR Scans | 5/month | Unlimited |
+| OCR Scans | Unlimited | Unlimited |
 | Manual Bills | Unlimited | Unlimited |
 | Bill History | 30 days | Forever |
 | Export to PDF | No | Yes |
@@ -123,6 +123,7 @@
 - bill_id: UUID (FK)
 - name: string
 - price: decimal
+- quantity: integer (default 1)
 - created_at: timestamp
 ```
 
@@ -220,7 +221,7 @@
 | Database | PostgreSQL 15+ |
 | ORM | GORM or raw SQL |
 | Auth | JWT (golang-jwt) |
-| OCR | Google Gemini Flash 2.5 API |
+| OCR | PaddleOCR (local) → OpenRouter Free Router → Gemini Flash Free |
 | Frontend | React 18+ |
 | Styling | Tailwind CSS |
 | State | React Query / Zustand |
@@ -238,7 +239,18 @@
 | `DB_NAME` | Database name | Yes |
 | `PORT` | API server port | Yes |
 | `JWT_SECRET` | JWT signing key | Yes |
-| `GEMINI_API_KEY` | Google Gemini API Key | Yes (for OCR) |
+| `JWT_ACCESS_EXPIRY` | Access token TTL (default `15m`) | No |
+| `JWT_REFRESH_EXPIRY` | Refresh token TTL (default `168h`) | No |
+| `DB_POOL_MAX_OPEN` | Max open connections (default `25`) | No |
+| `DB_POOL_MAX_IDLE` | Max idle connections (default `5`) | No |
+| `DB_POOL_LIFETIME` | Conn max lifetime (default `5m`) | No |
+| `SERVER_READ_TIMEOUT` | HTTP read timeout (default `10s`) | No |
+| `SERVER_WRITE_TIMEOUT` | HTTP write timeout (default `30s`) | No |
+| `SERVER_IDLE_TIMEOUT` | HTTP idle timeout (default `120s`) | No |
+| `SSL_MODE` | PostgreSQL SSL mode (default `disable`) | No |
+| `CORS_ORIGIN` | Allowed CORS origin (default `http://localhost:5173`) | No |
+| `OPENROUTER_API_KEY` | OpenRouter API key | Yes (for OCR) |
+| `GEMINI_API_KEY` | Google Gemini API Key | Yes (for OCR fallback) |
 | `STRIPE_SECRET_KEY` | Stripe API key | Yes (for premium) |
 
 ---
@@ -267,8 +279,10 @@ splitbill_backend/
 │   │   └── usage_repository.go     # Usage repository interface
 │   ├── delivery/
 │   │   └── http/
-│   │       ├── middleware/
-│   │       │   └── auth.go         # JWT auth middleware
+│       │       ├── middleware/
+│       │       │   ├── auth.go         # JWT auth middleware
+│       │       │   ├── cors.go         # Configurable CORS origin
+│       │       │   └── ratelimit.go    # IP-based rate limiter (10/min OCR)
 │   │       ├── auth_handler.go     # Register, Login, Refresh handlers
 │   │       ├── bill_handler.go     # CRUD + OCR handlers
 │   │       └── router.go           # Route registration (gorilla/mux)
@@ -285,7 +299,8 @@ splitbill_backend/
 │           ├── payment_repository.go
 │           ├── share_repository.go
 │           ├── usage_repository.go
-│           └── ocr_service.go      # Mock OCR service
+│           ├── ocr_service.go      # PaddleOCR → OpenRouter → Gemini pipeline
+│           └── paddle_ocr.py       # PaddleOCR Python wrapper
 ├── migrations/
 │   ├── 001_users.sql
 │   ├── 002_bills.sql
@@ -295,7 +310,11 @@ splitbill_backend/
 │   ├── 006_payments.sql
 │   ├── 007_usage_tracking.sql
 │   ├── 008_refresh_tokens.sql
-│   └── 009_shares.sql              # Shareable links
+│   ├── 009_shares.sql              # Shareable links
+│   ├── 010_venue_intelligence.sql
+│   ├── 011_split_type.sql
+│   └── 012_timestamptz_checks.sql  # TIMESTAMPTZ + CHECK constraints
+├── run_migrations.sh           # Idempotent migration runner
 ├── docs/
 │   ├── SPEC.md
 │   ├── ARCHITECTURE.md

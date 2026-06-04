@@ -10,16 +10,16 @@ import (
 )
 
 func NewPostgresConnection(cfg *config.Config) (*pgxpool.Pool, error) {
-	dsn := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
-		cfg.DBUser, cfg.DBPass, cfg.DBHost, cfg.DBPort, cfg.DBName)
+	dsn := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s",
+		cfg.DBUser, cfg.DBPass, cfg.DBHost, cfg.DBPort, cfg.DBName, cfg.DBSSLMode)
 
 	poolConfig, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
 		return nil, fmt.Errorf("unable to parse config: %w", err)
 	}
 
-	poolConfig.MaxConns = 25
-	poolConfig.MinConns = 5
+	poolConfig.MaxConns = int32(cfg.DBMaxConns)
+	poolConfig.MinConns = int32(cfg.DBMinConns)
 	poolConfig.MaxConnLifetime = time.Hour
 	poolConfig.MaxConnIdleTime = 30 * time.Minute
 

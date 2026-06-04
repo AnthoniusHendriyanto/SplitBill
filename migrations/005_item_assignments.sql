@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS item_assignments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     item_id UUID NOT NULL REFERENCES items(id) ON DELETE CASCADE,
     person_id UUID NOT NULL REFERENCES persons(id) ON DELETE CASCADE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(item_id, person_id)
 );
 

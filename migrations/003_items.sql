@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS items (
     bill_id UUID NOT NULL REFERENCES bills(id) ON DELETE CASCADE,
     name VARCHAR(255) NOT NULL,
     price DECIMAL(15,2) NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX idx_items_bill_id ON items(bill_id);

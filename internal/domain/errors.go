@@ -10,6 +10,7 @@ var (
 	ErrTokenExpired         = errors.New("token expired")
 	ErrTokenInvalid         = errors.New("invalid token")
 	ErrForbidden            = errors.New("forbidden")
+	ErrPremiumRequired      = errors.New("custom and percentage split are premium features")
 	ErrInvalidInput         = errors.New("invalid input")
 	ErrInternalError        = errors.New("internal error")
 )
