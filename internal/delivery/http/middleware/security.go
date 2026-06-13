@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"io"
 	"net/http"
 )
 
@@ -28,6 +27,4 @@ func BodyLimit(maxBytes int64) func(http.Handler) http.Handler {
 	}
 }
 
-func LimitReader(r io.ReadCloser, n int64) io.ReadCloser {
-	return http.MaxBytesReader(nil, r, n)
-}
+

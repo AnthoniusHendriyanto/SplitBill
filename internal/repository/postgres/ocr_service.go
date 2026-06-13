@@ -161,7 +161,24 @@ type geminiStructuredResult struct {
 
 const structurePrompt = `Extract receipt fields as JSON. Output ONLY the JSON object.
 
-Receipts may be in Indonesian, English, Chinese, Japanese, Korean, or mixed languages.
+Receipts are primarily Indonesian cafe/restaurant receipts. May also be in English, Chinese, Japanese, Korean, or mixed.
+
+INDONESIAN GUIDE:
+- Tax: "PPN", "PB1", "Pajak", "PPh"
+- Service: "Service Charge", "Service", "Servis", "Servis & Lainnya", "Svc Chg", "Svc", "Layanan"
+- Total: "Total", "Grand Total", "Total Bayar", "Jumlah"
+- Subtotal: "Subtotal", "Jumlah", "Sub Total"
+
+PRICE PARSING:
+- "Rp 25.000" -> 25000. Remove "Rp", dots (thousands separator), commas.
+- "." is THOUSANDS separator in Indonesia (25.000 = 25000, NOT 25.0).
+- "Rp 25.500" -> 25500 (NOT 25.5).
+- "," is decimal separator (25,50 = 25.5) — rare.
+
+QUANTITY PATTERNS:
+- "2x Kopi Susu Rp 30.000" -> quantity=2, price=15000 each (30000 / 2)
+- "Kopi Susu @15.000" -> quantity=1, price=15000
+- Default quantity=1.
 
 SCHEMA:
 {
@@ -178,24 +195,46 @@ SCHEMA:
 RULES:
 - restaurant_name: from receipt top. "" if not visible.
 - date: YYYY-MM-DD. "" if not visible. Use printed date, not today.
-- items: only MAIN menu items with prices. Exclude headers, address, phone, cashier, table, payment info, change, tip, barcodes, QR data.
-  - Sub-lines under a main item (even with prices like toppings, add-ons, extras) are MODIFIERS — attach name with " + " and include in the parent item's price. Do NOT list as separate items.
-  - CRITICAL ANTI-PATTERN: "Topping - Soya Bean Curd Rp 8.000" under "Milk Tea Rp 36.000" → modifier, not a separate item. The 36.000 already includes the topping.
-  - Modifier lines with no price below an item: attach name with " + ".
-  - "Rp 25.000" -> 25000. Remove Rp, dots, commas. Numeric only.
-  - "2x Kopi Rp 30.000" -> quantity=2, price=30000. Default quantity=1.
-  - If a price is unclear or missing -> price=0. Do NOT guess or invent any price.
-  - CRITICAL: ONLY use items that appear verbatim. NEVER add items not in the OCR text.
-- subtotal: the printed subtotal on the receipt. Authoritative — prefer this over summing items.
-- service_charge: rupiah. Look for "Service Charge"/"Service"/"Svc"/"Layanan"/"Service Charge (x%)". 0 if absent.
-- tax: rupiah. Look for "PPN"/"PB1"/"Pajak"/"Tax"/"GST"/"VAT". 0 if absent.
-  - WARNING: OCR may merge columns, placing grand_total number next to the "Pajak"
-    keyword. If the number near "Pajak"/"Tax" matches grand_total or exceeds subtotal,
-    the real tax is missing. Set tax=0 and calculate: tax = grand_total - subtotal.
-- grand_total: the FINAL total printed on the receipt. Authoritative — use this over your own calculation.
-- ai_confidence: 0-100. Rate overall extraction quality. Be conservative: if prices are unclear, items might be missing, subtotal and items don't align, or numbers seem contradictory -> lower score below 70.
+- items: only MAIN menu items with prices.
+  - Sub-lines (toppings, add-ons, extras, level, size, temperature) are MODIFIERS. Attach their NAME to the parent item name with " + ".
+  - CRITICAL: Modifier prices are FOR DISPLAY ONLY. NEVER add them to the parent item price. The parent uses its own listed price.
+    Example: "Milk Tea Rp 36.000" and sub-line "Topping Rp 8.000" → price=36000, name="Milk Tea + Topping". Price stays 36000.
+  - Drop zero-price sub-lines like "*Ice 0", "*Less Ice 0", "*Less sugar 0", "SUGAR LEVEL-30% Rp0", "Level 0" — these are order instructions, not modifiers. Do NOT attach.
+  - If a price is unclear or missing -> 0. Do NOT guess any price.
+  - ONLY use items that appear verbatim. NEVER invent items.
+- subtotal: the printed subtotal. Authoritative.
+  - If missing or unreliable (e.g., OCR merged it with another number), sum item prices as fallback subtotal.
+- service_charge: Look for "Service Charge"/"Service"/"Servis"/"Servis & Lainnya"/"Svc"/"Layanan"/"Svc Chg". 0 if absent.
+  - If percentage shown (e.g., "Service Charge 5%"), calculate: subtotal * percentage / 100.
+  - CRITICAL: "Pajak"/"PPN"/"PB1" values NEVER go into service_charge. They are always tax.
+- tax: Look for "PPN"/"PB1"/"Pajak"/"Tax"/"GST"/"VAT"/"PPh". 0 if absent.
+  - If percentage shown (e.g., "PPN 11%"), calculate: subtotal * percentage / 100.
+- grand_total: FINAL total. Look for "Total"/"Grand Total"/"Total Bayar"/"Jumlah". Authoritative.
 
-If the text is NOT a receipt -> {"error": "Not a receipt."}
+MANDATORY COLUMN-MERGE CHECK:
+  Indonesian receipts often have merged columns. ALWAYS verify: items_total + service_charge + tax == grand_total.
+  If they DON'T match, the values were swapped by column merging. Swap service_charge and tax, then recheck.
+  If "Pajak" has no adjacent number, the number between it and "Total" is the tax.
+
+EXAMPLE (learn from this exact pattern):  
+Input:
+  "Nasi Ayam Etera 45.000
+  Kopi Susu Gula Aren 38.000
+  83.000
+  Subtotal 4.650
+  Servis & Lainnya 8.715
+  Pajak
+  96.365
+  Total 96.365"
+Output:
+  items_total = 45000 + 38000 = 83000
+  "Servis & Lainnya 8.715" -> candidate=8715 but this is actually tax (Pajak value)
+  "Subtotal 4.650" -> 4650 too small for subtotal, its actually the service_charge
+  "Pajak" -> no number, the value 8715 below it is the tax
+  Cross-check: 83000 + 4650 + 8715 = 96365 == total -> CORRECT
+  So: service_charge=4650, tax=8715
+
+If NOT a receipt -> {"error": "Not a receipt."}
 
 STRICT: Start with {. End with }. No other text, no markdown, no explanation.`
 

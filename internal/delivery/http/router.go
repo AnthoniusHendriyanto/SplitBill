@@ -34,11 +34,9 @@ func NewRouter(
 	authSub.HandleFunc("/refresh", authHandler.Refresh).Methods("POST", "OPTIONS")
 	authSub.HandleFunc("/logout", authHandler.Logout).Methods("POST", "OPTIONS")
 
-	protected := router.PathPrefix("/api/v1").Subrouter()
-	protected.Use(authMiddleware.Authenticate)
-	protected.Use(middleware.BodyLimit(10 << 20))
-
-	protected.Handle("/ocr", ocrRateLimiter.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	publicAPI := router.PathPrefix("/api/v1").Subrouter()
+	publicAPI.Use(middleware.BodyLimit(10 << 20))
+	publicAPI.Handle("/ocr", ocrRateLimiter.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusOK)
 			return
@@ -47,6 +45,10 @@ func NewRouter(
 			billHandler.ProcessOCR(w, r)
 		}
 	}))).Methods("POST", "OPTIONS")
+
+	protected := router.PathPrefix("/api/v1").Subrouter()
+	protected.Use(authMiddleware.Authenticate)
+	protected.Use(middleware.BodyLimit(10 << 20))
 
 	protected.HandleFunc("/bills", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodOptions {

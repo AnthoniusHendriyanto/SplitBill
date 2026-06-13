@@ -17,7 +17,3 @@ type UsageResponse struct {
 	ResetAt  time.Time  `json:"reset_at"`
 }
 
-type UsageLimit struct {
-	Current int   `json:"current"`
-	Limit   int   `json:"limit"`
-}

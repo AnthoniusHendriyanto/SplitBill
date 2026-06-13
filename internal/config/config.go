@@ -21,17 +21,13 @@ type Config struct {
 	JWTRefreshSecret    string
 	JWTExpiration       int
 	RefreshTokenExpiry  int
-	StripeSecretKey     string
-	StripeWebhookSecret string
-	GeminiAPIKey        string
-	GroqAPIKey          string
-	OpenRouterAPIKey    string
-	ReadTimeout         int
-	WriteTimeout        int
-	IdleTimeout         int
-	UsageLimit          int
-	PythonPath          string
-	MaxBodyBytes        int64
+	GeminiAPIKey     string
+	GroqAPIKey       string
+	ReadTimeout      int
+	WriteTimeout     int
+	IdleTimeout      int
+	UsageLimit       int
+	PythonPath       string
 }
 
 func LoadConfig() *Config {
@@ -50,17 +46,13 @@ func LoadConfig() *Config {
 		JWTRefreshSecret:    getEnv("JWT_REFRESH_SECRET", "your-refresh-secret-key-change-in-production"),
 		JWTExpiration:       getEnvInt("JWT_EXPIRATION", 15),
 		RefreshTokenExpiry:  getEnvInt("REFRESH_TOKEN_EXPIRY", 7),
-		StripeSecretKey:     getEnv("STRIPE_SECRET_KEY", ""),
-		StripeWebhookSecret: getEnv("STRIPE_WEBHOOK_SECRET", ""),
-		GeminiAPIKey:        getEnv("GEMINI_API_KEY", ""),
-		GroqAPIKey:          getEnv("GROQ_API_KEY", ""),
-		OpenRouterAPIKey:    getEnv("OPENROUTER_API_KEY", ""),
-		ReadTimeout:         getEnvInt("SERVER_READ_TIMEOUT", 30),
-		WriteTimeout:        getEnvInt("SERVER_WRITE_TIMEOUT", 180),
-		IdleTimeout:         getEnvInt("SERVER_IDLE_TIMEOUT", 120),
-		UsageLimit:          getEnvInt("USAGE_LIMIT", 50),
-		PythonPath:          getEnv("PYTHON_PATH", "python3"),
-		MaxBodyBytes:        int64(getEnvInt("MAX_BODY_BYTES", 10<<20)),
+		GeminiAPIKey:  getEnv("GEMINI_API_KEY", ""),
+		GroqAPIKey:    getEnv("GROQ_API_KEY", ""),
+		ReadTimeout:   getEnvInt("SERVER_READ_TIMEOUT", 30),
+		WriteTimeout:  getEnvInt("SERVER_WRITE_TIMEOUT", 180),
+		IdleTimeout:   getEnvInt("SERVER_IDLE_TIMEOUT", 120),
+		UsageLimit:    getEnvInt("USAGE_LIMIT", 50),
+		PythonPath:    getEnv("PYTHON_PATH", "python3"),
 	}
 
 	if cfg.JWTSecret == "your-secret-key-change-in-production" {

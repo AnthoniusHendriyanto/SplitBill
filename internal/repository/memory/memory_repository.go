@@ -19,7 +19,6 @@ type Repositories struct {
 	Person     domain.PersonRepository
 	Assignment domain.AssignmentRepository
 	Payment    domain.PaymentRepository
-	Share      domain.ShareRepository
 	Usage      domain.UsageRepository
 }
 
@@ -46,7 +45,6 @@ func NewRepositories() *Repositories {
 		Person:     &personRepository{persons: make(map[string]*domain.Person)},
 		Assignment: ar,
 		Payment:    &paymentRepository{payments: make(map[string]*domain.Payment)},
-		Share:      &shareRepository{shares: make(map[string]*domain.Share)},
 		Usage:      &usageRepository{usage: make(map[string]*domain.UsageTracking)},
 	}
 }
@@ -519,55 +517,6 @@ func (r *paymentRepository) DeleteByBillID(_ context.Context, billID string) err
 			delete(r.payments, id)
 		}
 	}
-	return nil
-}
-
-// ---- Share Repository ----
-
-type shareRepository struct {
-	mu     sync.Mutex
-	shares map[string]*domain.Share
-}
-
-func (r *shareRepository) Create(_ context.Context, share *domain.Share) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if share.ID == "" {
-		share.ID = uuid.New().String()
-	}
-	if share.ShareToken == "" {
-		share.ShareToken = uuid.New().String()
-	}
-	share.CreatedAt = time.Now()
-	r.shares[share.ShareToken] = share
-	return nil
-}
-
-func (r *shareRepository) GetByShareToken(_ context.Context, token string) (domain.Share, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	s, ok := r.shares[token]
-	if !ok {
-		return domain.Share{}, domain.ErrNotFound
-	}
-	return *s, nil
-}
-
-func (r *shareRepository) IncrementViews(_ context.Context, token string) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	s, ok := r.shares[token]
-	if !ok {
-		return domain.ErrNotFound
-	}
-	s.CurrentViews++
-	return nil
-}
-
-func (r *shareRepository) Delete(_ context.Context, token string) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	delete(r.shares, token)
 	return nil
 }
 

@@ -119,20 +119,7 @@ type Pagination struct {
 	TotalPages  int `json:"total_pages"`
 }
 
-type UpdateBillRequest struct {
-	Title        string            `json:"title"`
-	Items        []ItemRequest     `json:"items"`
-	Persons      []PersonRequest   `json:"persons"`
-	SplitType    string            `json:"split_type"`
-	Assignments  []AssignmentRequest `json:"assignments"`
-}
-
 type BillDetailResponse struct {
 	Bill              Bill                      `json:"bill"`
 	SettlementSummary map[string]float64       `json:"settlement_summary"`
-}
-
-type PaymentSettleRequest struct {
-	PaymentID string  `json:"payment_id" validate:"required"`
-	Amount    float64 `json:"amount"`
 }
