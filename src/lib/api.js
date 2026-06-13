@@ -121,8 +121,9 @@ export const api = {
 
   logout: async (refreshToken) => {
     try {
-      await request('/api/v1/auth/logout', {
+      await fetch(`${authBase}/logout`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refresh_token: refreshToken }),
       });
     } catch {
@@ -181,19 +182,6 @@ export const api = {
     body: JSON.stringify(data),
   }),
 
-  // Premium
-  subscribeToPremium: (priceId) => request('/api/v1/premium/subscribe', {
-    method: 'POST',
-    body: JSON.stringify({ price_id: priceId }),
-  }),
-
   // Usage
   getUsage: () => request('/api/v1/usage'),
-
-  // Payments
-  getPayments: (billId) => request(`/api/v1/payments/${billId}`),
-  settlePayment: (billId, paymentId, amount) => request(`/api/v1/payments/${billId}/settle`, {
-    method: 'POST',
-    body: JSON.stringify({ payment_id: paymentId, amount_paid: amount }),
-  }),
 };

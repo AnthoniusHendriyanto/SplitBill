@@ -1,6 +1,7 @@
 import { memo, useState } from 'react';
 import { motion } from 'framer-motion';
 import useBillStore from '../store/useBillStore';
+import useAuthStore from '../store/useAuthStore';
 import Icon from './Icon';
 import { cn } from '../utils/cn';
 
@@ -21,10 +22,19 @@ function Dashboard({ setActiveTab, setStep, setSelectedBillId }) {
       return sum + unpaidTotal;
     }, 0);
 
+  const currentUser = useAuthStore.getState().user;
   const currentMonth = new Date().getMonth();
   const monthlySpending = completedBills
     .filter(b => b.status !== 'draft' && new Date(b.completedAt).getMonth() === currentMonth)
-    .reduce((sum, b) => sum + b.grandTotal, 0);
+    .reduce((sum, b) => {
+      const myPerson = b.persons.find(p =>
+        p.isCurrentUser || p.userId === currentUser?.id ||
+        (currentUser?.name && p.name?.toLowerCase() === currentUser.name.toLowerCase())
+      );
+      if (!myPerson) return sum + (b.grandTotal || 0);
+      const myTotal = b.totals.find(t => t.id === myPerson.id)?.total || 0;
+      return sum + myTotal;
+    }, 0);
   const pendingSettlementsCount = completedBills.filter(b => b.status === 'pending').length;
   const monthlyBillsCount = completedBills.filter(b => new Date(b.completedAt).getMonth() === currentMonth).length;
 

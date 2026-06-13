@@ -29,6 +29,7 @@ export default function App() {
   const updateBill = useBillStore((s) => s.updateBill);
   const calculateTotals = useBillStore((s) => s.calculateTotals);
   const settings = useBillStore((s) => s.settings);
+  const assignments = useBillStore((s) => s.assignments);
   const ui = useBillStore((s) => s.ui);
   const updateUI = useBillStore((s) => s.updateUI);
   const fetchCompletedBills = useBillStore((s) => s.fetchCompletedBills);
@@ -62,14 +63,18 @@ export default function App() {
     };
   }, [hydrated]);
 
+  const initialRefreshRef = useRef(false);
+
   useEffect(() => {
     if (!hydrated) return;
+    if (initialRefreshRef.current) return;
+    initialRefreshRef.current = true;
     if (!refreshToken || isGuest) {
-      const timer = setTimeout(() => setIsValidating(false), 0);
-      return () => clearTimeout(timer);
+      setIsValidating(false);
+      return;
     }
     silentRefresh().finally(() => setIsValidating(false));
-  }, [hydrated, refreshToken, isGuest, silentRefresh]);
+  }, [hydrated, isGuest, silentRefresh]);
 
   const stepRef = useRef(step);
   const setStep = useCallback((newStep) => updateUI({ step: typeof newStep === 'function' ? newStep(stepRef.current) : newStep }), [updateUI]);
@@ -170,7 +175,7 @@ export default function App() {
     [receiptSubtotal, receiptService, receiptTax]
   );
 
-  const personTotals = useMemo(() => calculateTotals(), [calculateTotals]);
+  const personTotals = useMemo(() => calculateTotals(), [bill, settings, assignments]);
 
   const handleServiceModeChange = (mode) => {
     if (mode === bill.serviceMode) return;
@@ -246,9 +251,7 @@ export default function App() {
       case 5:
         return <Step5Settlement
           receiptSubtotal={receiptSubtotal}
-          receiptGrandTotal={receiptGrandTotal}
           personTotals={personTotals}
-          setStep={setStep}
           setActiveTab={setActiveTab}
         />;
       default:

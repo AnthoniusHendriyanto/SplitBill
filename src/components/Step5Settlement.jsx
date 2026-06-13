@@ -73,7 +73,7 @@ function Step5Settlement({
             ))}
           </div>
         </div>
-        <DebtMap persons={bill.persons} personTotals={personTotals} payerId={bill.payerId} />
+        <DebtMap />
       </div>
       <div className="col-span-12 lg:col-span-5 space-y-6 bg-card border border-slate-900 rounded-3xl p-6 flex flex-col justify-between min-h-[500px]">
         <div className="space-y-6">

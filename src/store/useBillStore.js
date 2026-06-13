@@ -131,7 +131,12 @@ const useBillStore = create(
               assignments: {},
               serverData: bill,
             }));
-            set({ completedBills: mapped });
+            set((state) => ({
+              completedBills: mapped.map(serverBill => {
+                const local = state.completedBills.find(b => b.id === serverBill.id);
+                return local ? { ...local, serverData: serverBill.serverData } : serverBill;
+              })
+            }));
           }
           set({ isLoadingBills: false });
         } catch (err) {
@@ -177,12 +182,13 @@ const useBillStore = create(
         }
 
         // Always save locally
+        const effectivePayerId = state.bill.payerId || state.bill.persons[0]?.id || null;
         set((state) => {
           const mappedPersons = state.bill.persons.map(p => {
             const pTotal = totals.find(t => t.id === p.id)?.total || 0;
             return {
               ...p,
-              paid: (p.id === state.bill.payerId || pTotal === 0) ? true : false,
+              paid: (p.id === effectivePayerId || pTotal === 0) ? true : false,
               paymentInfo: p.paymentInfo ? { ...p.paymentInfo } : undefined
             };
           });

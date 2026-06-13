@@ -43,10 +43,10 @@ function Step1Scan({
                 type="file"
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                 accept="image/*"
-                onChange={(e) => { if (e.target.files && e.target.files[0]) { handleUpload(e.target.files[0]); e.target.value = ''; } }}
+                onChange={(e) => { e.preventDefault(); if (e.target.files && e.target.files[0]) { handleUpload(e.target.files[0]); e.target.value = ''; } }}
                 aria-label="Upload receipt image"
               />
-              <button className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-indigo-600/25 hover:shadow-indigo-600/40 transition-all flex items-center justify-center gap-2 border-none cursor-pointer outline-none">
+              <button type="button" className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-indigo-600/25 hover:shadow-indigo-600/40 transition-all flex items-center justify-center gap-2 border-none cursor-pointer outline-none">
                 <Icon name="cloud_upload" className="text-base" />
                 Upload Receipt Image
               </button>
@@ -64,7 +64,7 @@ function Step1Scan({
               </p>
             </div>
             <div className="mt-6 w-full">
-              <button
+              <button type="button"
                 onClick={() => {
                   updateBill({ title: "Manual Ledger", imageUrl: "", items: [], persons: [] });
                   addItem();
@@ -99,14 +99,14 @@ function Step1Scan({
                 </span>
                 {!isScanning && imageUrl && (
                   <div className="flex gap-2">
-                    <button
+                    <button type="button"
                       onClick={() => { updateBill({ imageUrl: "", title: "", items: [], serviceCharge: 0, tax: 0 }); setStep(1); }}
                       className="text-[9px] font-extrabold uppercase text-rose-400 hover:text-rose-300 transition-colors border-none bg-transparent outline-none cursor-pointer flex items-center gap-1"
                     >
                       <Icon name="delete" className="text-[10px]" />
                       Replace Receipt
                     </button>
-                    <button
+                    <button type="button"
                       onClick={reRunOcr}
                       className="text-[9px] font-extrabold uppercase text-indigo-400 hover:text-indigo-300 transition-colors border-none bg-transparent outline-none cursor-pointer flex items-center gap-1"
                     >
@@ -199,7 +199,7 @@ function Step1Scan({
             </div>
             {!isScanning && (
               <div className="mt-8 pt-6 border-t border-slate-900 flex justify-end">
-                <button
+                <button type="button"
                   onClick={() => setStep(2)}
                   className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-extrabold text-xs shadow-lg shadow-indigo-600/25 transition-all flex items-center gap-1.5 border-none outline-none cursor-pointer"
                 >

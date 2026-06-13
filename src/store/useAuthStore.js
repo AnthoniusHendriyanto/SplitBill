@@ -4,6 +4,8 @@ import { api } from '../lib/api';
 import { API } from '../config/api';
 import useBillStore from './useBillStore';
 
+let _silentRefreshPromise = null;
+
 const resetActiveBill = () => {
   try {
     const store = useBillStore.getState();
@@ -22,7 +24,6 @@ const resetActiveBill = () => {
 const useAuthStore = create(
   persist(
     (set, get) => ({
-      _hasHydrated: false,
       user: null,
       accessToken: null,
       refreshToken: null,
@@ -92,34 +93,42 @@ const useAuthStore = create(
 
       setTokens: (accessToken, refreshToken) => set({ accessToken, refreshToken }),
 
-      silentRefresh: async () => {
+      silentRefresh: async (signal) => {
+        if (_silentRefreshPromise) return _silentRefreshPromise;
         const state = get();
         if (!state.refreshToken) {
           set({ user: null, accessToken: null, refreshToken: null, isGuest: false });
           return false;
         }
-        try {
-          const res = await fetch(`${API.base}/api/v1/auth/refresh`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ refresh_token: state.refreshToken }),
-          });
-          if (!res.ok) {
+        _silentRefreshPromise = (async () => {
+          try {
+            const res = await fetch(`${API.base}/api/v1/auth/refresh`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ refresh_token: state.refreshToken }),
+              signal,
+            });
+            if (!res.ok) {
+              set({ user: null, accessToken: null, refreshToken: null, isGuest: false });
+              return false;
+            }
+            const body = await res.json();
+            const data = body.data || body;
+            set({
+              user: data.user || state.user,
+              accessToken: data.access_token,
+              refreshToken: data.refresh_token,
+            });
+            return true;
+          } catch (err) {
+            if (err.name === 'AbortError') return false;
             set({ user: null, accessToken: null, refreshToken: null, isGuest: false });
             return false;
+          } finally {
+            _silentRefreshPromise = null;
           }
-          const body = await res.json();
-          const data = body.data || body;
-          set({
-            user: data.user || state.user,
-            accessToken: data.access_token,
-            refreshToken: data.refresh_token,
-          });
-          return true;
-        } catch {
-          set({ user: null, accessToken: null, refreshToken: null, isGuest: false });
-          return false;
-        }
+        })();
+        return _silentRefreshPromise;
       },
 
       clearErrors: () => set({ loginError: null, registerError: null }),
@@ -130,9 +139,6 @@ const useAuthStore = create(
         refreshToken: state.refreshToken,
         isGuest: state.isGuest,
       }),
-      onRehydrateStorage: () => (state) => {
-        if (state) state._hasHydrated = true;
-      },
       // Use Zustand persist hasHydrated via store
     }
   )

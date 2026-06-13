@@ -22,10 +22,11 @@ function BillDetailsModal({ billId, onClose }) {
   if (!bill) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={bill.title}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={onClose} role="dialog" aria-modal="true" aria-label={bill.title}>
       <motion.div
         initial={{ scale: 0.95, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
+        onClick={(e) => e.stopPropagation()}
         className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-gray-800 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] font-inter text-slate-800 dark:text-slate-200"
       >
         <div className="p-6 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center">
@@ -77,6 +78,19 @@ function BillDetailsModal({ billId, onClose }) {
                       </div>
                       <div>
                         <p className="font-bold text-sm text-slate-900 dark:text-white">{person.name}</p>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          Rp {(bill.totals?.find(t => t.id === person.id)?.total || 0).toLocaleString('id-ID')}
+                        </p>
+                        {(() => {
+                          const pt = bill.totals?.find(t => t.id === person.id);
+                          if (!pt) return null;
+                          const parts = [];
+                          if (pt.subtotal > 0) parts.push(`Subtotal Rp${pt.subtotal.toLocaleString('id-ID')}`);
+                          if (pt.service > 0) parts.push(`Service Charge Rp${pt.service.toLocaleString('id-ID')}`);
+                          if (pt.tax > 0) parts.push(`Tax Rp${pt.tax.toLocaleString('id-ID')}`);
+                          if (parts.length === 0) return null;
+                          return <p className="text-xs text-slate-400 mt-0.5">{parts.join(' · ')}</p>;
+                        })()}
                       </div>
                     </div>
                     <div className="flex items-center gap-4">

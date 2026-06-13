@@ -1,4 +1,3 @@
-/* eslint-disable react-refresh/only-export-components */
 import { StrictMode, Suspense, lazy } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
