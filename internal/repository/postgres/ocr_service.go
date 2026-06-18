@@ -174,6 +174,8 @@ PRICE PARSING:
 - "." is THOUSANDS separator in Indonesia (25.000 = 25000, NOT 25.0).
 - "Rp 25.500" -> 25500 (NOT 25.5).
 - "," is decimal separator (25,50 = 25.5) — rare.
+- COMMA CONTEXT: In Indonesian OCR, a comma may actually be a misread dot (thousands separator). Check context: if a price like "32,000" would make sense as thirty-two thousand for the item (e.g., coffee), treat comma as thousands separator → 32000.
+  CRITERIA for comma-as-thousands: if treating it as decimal gives < 100 and the item is clearly a menu item (not a cheap snack), prefer thousands interpretation.
 
 QUANTITY PATTERNS:
 - "2x Kopi Susu Rp 30.000" -> quantity=2, price=15000 each (30000 / 2)
@@ -184,7 +186,7 @@ SCHEMA:
 {
   "restaurant_name": "",
   "date": "YYYY-MM-DD",
-  "items": [{"name": "", "quantity": 1, "modifiers": [], "price": 0.0}],
+  "items": [{"name": "", "quantity": 1, "modifiers": [], "price": 0.0}],  // modifiers ALWAYS empty [] — put modifier text in name field
   "subtotal": 0.0,
   "service_charge": 0.0,
   "tax": 0.0,
@@ -196,27 +198,65 @@ RULES:
 - restaurant_name: from receipt top. "" if not visible.
 - date: YYYY-MM-DD. "" if not visible. Use printed date, not today.
 - items: only MAIN menu items with prices.
-  - Sub-lines (toppings, add-ons, extras, level, size, temperature) are MODIFIERS. Attach their NAME to the parent item name with " + ".
+  - Sub-lines (toppings, add-ons, extras, level, size, temperature, bean type, sweetness) are MODIFIERS. Attach them to the parent item name with " + " like "Americano Ice + arabica full". IMPORTANT: leave the "modifiers" array EMPTY [] — modifier names go in the "name" field only, not in "modifiers".
   - CRITICAL: Modifier prices are FOR DISPLAY ONLY. NEVER add them to the parent item price. The parent uses its own listed price.
     Example: "Milk Tea Rp 36.000" and sub-line "Topping Rp 8.000" → price=36000, name="Milk Tea + Topping". Price stays 36000.
+    Example: "Americano (Ice) Rp 28.000" and sub-line "arabica full" → modifier "arabica full" is a bean type, no price. Name = "Americano (Ice) + arabica full", price stays 28000.
+  - CRITICAL COLUMN-MERGE: If a modifier line has a PRICE on it (e.g., "arabica full Rp 48.000"), that price is NOT the modifier's price and NOT the parent's price. It's the NEXT ITEM's price that got column-merged onto the modifier line. The parent item's price comes from the PARENT'S OWN LINE ONLY (e.g., "Americano Icex1 Rp 28.000" → price=28000). Never change the parent's price based on a modifier line.
   - Drop zero-price sub-lines like "*Ice 0", "*Less Ice 0", "*Less sugar 0", "SUGAR LEVEL-30% Rp0", "Level 0" — these are order instructions, not modifiers. Do NOT attach.
   - If a price is unclear or missing -> 0. Do NOT guess any price.
   - ONLY use items that appear verbatim. NEVER invent items.
+  - OCR artifacts: ")xN" means "xN" (e.g., "Ice)x1" → quantity 1). Treat ")x" as " x".
 - subtotal: the printed subtotal. Authoritative.
+  - If subtotal < items_total * 0.5 or subtotal > items_total * 2, the printed subtotal is likely an OCR error (merged/truncated). Fall back to sum of item prices.
   - If missing or unreliable (e.g., OCR merged it with another number), sum item prices as fallback subtotal.
 - service_charge: Look for "Service Charge"/"Service"/"Servis"/"Servis & Lainnya"/"Svc"/"Layanan"/"Svc Chg". 0 if absent.
   - If percentage shown (e.g., "Service Charge 5%"), calculate: subtotal * percentage / 100.
   - CRITICAL: "Pajak"/"PPN"/"PB1" values NEVER go into service_charge. They are always tax.
 - tax: Look for "PPN"/"PB1"/"Pajak"/"Tax"/"GST"/"VAT"/"PPh". 0 if absent.
   - If percentage shown (e.g., "PPN 11%"), calculate: subtotal * percentage / 100.
+  - CRITICAL: If the Pajak/PPN line shows a number that equals grand_total, the line likely MERGED two values (Pajak + Total). The actual tax value is not this merged number.
 - grand_total: FINAL total. Look for "Total"/"Grand Total"/"Total Bayar"/"Jumlah". Authoritative.
 
-MANDATORY COLUMN-MERGE CHECK:
-  Indonesian receipts often have merged columns. ALWAYS verify: items_total + service_charge + tax == grand_total.
-  If they DON'T match, the values were swapped by column merging. Swap service_charge and tax, then recheck.
-  If "Pajak" has no adjacent number, the number between it and "Total" is the tax.
+MANDATORY CROSS-CHECK (always perform in this order):
+  Step 1: Compute items_total = sum of all item prices (quantity * price each).
+  Step 2: If subtotal is reliable AND items_total != subtotal, then prices are likely SHIFTED by cascading column merge. Apply CASCADING COLUMN MERGE DETECTION (see below).
+  Step 3: Verify: items_total + service_charge + tax == grand_total.
+    - If NOT equal, service_charge and tax may be swapped. Swap and recheck.
+  Step 4: TAX COMPUTATION FALLBACK (if tax is still unknown/unreliable after Step 3):
+    If grand_total is reliable and items_total + service_charge <= grand_total, then:
+      computed_tax = grand_total - items_total - service_charge
+      If computed_tax > 0 and tax was 0 or suspect, USE computed_tax as the tax value.
+  Step 5: SERVICE_CHARGE COMPUTATION FALLBACK (mirror of Step 4):
+    If grand_total is reliable and items_total + tax <= grand_total, then:
+      computed_service = grand_total - items_total - tax
+      If computed_service > 0 and service_charge was 0 or suspect, USE computed_service.
+  Example: items_total=32000, service_charge=0, grand_total=35200, tax=0
+    → computed_tax = 35200 - 32000 - 0 = 3200
+    → tax = 3200
+  Example: items_total=83000, grand_total=96365, "Pajak" with no visible value
+    → computed from difference if swap fails
 
-EXAMPLE (learn from this exact pattern):  
+CASCADING COLUMN MERGE DETECTION:
+  Indonesian multi-column receipts cause a CASCADE where each item's price merges onto the NEXT item's line.
+  This shifts ALL prices down by one position across consecutive items.
+  Symptoms: items_total != subtotal, and multiple consecutive items have wrong prices.
+  To detect: identify the segment where this occurs.
+    - The FIRST affected item has NO price on its line — the price was prepended to the PREVIOUS row as column-merge noise.
+    - The LAST affected item's price appears on the NEXT line (which becomes a dangling orphan price).
+  FIX: Within the affected segment, shift each price UP by one position (assign each item the price of the line below it).
+  Example:
+    Input: "Item A Rp 1000\nItem B\nItem C Rp 3000\n2000"
+    The cascading merge: Item A → has correct price 1000. Item B → no price (lost). Item C → has Item B's price 3000. "2000" → orphan (Item C's price).
+    Corrected: Item A=1000, Item B=2000 (from orphan), Item C=3000 (shifted up from its own line). Total = 1000+2000+3000 = 6000.
+  The KEY signal: items_total != subtotal. When detected, re-examine prices for a one-position shift across affected items.
+
+MERGED-LINE DETECTION: Indonesian receipts often merge adjacent fields into one OCR line.
+  - If "Pajak"/"PPN"/"PB1" is immediately followed by a number >= grand_total * 0.8, the tax keyword and total value merged. The actual tax value is NOT that number.
+  - Apply TAX COMPUTATION FALLBACK (Step 3) in this case.
+  - Similarly, if "Subtotal" is followed by a number < items_total * 0.5, the subtotal value may be truncated/merged. Fall back to items_total.
+
+EXAMPLE 1 (column swap):
 Input:
   "Nasi Ayam Etera 45.000
   Kopi Susu Gula Aren 38.000
@@ -233,6 +273,62 @@ Output:
   "Pajak" -> no number, the value 8715 below it is the tax
   Cross-check: 83000 + 4650 + 8715 = 96365 == total -> CORRECT
   So: service_charge=4650, tax=8715
+
+EXAMPLE 2 (merged Pajak+Total):
+Input:
+  "32,000
+   1 Black Peach Coffee
+   Subtotal 1 Produk 32,000
+   Pajak 35,200
+   Total"
+Output:
+  items_total = 32000 (one item)
+  "Pajak 35,200" -> merged line, Pajak number = 35200 which equals grand_total -> REJECT as tax
+  computed_tax = 35200 - 32000 - 0 = 3200
+  So: tax=3200, service_charge=0, grand_total=35200
+
+EXAMPLE 3 (cascading column merge):
+Input:
+  "Americano Icex1 Rp 28.000
+   arabica full Rp 48.000
+   Garang Asem Sa..x1
+   tambah rawit potong dikuah Rp22.000
+   Bakwan Jagung x1 Rp110.000
+   Asem-Asem Dagingx2 Rp33.000
+   Tumis Daun Pep..x1 Rp76.000
+   Tahu Telur x2
+   Nasi Putih x1 Rp8.000"
+CASCADE PATTERN (price shifted down by 1 position):
+  Line 1: "Americano Icex1 Rp 28.000" → Item A, price=28000 (OWN price, correct)
+  Line 2: "arabica full Rp 48.000" → MODIFIER of Item A. Has a price on its line (48000).
+          → BUT it's a MODIFIER — it has NO price. "Rp 48.000" = Item B's price.
+          → Item A KEEPS its own price: 28000. Do NOT change it.
+  Line 3: "Garang Asem Sa..x1" → Item B, no price on its line
+          → Item B's price = 48000 (taken from Line 2's dangling price)
+  Line 4: "tambah rawit potong dikuah Rp22.000" → MODIFIER of Item B
+          → "Rp22.000" = Item C's price. Item B keeps 48000.
+  Line 5: "Bakwan Jagung x1 Rp110.000" → Item C. Its own price is 22000 (from Line 4).
+          → "Rp110.000" belongs to Item D. Item C price = 22000.
+  Line 6: "Asem-Asem Dagingx2 Rp33.000" → Item D x2. Price on line (33000) belongs to Item E.
+          → Item D unit price = 55000 (computed: 110000 total / 2). "Rp33.000" = Item E's price.
+  Line 7: "Tumis Daun Pep..x1 Rp76.000" → Item E. Price on line (76000) belongs to Item F.
+          → Item E price = 33000. "Rp76.000" = Item F's price.
+  Line 8: "Tahu Telur x2" → Item F x2. No price on its line → cascade ended.
+          → Item F unit price = 38000 (computed: 76000 total / 2).
+  Line 9: "Nasi Putih x1 Rp8.000" → Item G, price=8000 (own price, cascade ended)
+Output:
+  Americano Ice x1: price=28000, "arabica full" as modifier
+  Garang Asem Sa.. x1: price=48000, "tambah rawit potong dikuah" as modifier
+  Bakwan Jagung x1: price=22000
+  Asem-Asem Daging x2: price=55000 (each, not total)
+  Tumis Daun Pep.. x1: price=33000
+  Tahu Telur x2: price=38000 (each, not total)
+  Nasi Putih x1: price=8000
+  CRITICAL: "price" is ALWAYS unit price (price each), NOT total price. When qty>1, the line shows total price (e.g., "Rp44.000" for qty=2). COMPUTE unit_price = total / qty (e.g., 44000/2 = 22000). Output the RESULT, not the expression.
+
+TAKE AWAY / DINE IN sections:
+  Items after "TAKE AWAY" or "DINE IN" headers are still REGULAR ITEMS. Do NOT skip them.
+  They are part of the same order, just labeled for packaging.
 
 If NOT a receipt -> {"error": "Not a receipt."}
 
