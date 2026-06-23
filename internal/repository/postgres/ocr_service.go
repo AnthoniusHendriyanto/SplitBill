@@ -10,10 +10,13 @@ import (
 	_ "image/png"
 	"io"
 	"log"
+	"math"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -155,6 +158,7 @@ type geminiStructuredResult struct {
 	Subtotal      float64 `json:"subtotal"`
 	ServiceCharge float64 `json:"service_charge"`
 	Tax           float64 `json:"tax"`
+	Discount      float64 `json:"discount"`
 	GrandTotal    float64 `json:"grand_total"`
 	AiConfidence  float64 `json:"ai_confidence"`
 }
@@ -173,6 +177,7 @@ PRICE PARSING:
 - "Rp 25.000" -> 25000. Remove "Rp", dots (thousands separator), commas.
 - "." is THOUSANDS separator in Indonesia (25.000 = 25000, NOT 25.0).
 - "Rp 25.500" -> 25500 (NOT 25.5).
+- CRITICAL: "753.086" = 753086 (seven hundred fifty-three thousand eighty-six), NOT 753086/100 = 7530.86. The dot is a thousands separator. This applies to ALL prices and totals.
 - "," is decimal separator (25,50 = 25.5) — rare.
 - COMMA CONTEXT: In Indonesian OCR, a comma may actually be a misread dot (thousands separator). Check context: if a price like "32,000" would make sense as thirty-two thousand for the item (e.g., coffee), treat comma as thousands separator → 32000.
   CRITERIA for comma-as-thousands: if treating it as decimal gives < 100 and the item is clearly a menu item (not a cheap snack), prefer thousands interpretation.
@@ -187,11 +192,12 @@ SCHEMA:
   "restaurant_name": "",
   "date": "YYYY-MM-DD",
   "items": [{"name": "", "quantity": 1, "modifiers": [], "price": 0.0}],  // modifiers ALWAYS empty [] — put modifier text in name field
-  "subtotal": 0.0,
-  "service_charge": 0.0,
-  "tax": 0.0,
-  "grand_total": 0.0,
-  "ai_confidence": 90.0
+   "subtotal": 0.0,
+   "service_charge": 0.0,
+   "tax": 0.0,
+   "grand_total": 0.0,
+   "discount": 0.0,
+   "ai_confidence": 90.0
 }
 
 RULES:
@@ -217,6 +223,8 @@ RULES:
   - If percentage shown (e.g., "PPN 11%"), calculate: subtotal * percentage / 100.
   - CRITICAL: If the Pajak/PPN line shows a number that equals grand_total, the line likely MERGED two values (Pajak + Total). The actual tax value is not this merged number.
 - grand_total: FINAL total. Look for "Total"/"Grand Total"/"Total Bayar"/"Jumlah". Authoritative.
+- discount: sum of ALL discounts. 0 if none. Look for "Aeon card disc", "Item promo", "MM DISC", "Diskon", "Disc", "Promo", "-" prefix amounts.
+- CRITICAL: discount MUST be a single number like 122916. NEVER output an expression like "850 + 14900". Compute the total first, then write the number.
 
 MANDATORY CROSS-CHECK (always perform in this order):
   Step 1: Compute items_total = sum of all item prices (quantity * price each).
@@ -330,9 +338,99 @@ TAKE AWAY / DINE IN sections:
   Items after "TAKE AWAY" or "DINE IN" headers are still REGULAR ITEMS. Do NOT skip them.
   They are part of the same order, just labeled for packaging.
 
+SUPERMARKET RECEIPT RULES (AEON / Hypermart / wholesale):
+Detect by "Aeon card disc", "MM DISC", or numbered items (004, 006, etc.).
+
+DISCOUNTS ARE CRITICAL — COMPUTE ALL VALUES:
+Every discount line REDUCES the preceding item's price.
+Item final price = base_price - discount_amount (COMPUTE this, e.g., 17000-850=16150, output 16150).
+The "discount" field = sum of ALL discount amounts (COMPUTE this, e.g., 850+14900+...=NNNNN).
+CRITICAL: NEVER output "a - b" or "a + b" as a value. Output the COMPUTED number only.
+
+FIND ITEMS:
+- Numbered lines: "004 SHAFELLD ER ITA 19.800" → item, name="SHAFELLD ER ITA", base_price=19800
+- "016 Aeon card disc SANGRAY OKRA CH -1.680" → ITEM (starts with line number), name="SANGRAY OKRA CH"
+  price from next calculation line "527,0000.102 53,754 -2.687" → base_price=53754, discounts 1680+2687=4367, final=49387
+- "015 MM_DISC P000750089 ACUVIVA 700M -14,900" + next line "2,800 12 33,600" → name="ACUVIVA 700M", unit_price=2800, qty=12
+- "021 SANGRAY DRIED B" → item, price from next calculation line "555.0000.116 64,380" → base=64380
+
+APPLY DISCOUNTS:
+- "Aeon card disc NNN" (no line number) → discount=NNN, apply to preceding item
+- "Item promo NNN" → discount=NNN, apply to preceding item  
+- "MM DISC ... NNN" → discount=NNN, apply to preceding item
+- "-NNN" at end of any line → discount=NNN
+- If discount names a variant, append: "SANGRAY FREEZE + ROASTED ALMOND"
+- Multiple discounts on same item? Sum them. Example: SANGRAY OKRA CH has 1680+2687=4367
+
+EXAMPLES:
+- MCNLTY LMN 190 base=17000, discount "CASSA ARTISAN C -850" → final=17000-850=16150
+- WANT WANT SENBE line 014 base=29800, prior "MM DISC ... -14,900" → final=29800-14900=14900
+- SANGRAY FREEZE base=74928, discount "ROASTED ALMOND 3.746" → final=74928-3746=71182
+- SANGRAY PUMPKIN base=41688, discounts 3039+2084 → final=41688-5123=36565
+
+SKIP LINES:
+- Barcode-only: "00001033077 39.800 19,900" — no item description
+- Calculation: "527,0000.102 53,754" — base×mult=total pattern
+- Standalone discount (no line number, no item description): "Aeon card disc -850"
+- Item promo summaries: "Aeon card disc Item promo 12.800 3,200 -640" — skip, all discounts already applied to individual items
+
 If NOT a receipt -> {"error": "Not a receipt."}
 
 STRICT: Start with {. End with }. No other text, no markdown, no explanation.`
+
+func evalExpr(s string) string {
+	s = strings.TrimSpace(s)
+	s = strings.ReplaceAll(s, ",", "")
+	re := regexp.MustCompile(`[\d\s+\-*/().]+`)
+	if !re.MatchString(s) {
+		return s
+	}
+	re = regexp.MustCompile(`\s+`)
+	s = re.ReplaceAllString(s, "")
+	var r float64
+	var op byte = '+'
+	numStr := ""
+	for i := 0; i <= len(s); i++ {
+		if i < len(s) && (s[i] >= '0' && s[i] <= '9' || s[i] == '.') {
+			numStr += string(s[i])
+			continue
+		}
+		if numStr != "" {
+			n, _ := strconv.ParseFloat(numStr, 64)
+			switch op {
+			case '+':
+				r += n
+			case '-':
+				r -= n
+			case '*':
+				r *= n
+			case '/':
+				if n != 0 {
+					r /= n
+				}
+			}
+			numStr = ""
+		}
+		if i < len(s) && (s[i] == '+' || s[i] == '-' || s[i] == '*' || s[i] == '/') {
+			op = s[i]
+		}
+	}
+	if r == float64(int(r)) {
+		return fmt.Sprintf("%.0f", r)
+	}
+	return fmt.Sprintf("%g", r)
+}
+
+func evalJSON(s string) string {
+	re := regexp.MustCompile(`:\s*"?(\d+(?:[\s,]*[-+*/][\s,]*\d+)+)"?`)
+	return re.ReplaceAllStringFunc(s, func(m string) string {
+		parts := re.FindStringSubmatch(m)
+		if len(parts) < 2 {
+			return m
+		}
+		return ": " + evalExpr(parts[1])
+	})
+}
 
 func (m *ocrService) parseStructuredJSON(rawJSON string) (*geminiStructuredResult, error) {
 	rawJSON = strings.TrimSpace(rawJSON)
@@ -347,6 +445,10 @@ func (m *ocrService) parseStructuredJSON(rawJSON string) (*geminiStructuredResul
 		rawJSON = rawJSON[start : end+1]
 	}
 
+	rawJSON = evalJSON(rawJSON)
+
+	rawJSON = fixDateField(rawJSON)
+
 	var parsed geminiStructuredResult
 	if err := json.Unmarshal([]byte(rawJSON), &parsed); err != nil {
 		return nil, fmt.Errorf("failed to parse structured JSON: %w, raw: %s", err, rawJSON)
@@ -355,6 +457,11 @@ func (m *ocrService) parseStructuredJSON(rawJSON string) (*geminiStructuredResul
 		return nil, fmt.Errorf("%s", parsed.Error)
 	}
 	return &parsed, nil
+}
+
+func fixDateField(raw string) string {
+	re := regexp.MustCompile(`"date"\s*:\s*(\d{4})`)
+	return re.ReplaceAllString(raw, `"date": "${1}"`)
 }
 
 func (m *ocrService) buildOCRResult(parsed *geminiStructuredResult) *domain.OCRResult {
@@ -395,12 +502,55 @@ func (m *ocrService) buildOCRResult(parsed *geminiStructuredResult) *domain.OCRR
 
 	confidence := parsed.AiConfidence
 	if confidence < 0 || confidence > 100 {
-		confidence = 0
+		confidence = 100
 	}
 
 	total := parsed.GrandTotal
 	if total <= 0 {
 		total = itemsTotal + parsed.ServiceCharge + parsed.Tax
+	}
+
+	discount := parsed.Discount
+	if discount < 0 {
+		discount = -discount
+	}
+
+	// override: compute confidence from data quality, not AI self-assessment
+	subtotal := parsed.Subtotal
+	if subtotal > 0 && itemsTotal > 0 {
+		itemRatio := itemsTotal / subtotal
+		switch {
+		case itemRatio < 0.3:
+			confidence = math.Min(confidence, 20)
+		case itemRatio < 0.5:
+			confidence = math.Min(confidence, 35)
+		case itemRatio < 0.7:
+			confidence = math.Min(confidence, 50)
+		case itemRatio < 0.85:
+			confidence = math.Min(confidence, 65)
+		case itemRatio > 1.15:
+			confidence = math.Min(confidence, 40)
+		}
+	}
+
+	computedTotal := itemsTotal + parsed.ServiceCharge + parsed.Tax
+	if computedTotal > 0 && total > 0 {
+		gvtDiff := math.Abs(computedTotal/total - 1)
+		switch {
+		case gvtDiff > 0.4:
+			confidence = math.Min(confidence, 25)
+		case gvtDiff > 0.2:
+			confidence = math.Min(confidence, 50)
+		case gvtDiff > 0.1:
+			confidence = math.Min(confidence, 70)
+		}
+	}
+
+	if confidence < 0 {
+		confidence = 0
+	}
+	if confidence > 100 {
+		confidence = 100
 	}
 
 	return &domain.OCRResult{
@@ -411,6 +561,7 @@ func (m *ocrService) buildOCRResult(parsed *geminiStructuredResult) *domain.OCRR
 		ServiceMode:   "amount",
 		Tax:           parsed.Tax,
 		TaxMode:       "amount",
+		Discount:      discount,
 		Total:         total,
 		Confidence:    confidence,
 	}
@@ -444,8 +595,7 @@ func (m *ocrService) structureWithGroq(ctx context.Context, rawText string) (*do
 			{Role: "system", Content: structurePrompt},
 			{Role: "user", Content: userMsg},
 		},
-		"temperature":    0,
-		"response_format": map[string]string{"type": "json_object"},
+		"temperature": 0,
 	}
 
 	jsonBytes, err := json.Marshal(reqBody)

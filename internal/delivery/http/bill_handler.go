@@ -12,13 +12,14 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/user/split-mate/internal/delivery/http/middleware"
 	"github.com/user/split-mate/internal/domain"
+	"github.com/user/split-mate/internal/usecase"
 )
 
 type BillHandler struct {
-	BillUsecase domain.BillUsecase
+	BillUsecase usecase.BillUsecase
 }
 
-func NewBillHandler(bu domain.BillUsecase) *BillHandler {
+func NewBillHandler(bu usecase.BillUsecase) *BillHandler {
 	return &BillHandler{BillUsecase: bu}
 }
 
@@ -30,7 +31,6 @@ func (h *BillHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req domain.CreateBillRequest
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "INVALID_INPUT", "Invalid request body")
 		return

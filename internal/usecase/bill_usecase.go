@@ -9,8 +9,6 @@ import (
 	"github.com/user/split-mate/internal/domain"
 )
 
-var _ domain.BillUsecase = (*billUsecase)(nil)
-
 type billUsecase struct {
 	billRepo       domain.BillRepository
 	itemRepo       domain.ItemRepository
@@ -35,7 +33,7 @@ func NewBillUsecase(
 	ocrService domain.OCRService,
 	timeout time.Duration,
 	usageLimit int,
-) domain.BillUsecase {
+) BillUsecase {
 	return &billUsecase{
 		billRepo:       billRepo,
 		itemRepo:       itemRepo,

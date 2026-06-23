@@ -6,13 +6,14 @@ import (
 
 	"github.com/user/split-mate/internal/delivery/http/middleware"
 	"github.com/user/split-mate/internal/domain"
+	"github.com/user/split-mate/internal/usecase"
 )
 
 type AuthHandler struct {
-	authUsecase domain.AuthUsecase
+	authUsecase usecase.AuthUsecase
 }
 
-func NewAuthHandler(authUsecase domain.AuthUsecase) *AuthHandler {
+func NewAuthHandler(authUsecase usecase.AuthUsecase) *AuthHandler {
 	return &AuthHandler{authUsecase: authUsecase}
 }
 

@@ -4,14 +4,14 @@ import (
 	"net/http"
 
 	"github.com/user/split-mate/internal/delivery/http/middleware"
-	"github.com/user/split-mate/internal/domain"
+	"github.com/user/split-mate/internal/usecase"
 )
 
 type UsageHandler struct {
-	billUsecase domain.BillUsecase
+	billUsecase usecase.BillUsecase
 }
 
-func NewUsageHandler(bu domain.BillUsecase) *UsageHandler {
+func NewUsageHandler(bu usecase.BillUsecase) *UsageHandler {
 	return &UsageHandler{billUsecase: bu}
 }
 

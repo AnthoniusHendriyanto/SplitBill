@@ -14,7 +14,6 @@ import (
 	delivery "github.com/user/split-mate/internal/delivery/http"
 	"github.com/user/split-mate/internal/delivery/http/middleware"
 	"github.com/user/split-mate/internal/domain"
-	"github.com/user/split-mate/internal/repository/memory"
 	"github.com/user/split-mate/internal/repository/postgres"
 	"github.com/user/split-mate/internal/usecase"
 )
@@ -29,16 +28,9 @@ func main() {
 
 	pool, err := postgres.NewPostgresConnection(cfg)
 	if err != nil {
-		log.Printf("Warning: Could not connect to PostgreSQL: %v", err)
-		log.Println("Using in-memory storage")
-
-	repos := memory.NewRepositories()
-	ocrSvc := memory.NewOCRService()
-	runServer(cfg, repos.User, repos.Bill, repos.Item, repos.Person, repos.Assignment, repos.Payment, repos.Usage, ocrSvc, timeoutContext, true)
-	return
+		log.Fatalf("Failed to connect to PostgreSQL: %v", err)
 	}
 	defer pool.Close()
-	log.Println("Connected to PostgreSQL Database")
 
 	userRepo := postgres.NewUserRepository(pool)
 	billRepo := postgres.NewBillRepository(pool)
@@ -48,7 +40,7 @@ func main() {
 	paymentRepo := postgres.NewPaymentRepository(pool)
 	usageRepo := postgres.NewUsageRepository(pool)
 
-	runServer(cfg, userRepo, billRepo, itemRepo, personRepo, assignmentRepo, paymentRepo, usageRepo, postgres.NewOCRService(cfg.GeminiAPIKey, cfg.GroqAPIKey, cfg.PythonPath), timeoutContext, false)
+	runServer(cfg, userRepo, billRepo, itemRepo, personRepo, assignmentRepo, paymentRepo, usageRepo, postgres.NewOCRService(cfg.GeminiAPIKey, cfg.GroqAPIKey, cfg.PythonPath), timeoutContext)
 }
 
 func runServer(
@@ -62,7 +54,6 @@ func runServer(
 	usageRepo domain.UsageRepository,
 	ocrSvc domain.OCRService,
 	timeout time.Duration,
-	isMemory bool,
 ) {
 	authUsecase := usecase.NewAuthUsecase(userRepo, cfg)
 	billUsecase := usecase.NewBillUsecase(billRepo, itemRepo, personRepo, assignmentRepo, paymentRepo, usageRepo, userRepo, ocrSvc, timeout, cfg.UsageLimit)
@@ -76,11 +67,6 @@ func runServer(
 	ocrRateLimiter := middleware.NewRateLimiter(10, time.Minute)
 	authRateLimiter := middleware.NewRateLimiter(5, time.Minute)
 	router := delivery.NewRouter(authHandler, billHandler, premiumHandler, usageHandler, authMiddleware, ocrRateLimiter, authRateLimiter, cfg.FrontendURL)
-
-	mode := ""
-	if isMemory {
-		mode = " (in-memory)"
-	}
 
 	server := &http.Server{
 		Addr:         ":" + cfg.Port,
@@ -96,7 +82,7 @@ func runServer(
 				log.Printf("Server panic recovered: %v", r)
 			}
 		}()
-		log.Printf("SplitMate Server%s starting on port %s...\n", mode, cfg.Port)
+		log.Printf("SplitMate Server starting on port %s...\n", cfg.Port)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Failed to start server: %v", err)
 		}

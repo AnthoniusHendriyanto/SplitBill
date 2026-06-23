@@ -21,7 +21,7 @@ type authUsecase struct {
 
 const bcryptCost = 12
 
-func NewAuthUsecase(userRepo domain.UserRepository, cfg *config.Config) domain.AuthUsecase {
+func NewAuthUsecase(userRepo domain.UserRepository, cfg *config.Config) AuthUsecase {
 	return &authUsecase{
 		userRepo: userRepo,
 		cfg:      cfg,

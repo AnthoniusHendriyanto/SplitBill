@@ -14,7 +14,7 @@ type premiumUsecase struct {
 	cfg      *config.Config
 }
 
-func NewPremiumUsecase(userRepo domain.UserRepository, cfg *config.Config) domain.PremiumUsecase {
+func NewPremiumUsecase(userRepo domain.UserRepository, cfg *config.Config) PremiumUsecase {
 	return &premiumUsecase{userRepo: userRepo, cfg: cfg}
 }
 

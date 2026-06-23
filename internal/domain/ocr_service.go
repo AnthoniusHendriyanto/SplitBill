@@ -10,6 +10,7 @@ type OCRResult struct {
 	ServiceMode   string    `json:"service_mode"`
 	Tax           float64   `json:"tax"`
 	TaxMode       string    `json:"tax_mode"`
+	Discount      float64   `json:"discount"`
 	Total         float64   `json:"total"`
 	Confidence    float64   `json:"confidence"`
 }

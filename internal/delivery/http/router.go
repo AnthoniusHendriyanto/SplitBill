@@ -25,79 +25,35 @@ func NewRouter(
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(domain.NewSuccess(map[string]string{"status": "ok"}))
-	}).Methods("GET", "OPTIONS")
+	}).Methods("GET")
 
 	authSub := router.PathPrefix("/api/v1/auth").Subrouter()
 	authSub.Use(middleware.BodyLimit(1 << 20))
-	authSub.Handle("/register", authRateLimiter.Middleware(http.HandlerFunc(authHandler.Register))).Methods("POST", "OPTIONS")
-	authSub.Handle("/login", authRateLimiter.Middleware(http.HandlerFunc(authHandler.Login))).Methods("POST", "OPTIONS")
-	authSub.HandleFunc("/refresh", authHandler.Refresh).Methods("POST", "OPTIONS")
-	authSub.HandleFunc("/logout", authHandler.Logout).Methods("POST", "OPTIONS")
+	authSub.Handle("/register", authRateLimiter.Middleware(http.HandlerFunc(authHandler.Register))).Methods("POST")
+	authSub.Handle("/login", authRateLimiter.Middleware(http.HandlerFunc(authHandler.Login))).Methods("POST")
+	authSub.HandleFunc("/refresh", authHandler.Refresh).Methods("POST")
+	authSub.HandleFunc("/logout", authHandler.Logout).Methods("POST")
 
 	publicAPI := router.PathPrefix("/api/v1").Subrouter()
 	publicAPI.Use(middleware.BodyLimit(10 << 20))
-	publicAPI.Handle("/ocr", ocrRateLimiter.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-		if r.Method == http.MethodPost {
-			billHandler.ProcessOCR(w, r)
-		}
-	}))).Methods("POST", "OPTIONS")
+	publicAPI.Handle("/ocr", ocrRateLimiter.Middleware(http.HandlerFunc(billHandler.ProcessOCR))).Methods("POST")
 
 	protected := router.PathPrefix("/api/v1").Subrouter()
 	protected.Use(authMiddleware.Authenticate)
 	protected.Use(middleware.BodyLimit(10 << 20))
 
-	protected.HandleFunc("/bills", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-		switch r.Method {
-		case http.MethodGet:
-			billHandler.Fetch(w, r)
-		case http.MethodPost:
-			billHandler.Create(w, r)
-		default:
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		}
-	}).Methods("GET", "POST", "OPTIONS")
+	protected.Handle("/bills", http.HandlerFunc(billHandler.Fetch)).Methods("GET")
+	protected.Handle("/bills", http.HandlerFunc(billHandler.Create)).Methods("POST")
 
-	protected.HandleFunc("/users/me", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-		switch r.Method {
-		case http.MethodGet:
-			authHandler.GetMe(w, r)
-		case http.MethodPut:
-			authHandler.UpdateMe(w, r)
-		default:
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		}
-	}).Methods("GET", "PUT", "OPTIONS")
+	protected.Handle("/users/me", http.HandlerFunc(authHandler.GetMe)).Methods("GET")
+	protected.Handle("/users/me", http.HandlerFunc(authHandler.UpdateMe)).Methods("PUT")
 
-	protected.HandleFunc("/bills/{id}", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-		switch r.Method {
-		case http.MethodGet:
-			billHandler.GetByID(w, r)
-		case http.MethodDelete:
-			billHandler.Delete(w, r)
-		default:
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		}
-	}).Methods("GET", "DELETE", "OPTIONS")
+	protected.Handle("/bills/{id}", http.HandlerFunc(billHandler.GetByID)).Methods("GET")
+	protected.Handle("/bills/{id}", http.HandlerFunc(billHandler.Delete)).Methods("DELETE")
 
-	protected.HandleFunc("/premium/subscribe", premiumHandler.Subscribe).Methods("POST", "OPTIONS")
-	protected.HandleFunc("/premium/callback", premiumHandler.Callback).Methods("POST", "OPTIONS")
-	protected.HandleFunc("/usage", usageHandler.GetUsage).Methods("GET", "OPTIONS")
+	protected.HandleFunc("/premium/subscribe", premiumHandler.Subscribe).Methods("POST")
+	protected.HandleFunc("/premium/callback", premiumHandler.Callback).Methods("POST")
+	protected.HandleFunc("/usage", usageHandler.GetUsage).Methods("GET")
 
 	return middleware.SecurityHeaders(middleware.CORSWithOrigin(frontendURL)(router))
 }

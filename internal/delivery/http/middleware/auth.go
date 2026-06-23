@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/user/split-mate/internal/domain"
+	"github.com/user/split-mate/internal/usecase"
 )
 
 type contextKey string
@@ -16,10 +17,10 @@ const (
 )
 
 type AuthMiddleware struct {
-	authUsecase domain.AuthUsecase
+	authUsecase usecase.AuthUsecase
 }
 
-func NewAuthMiddleware(authUsecase domain.AuthUsecase) *AuthMiddleware {
+func NewAuthMiddleware(authUsecase usecase.AuthUsecase) *AuthMiddleware {
 	return &AuthMiddleware{authUsecase: authUsecase}
 }
 

@@ -6,13 +6,14 @@ import (
 
 	"github.com/user/split-mate/internal/delivery/http/middleware"
 	"github.com/user/split-mate/internal/domain"
+	"github.com/user/split-mate/internal/usecase"
 )
 
 type PremiumHandler struct {
-	premiumUsecase domain.PremiumUsecase
+	premiumUsecase usecase.PremiumUsecase
 }
 
-func NewPremiumHandler(pu domain.PremiumUsecase) *PremiumHandler {
+func NewPremiumHandler(pu usecase.PremiumUsecase) *PremiumHandler {
 	return &PremiumHandler{premiumUsecase: pu}
 }
 
