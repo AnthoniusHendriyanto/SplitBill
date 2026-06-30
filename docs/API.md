@@ -7,12 +7,41 @@ Production: https://api.splitmate.app/v1
 Development: http://localhost:8080/api/v1
 ```
 
+## Response Envelope
+
+All API responses follow a consistent envelope:
+
+**Success (2xx/3xx):**
+```json
+{
+  "success": true,
+  "message": "Success",
+  "data": { ... }
+}
+```
+
+**Error (4xx/5xx):**
+```json
+{
+  "success": false,
+  "message": "Human-readable error message",
+  "error": {
+    "code": "ERROR_CODE",
+    "details": null
+  }
+}
+```
+
+The `data` field contains the endpoint-specific payload. On `204 No Content`, no body is returned.
+
 ## Authentication
 
 All protected endpoints require JWT token in header:
 ```
 Authorization: Bearer <access_token>
 ```
+
+Refresh tokens are stored in an httpOnly cookie (`refresh_token`, Path=/api/v1/auth) — set automatically by Login/Register/Refresh endpoints.
 
 ---
 
@@ -23,8 +52,7 @@ Authorization: Bearer <access_token>
 | POST | /auth/register | Create new account | No |
 | POST | /auth/login | Login to account | No |
 | POST | /auth/refresh | Refresh access token | No |
-| POST | /auth/logout | Invalidate refresh token | Yes |
-| GET | /users/me | Get current user profile | Yes |
+| POST | /auth/logout | Invalidate refresh token | No (uses cookie) |
 | PUT | /users/me | Update user profile | Yes |
 | POST | /bills | Create new bill | Yes |
 | GET | /bills | List user's bills | Yes |
@@ -36,11 +64,10 @@ Authorization: Bearer <access_token>
 | POST | /ocr | Process receipt image | No (public, IP rate limited) |
 | GET | /payments/:bill_id | Get payment summary | Yes |
 | POST | /payments/:bill_id/settle | Mark payment as paid | Yes |
-| POST | /auth/logout | Invalidate refresh token | No (uses body token) |
-| GET | /users/me | Get current user profile | Yes |
-| PUT | /users/me | Update user profile | Yes |
+
 | POST | /premium/subscribe | Subscribe to premium | Yes |
-| POST | /premium/webhook | Stripe webhook handler | No |
+| POST | /premium/callback | Payment confirmation callback | No (requires X-Callback-Secret header) |
+| POST | /premium/subscribe | Generate premium subscription payment link | Yes |
 
 ---
 
@@ -110,9 +137,11 @@ Login with email and password.
 **Error (401 Unauthorized)**
 ```json
 {
+  "success": false,
+  "message": "Email or password is incorrect",
   "error": {
     "code": "INVALID_CREDENTIALS",
-    "message": "Email or password is incorrect"
+    "details": null
   }
 }
 ```
@@ -121,20 +150,18 @@ Login with email and password.
 
 ### POST /auth/refresh
 
-Refresh expired access token.
+Refresh expired access token. Reads refresh token from httpOnly cookie (set by Login/Register).
 
-**Request**
-```json
-{
-  "refresh_token": "eyJhbGciOiJIUzI1NiIs..."
-}
-```
+**Request**: empty body
 
 **Response (200 OK)**
 ```json
 {
-  "access_token": "eyJhbGciOiJIUzI1NiIs...",
-  "refresh_token": "eyJhbGciOiJIUzI1NiIs..."
+  "success": true,
+  "message": "Success",
+  "data": {
+    "access_token": "eyJhbGciOiJIUzI1NiIs..."
+  }
 }
 ```
 

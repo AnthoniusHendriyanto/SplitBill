@@ -49,6 +49,16 @@ func (r *usageRepository) IncrementUsage(ctx context.Context, userID, action, mo
 	return err
 }
 
+func (r *usageRepository) GetTierLimit(ctx context.Context, tier string) (domain.TierLimit, error) {
+	query := `SELECT tier, monthly_bill_limit, monthly_ocr_limit FROM tier_limits WHERE tier = $1`
+	var tl domain.TierLimit
+	err := r.Pool.QueryRow(ctx, query, tier).Scan(&tl.Tier, &tl.MonthlyBillLimit, &tl.MonthlyOCRLimit)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.TierLimit{Tier: tier, MonthlyBillLimit: 50, MonthlyOCRLimit: 10}, nil
+	}
+	return tl, err
+}
+
 func (r *usageRepository) ResetMonthlyUsage(ctx context.Context, userID, action, month string) error {
 	query := `
 		INSERT INTO usage_tracking (id, user_id, action, count, month, created_at)

@@ -6,11 +6,17 @@ type Bill struct {
 	ID            string    `json:"id"`
 	UserID        string    `json:"user_id"`
 	Title         string    `json:"title"`
+	Merchant      string    `json:"merchant"`
 	TotalAmount   float64   `json:"total_amount"`
 	ServiceCharge float64   `json:"service_charge"`
+	ServiceMode   string    `json:"service_mode"`
 	Tax           float64   `json:"tax"`
+	TaxMode       string    `json:"tax_mode"`
+	Discount      float64   `json:"discount"`
 	GrandTotal    float64   `json:"grand_total"`
+	Status        string    `json:"status"`
 	SplitType     string    `json:"split_type"`
+	BillDate      string    `json:"bill_date"`
 	Items         []Item    `json:"items"`
 	Persons       []Person  `json:"persons"`
 	Payments      []Payment `json:"payments"`
@@ -19,7 +25,15 @@ type Bill struct {
 }
 
 func (b Bill) CalculateGrandTotal() float64 {
-	return b.TotalAmount + (b.TotalAmount*b.ServiceCharge/100) + (b.TotalAmount*b.Tax/100)
+	svc := b.ServiceCharge
+	if b.ServiceMode == "percent" {
+		svc = b.TotalAmount * b.ServiceCharge / 100
+	}
+	tax := b.Tax
+	if b.TaxMode == "percent" {
+		tax = b.TotalAmount * b.Tax / 100
+	}
+	return b.TotalAmount + svc + tax - b.Discount
 }
 
 type Item struct {
@@ -33,12 +47,14 @@ type Item struct {
 }
 
 type Person struct {
-	ID          string    `json:"id"`
-	BillID      string    `json:"bill_id"`
-	Name        string    `json:"name"`
-	IsPayer     bool      `json:"is_payer"`
-	Percentage  float64   `json:"percentage"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID          string      `json:"id"`
+	BillID      string      `json:"bill_id"`
+	UserID      *string     `json:"user_id,omitempty"`
+	Name        string      `json:"name"`
+	IsPayer     bool        `json:"is_payer"`
+	Percentage  float64     `json:"percentage"`
+	PaymentInfo interface{} `json:"payment_info,omitempty"`
+	CreatedAt   time.Time   `json:"created_at"`
 }
 
 type ItemAssignment struct {
@@ -71,13 +87,19 @@ const (
 )
 
 type CreateBillRequest struct {
-	Title        string            `json:"title" validate:"required"`
-	Items        []ItemRequest     `json:"items" validate:"required"`
-	Persons      []PersonRequest   `json:"persons" validate:"required,min=2"`
-	SplitType    string            `json:"split_type" validate:"required"`
-	Assignments  []AssignmentRequest `json:"assignments"`
-	ServiceCharge float64          `json:"service_charge"`
-	Tax           float64          `json:"tax"`
+	Title         string              `json:"title" validate:"required"`
+	Merchant      string              `json:"merchant"`
+	Items         []ItemRequest       `json:"items" validate:"required"`
+	Persons       []PersonRequest     `json:"persons" validate:"required,min=2"`
+	SplitType     string              `json:"split_type" validate:"required"`
+	Assignments   []AssignmentRequest `json:"assignments"`
+	ServiceCharge float64             `json:"service_charge"`
+	ServiceMode   string              `json:"service_mode"`
+	Tax           float64             `json:"tax"`
+	TaxMode       string              `json:"tax_mode"`
+	Discount      float64             `json:"discount"`
+	Status        string              `json:"status"`
+	BillDate      string              `json:"bill_date"`
 }
 
 type ItemRequest struct {
@@ -88,10 +110,11 @@ type ItemRequest struct {
 }
 
 type PersonRequest struct {
-	ID         string  `json:"id,omitempty"`
-	Name       string  `json:"name" validate:"required"`
-	IsPayer    bool    `json:"is_payer"`
-	Percentage float64 `json:"percentage"`
+	ID          string      `json:"id,omitempty"`
+	Name        string      `json:"name" validate:"required"`
+	IsPayer     bool        `json:"is_payer"`
+	Percentage  float64     `json:"percentage"`
+	PaymentInfo interface{} `json:"payment_info,omitempty"`
 }
 
 type AssignmentRequest struct {
@@ -107,8 +130,16 @@ type BillListResponse struct {
 type BillSummary struct {
 	ID          string    `json:"id"`
 	Title       string    `json:"title"`
+	Merchant    string    `json:"merchant,omitempty"`
 	GrandTotal  float64   `json:"grand_total"`
+	UserShare   float64   `json:"user_share"`
+	Receivable  float64   `json:"receivable"`
+	Payable     float64   `json:"payable"`
 	PersonCount int       `json:"person_count"`
+	Status      string    `json:"status"`
+	Discount    float64   `json:"discount"`
+	PayerName   string    `json:"payer_name"`
+	BillDate    string    `json:"bill_date"`
 	CreatedAt   time.Time `json:"created_at"`
 }
 
@@ -117,6 +148,12 @@ type Pagination struct {
 	Limit       int `json:"limit"`
 	TotalItems  int `json:"total_items"`
 	TotalPages  int `json:"total_pages"`
+}
+
+type UserPaymentSummary struct {
+	UserShare  float64
+	Receivable float64
+	Payable    float64
 }
 
 type BillDetailResponse struct {

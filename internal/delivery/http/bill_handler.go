@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log"
 	"mime/multipart"
 	"net/http"
 	"path/filepath"
@@ -43,8 +44,13 @@ func (h *BillHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	bill, err := h.BillUsecase.Create(r.Context(), userID, &req)
 	if err != nil {
+		log.Printf("Create bill error: %v", err)
 		if errors.Is(err, domain.ErrPremiumRequired) {
 			writeError(w, http.StatusForbidden, "PREMIUM_REQUIRED", "Custom and percentage split are premium features")
+			return
+		}
+		if errors.Is(err, domain.ErrBillLimitExceeded) {
+			writeError(w, http.StatusTooManyRequests, "BILL_LIMIT_EXCEEDED", "Monthly bill limit reached. Upgrade to premium for unlimited bills.")
 			return
 		}
 		writeInternalError(w, err)
@@ -101,7 +107,7 @@ func (h *BillHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := h.BillUsecase.GetByID(r.Context(), userID, billID)
 	if err != nil {
-		if err == domain.ErrNotFound {
+		if errors.Is(err, domain.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "BILL_NOT_FOUND", "Bill not found")
 			return
 		}
@@ -110,6 +116,64 @@ func (h *BillHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeSuccess(w, http.StatusOK, resp)
+}
+
+func (h *BillHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	if userID == "" {
+		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Not authenticated")
+		return
+	}
+
+	vars := mux.Vars(r)
+	billID := vars["id"]
+	if billID == "" {
+		writeError(w, http.StatusBadRequest, "MISSING_ID", "Bill ID is required")
+		return
+	}
+
+	var req struct {
+		Status string `json:"status"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_INPUT", "Invalid request body")
+		return
+	}
+
+	if err := h.BillUsecase.UpdateStatus(r.Context(), userID, billID, req.Status); err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "BILL_NOT_FOUND", "Bill not found")
+			return
+		}
+		writeInternalError(w, err)
+		return
+	}
+
+	writeSuccess(w, http.StatusOK, map[string]string{"status": req.Status})
+}
+
+func (h *BillHandler) MarkPersonPaid(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	if userID == "" {
+		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Not authenticated")
+		return
+	}
+
+	vars := mux.Vars(r)
+	billID := vars["id"]
+	personID := vars["personId"]
+	if billID == "" || personID == "" {
+		writeError(w, http.StatusBadRequest, "MISSING_ID", "Bill ID and Person ID are required")
+		return
+	}
+
+	bill, err := h.BillUsecase.MarkPersonPaid(r.Context(), userID, billID, personID)
+	if err != nil {
+		writeInternalError(w, err)
+		return
+	}
+
+	writeSuccess(w, http.StatusOK, map[string]interface{}{"status": "paid", "completed": bill != nil})
 }
 
 func (h *BillHandler) Delete(w http.ResponseWriter, r *http.Request) {
@@ -128,7 +192,7 @@ func (h *BillHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	err := h.BillUsecase.Delete(r.Context(), userID, billID)
 	if err != nil {
-		if err == domain.ErrNotFound {
+		if errors.Is(err, domain.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "BILL_NOT_FOUND", "Bill not found")
 			return
 		}

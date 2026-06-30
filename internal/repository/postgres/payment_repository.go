@@ -62,6 +62,67 @@ func (r *paymentRepository) Update(ctx context.Context, payment *domain.Payment)
 	return err
 }
 
+func (r *paymentRepository) MarkPersonPaymentsPaid(ctx context.Context, billID, personID string) (int64, error) {
+	query := `UPDATE payments SET is_paid = true, paid_at = NOW() WHERE bill_id = $1 AND from_person_id = $2`
+	res, err := r.Pool.Exec(ctx, query, billID, personID)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected(), nil
+}
+
+func (r *paymentRepository) AllPaymentsPaid(ctx context.Context, billID string) (bool, error) {
+	query := `
+		SELECT NOT EXISTS (
+			SELECT 1 FROM payments pm
+			JOIN persons p ON p.id = pm.from_person_id
+			WHERE pm.bill_id = $1 AND NOT p.is_payer AND NOT pm.is_paid
+		)
+	`
+	var paid bool
+	err := r.Pool.QueryRow(ctx, query, billID).Scan(&paid)
+	return paid, err
+}
+
+func (r *paymentRepository) GetUserPaymentSummaryByBillIDs(ctx context.Context, billIDs []string, userID string) (map[string]domain.UserPaymentSummary, error) {
+	result := make(map[string]domain.UserPaymentSummary)
+	if len(billIDs) == 0 {
+		return result, nil
+	}
+
+	query := `
+		SELECT p.bill_id,
+			COALESCE(SUM(CASE
+				WHEN pm.from_person_id = p.id THEN pm.amount
+				WHEN pm.to_person_id = p.id AND p.is_payer THEN -pm.amount
+				ELSE 0
+			END), 0) AS user_share,
+			COALESCE(SUM(CASE WHEN pm.to_person_id = p.id AND NOT pm.is_paid THEN pm.amount ELSE 0 END), 0) AS receivable,
+			COALESCE(SUM(CASE WHEN pm.from_person_id = p.id AND NOT pm.is_paid THEN pm.amount ELSE 0 END), 0) AS payable
+		FROM persons p
+		LEFT JOIN payments pm ON pm.bill_id = p.bill_id
+		WHERE p.bill_id = ANY($1) AND (p.user_id = $2 OR p.name = (SELECT name FROM users WHERE id = $2) OR (p.user_id IS NULL AND p.is_payer AND p.bill_id IN (SELECT id FROM bills WHERE user_id = $2)))
+		GROUP BY p.bill_id
+	`
+	args := []interface{}{billIDs, userID}
+
+	rows, err := r.Pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var billID string
+		var summary domain.UserPaymentSummary
+		if err := rows.Scan(&billID, &summary.UserShare, &summary.Receivable, &summary.Payable); err != nil {
+			return nil, err
+		}
+		result[billID] = summary
+	}
+	return result, rows.Err()
+}
+
 func (r *paymentRepository) DeleteByBillID(ctx context.Context, billID string) error {
 	query := `DELETE FROM payments WHERE bill_id = $1`
 	_, err := r.Pool.Exec(ctx, query, billID)

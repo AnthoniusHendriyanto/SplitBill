@@ -21,13 +21,13 @@ type Config struct {
 	JWTRefreshSecret    string
 	JWTExpiration       int
 	RefreshTokenExpiry  int
-	GeminiAPIKey     string
 	GroqAPIKey       string
 	ReadTimeout      int
 	WriteTimeout     int
 	IdleTimeout      int
-	UsageLimit       int
-	PythonPath       string
+	UsageLimit           int
+	PythonPath           string
+	PremiumCallbackSecret string
 }
 
 func LoadConfig() *Config {
@@ -46,13 +46,13 @@ func LoadConfig() *Config {
 		JWTRefreshSecret:    getEnv("JWT_REFRESH_SECRET", "your-refresh-secret-key-change-in-production"),
 		JWTExpiration:       getEnvInt("JWT_EXPIRATION", 15),
 		RefreshTokenExpiry:  getEnvInt("REFRESH_TOKEN_EXPIRY", 7),
-		GeminiAPIKey:  getEnv("GEMINI_API_KEY", ""),
 		GroqAPIKey:    getEnv("GROQ_API_KEY", ""),
 		ReadTimeout:   getEnvInt("SERVER_READ_TIMEOUT", 30),
 		WriteTimeout:  getEnvInt("SERVER_WRITE_TIMEOUT", 180),
 		IdleTimeout:   getEnvInt("SERVER_IDLE_TIMEOUT", 120),
 		UsageLimit:    getEnvInt("USAGE_LIMIT", 50),
-		PythonPath:    getEnv("PYTHON_PATH", "python3"),
+		PythonPath:              getEnv("PYTHON_PATH", "python3"),
+		PremiumCallbackSecret:   getEnv("PREMIUM_CALLBACK_SECRET", ""),
 	}
 
 	if cfg.JWTSecret == "your-secret-key-change-in-production" {

@@ -39,8 +39,9 @@ func main() {
 	assignmentRepo := postgres.NewAssignmentRepository(pool)
 	paymentRepo := postgres.NewPaymentRepository(pool)
 	usageRepo := postgres.NewUsageRepository(pool)
+	contactRepo := postgres.NewContactRepository(pool)
 
-	runServer(cfg, userRepo, billRepo, itemRepo, personRepo, assignmentRepo, paymentRepo, usageRepo, postgres.NewOCRService(cfg.GeminiAPIKey, cfg.GroqAPIKey, cfg.PythonPath), timeoutContext)
+	runServer(cfg, userRepo, billRepo, itemRepo, personRepo, assignmentRepo, paymentRepo, usageRepo, contactRepo, postgres.NewOCRService(cfg.GroqAPIKey, cfg.PythonPath), timeoutContext)
 }
 
 func runServer(
@@ -52,6 +53,7 @@ func runServer(
 	assignmentRepo domain.AssignmentRepository,
 	paymentRepo domain.PaymentRepository,
 	usageRepo domain.UsageRepository,
+	contactRepo domain.ContactRepository,
 	ocrSvc domain.OCRService,
 	timeout time.Duration,
 ) {
@@ -61,12 +63,14 @@ func runServer(
 
 	authHandler := delivery.NewAuthHandler(authUsecase)
 	billHandler := delivery.NewBillHandler(billUsecase)
-	premiumHandler := delivery.NewPremiumHandler(premiumUsecase)
+	premiumHandler := delivery.NewPremiumHandler(premiumUsecase, cfg.PremiumCallbackSecret)
 	usageHandler := delivery.NewUsageHandler(billUsecase)
+	contactUsecase := usecase.NewContactUsecase(contactRepo)
+	contactHandler := delivery.NewContactHandler(contactUsecase)
 	authMiddleware := middleware.NewAuthMiddleware(authUsecase)
 	ocrRateLimiter := middleware.NewRateLimiter(10, time.Minute)
 	authRateLimiter := middleware.NewRateLimiter(5, time.Minute)
-	router := delivery.NewRouter(authHandler, billHandler, premiumHandler, usageHandler, authMiddleware, ocrRateLimiter, authRateLimiter, cfg.FrontendURL)
+	router := delivery.NewRouter(authHandler, billHandler, premiumHandler, usageHandler, contactHandler, authMiddleware, ocrRateLimiter, authRateLimiter, cfg.FrontendURL)
 
 	server := &http.Server{
 		Addr:         ":" + cfg.Port,
@@ -92,6 +96,9 @@ func runServer(
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 	log.Println("Shutting down server...")
+
+	ocrRateLimiter.Stop()
+	authRateLimiter.Stop()
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

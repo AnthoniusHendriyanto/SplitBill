@@ -21,15 +21,15 @@ func (r *itemRepository) Create(ctx context.Context, item *domain.Item) error {
 		item.ID = uuid.New().String()
 	}
 	query := `
-		INSERT INTO items (id, bill_id, name, price, created_at)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO items (id, bill_id, name, price, quantity, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6)
 	`
-	_, err := r.Pool.Exec(ctx, query, item.ID, item.BillID, item.Name, item.Price, item.CreatedAt)
+	_, err := r.Pool.Exec(ctx, query, item.ID, item.BillID, item.Name, item.Price, item.Quantity, item.CreatedAt)
 	return err
 }
 
 func (r *itemRepository) GetByBillID(ctx context.Context, billID string) ([]domain.Item, error) {
-	query := `SELECT id, bill_id, name, price, created_at FROM items WHERE bill_id = $1 ORDER BY created_at`
+	query := `SELECT id, bill_id, name, price, quantity, created_at FROM items WHERE bill_id = $1 ORDER BY created_at`
 	rows, err := r.Pool.Query(ctx, query, billID)
 	if err != nil {
 		return nil, err
@@ -39,7 +39,7 @@ func (r *itemRepository) GetByBillID(ctx context.Context, billID string) ([]doma
 	var items []domain.Item
 	for rows.Next() {
 		var item domain.Item
-		if err := rows.Scan(&item.ID, &item.BillID, &item.Name, &item.Price, &item.CreatedAt); err != nil {
+		if err := rows.Scan(&item.ID, &item.BillID, &item.Name, &item.Price, &item.Quantity, &item.CreatedAt); err != nil {
 			return nil, err
 		}
 		items = append(items, item)
@@ -81,15 +81,15 @@ func (r *personRepository) Create(ctx context.Context, person *domain.Person) er
 		person.ID = uuid.New().String()
 	}
 	query := `
-		INSERT INTO persons (id, bill_id, name, is_payer, percentage, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO persons (id, bill_id, user_id, name, is_payer, percentage, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 	`
-	_, err := r.Pool.Exec(ctx, query, person.ID, person.BillID, person.Name, person.IsPayer, person.Percentage, person.CreatedAt)
+	_, err := r.Pool.Exec(ctx, query, person.ID, person.BillID, person.UserID, person.Name, person.IsPayer, person.Percentage, person.CreatedAt)
 	return err
 }
 
 func (r *personRepository) GetByBillID(ctx context.Context, billID string) ([]domain.Person, error) {
-	query := `SELECT id, bill_id, name, is_payer, percentage, created_at FROM persons WHERE bill_id = $1`
+	query := `SELECT id, bill_id, user_id, name, is_payer, percentage, created_at FROM persons WHERE bill_id = $1`
 	rows, err := r.Pool.Query(ctx, query, billID)
 	if err != nil {
 		return nil, err
@@ -99,7 +99,7 @@ func (r *personRepository) GetByBillID(ctx context.Context, billID string) ([]do
 	var persons []domain.Person
 	for rows.Next() {
 		var person domain.Person
-		if err := rows.Scan(&person.ID, &person.BillID, &person.Name, &person.IsPayer, &person.Percentage, &person.CreatedAt); err != nil {
+		if err := rows.Scan(&person.ID, &person.BillID, &person.UserID, &person.Name, &person.IsPayer, &person.Percentage, &person.CreatedAt); err != nil {
 			return nil, err
 		}
 		persons = append(persons, person)

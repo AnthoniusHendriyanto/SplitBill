@@ -90,6 +90,8 @@ func (u *authUsecase) Login(ctx context.Context, req *domain.LoginRequest) (*dom
 		return nil, domain.ErrInvalidCredentials
 	}
 
+	u.checkPremiumExpiry(ctx, &user)
+
 	accessToken, refreshToken, expiresAt, err := u.generateTokens(user.ID)
 	if err != nil {
 		return nil, err
@@ -112,6 +114,15 @@ func (u *authUsecase) Login(ctx context.Context, req *domain.LoginRequest) (*dom
 	}, nil
 }
 
+func (u *authUsecase) checkPremiumExpiry(ctx context.Context, user *domain.User) {
+	if user.Tier == "premium" && user.PremiumExpiresAt != nil && user.PremiumExpiresAt.Before(time.Now()) {
+		if err := u.userRepo.UpdateTier(ctx, user.ID, "free", nil); err != nil {
+			log.Printf("failed to downgrade expired premium user %s: %v", user.ID, err)
+		}
+		user.Tier = "free"
+	}
+}
+
 func (u *authUsecase) RefreshToken(ctx context.Context, refreshToken string) (*domain.AuthResponse, error) {
 	claims, err := u.validateRefreshToken(refreshToken)
 	if err != nil {
@@ -127,6 +138,8 @@ func (u *authUsecase) RefreshToken(ctx context.Context, refreshToken string) (*d
 	if err != nil {
 		return nil, err
 	}
+
+	u.checkPremiumExpiry(ctx, &user)
 
 	newAccessToken, newRefreshToken, expiresAt, err := u.generateTokens(user.ID)
 	if err != nil {
@@ -155,6 +168,9 @@ func (u *authUsecase) GetMe(ctx context.Context, userID string) (*domain.UserRes
 	if err != nil {
 		return nil, err
 	}
+
+	u.checkPremiumExpiry(ctx, &user)
+
 	return &domain.UserResponse{
 		ID:        user.ID,
 		Email:     user.Email,

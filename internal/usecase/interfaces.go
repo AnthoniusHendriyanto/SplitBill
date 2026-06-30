@@ -22,10 +22,18 @@ type BillUsecase interface {
 	GetByID(ctx context.Context, userID, billID string) (*domain.BillDetailResponse, error)
 	Delete(ctx context.Context, userID, billID string) error
 	ProcessOCR(ctx context.Context, userID string, imageBytes []byte) (*domain.OCRResult, error)
+	UpdateStatus(ctx context.Context, userID, billID, status string) error
+	MarkPersonPaid(ctx context.Context, userID, billID, personID string) (*domain.Bill, error)
 	GetUsage(ctx context.Context, userID string) (*domain.UsageResponse, error)
 }
 
 type PremiumUsecase interface {
 	Subscribe(ctx context.Context, userID string, req *domain.PremiumSubscribeRequest) (*domain.PremiumSubscribeResponse, error)
 	ConfirmPayment(ctx context.Context, req *domain.PremiumCallbackRequest) error
+}
+
+type ContactUsecase interface {
+	List(ctx context.Context, userID string) ([]domain.Contact, error)
+	Create(ctx context.Context, userID, name string) (*domain.Contact, error)
+	Delete(ctx context.Context, id, userID string) error
 }

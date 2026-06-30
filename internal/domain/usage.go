@@ -17,3 +17,9 @@ type UsageResponse struct {
 	ResetAt  time.Time  `json:"reset_at"`
 }
 
+type TierLimit struct {
+	Tier            string `json:"tier"`
+	MonthlyBillLimit int   `json:"monthly_bill_limit"`
+	MonthlyOCRLimit  int   `json:"monthly_ocr_limit"`
+}
+

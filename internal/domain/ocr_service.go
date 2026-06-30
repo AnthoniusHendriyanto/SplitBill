@@ -6,6 +6,7 @@ type OCRResult struct {
 	Title         string    `json:"title"`
 	Date          string    `json:"date"`
 	Items         []OCRItem `json:"items"`
+	Subtotal      float64   `json:"subtotal"`
 	ServiceCharge float64   `json:"service_charge"`
 	ServiceMode   string    `json:"service_mode"`
 	Tax           float64   `json:"tax"`

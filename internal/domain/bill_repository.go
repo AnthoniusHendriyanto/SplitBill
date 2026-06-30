@@ -39,5 +39,8 @@ type PaymentRepository interface {
 	Create(ctx context.Context, payment *Payment) error
 	GetByBillID(ctx context.Context, billID string) ([]Payment, error)
 	Update(ctx context.Context, payment *Payment) error
+	MarkPersonPaymentsPaid(ctx context.Context, billID, personID string) (int64, error)
+	AllPaymentsPaid(ctx context.Context, billID string) (bool, error)
+	GetUserPaymentSummaryByBillIDs(ctx context.Context, billIDs []string, userID string) (map[string]UserPaymentSummary, error)
 	DeleteByBillID(ctx context.Context, billID string) error
 }

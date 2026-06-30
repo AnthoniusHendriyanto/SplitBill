@@ -24,24 +24,26 @@ func (r *billRepository) Create(ctx context.Context, bill *domain.Bill) error {
 		bill.ID = uuid.New().String()
 	}
 	query := `
-		INSERT INTO bills (id, user_id, title, total_amount, service_charge, tax, split_type, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		INSERT INTO bills (id, user_id, title, merchant, total_amount, service_charge, service_mode, tax, tax_mode, discount, grand_total, status, split_type, bill_date, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 	`
 	_, err := r.Pool.Exec(ctx, query,
-		bill.ID, bill.UserID, bill.Title, bill.TotalAmount, bill.ServiceCharge, bill.Tax,
-		bill.SplitType, bill.CreatedAt, bill.UpdatedAt)
+		bill.ID, bill.UserID, bill.Title, bill.Merchant, bill.TotalAmount, bill.ServiceCharge, bill.ServiceMode,
+		bill.Tax, bill.TaxMode, bill.Discount, bill.GrandTotal, bill.Status,
+		bill.SplitType, bill.BillDate, bill.CreatedAt, bill.UpdatedAt)
 	return err
 }
 
 func (r *billRepository) GetByID(ctx context.Context, id string) (domain.Bill, error) {
 	query := `
-		SELECT id, user_id, title, total_amount, service_charge, tax, split_type, created_at, updated_at
+		SELECT id, user_id, title, merchant, total_amount, service_charge, service_mode, tax, tax_mode, discount, grand_total, status, split_type, bill_date, created_at, updated_at
 		FROM bills WHERE id = $1
 	`
 	var bill domain.Bill
 	err := r.Pool.QueryRow(ctx, query, id).Scan(
-		&bill.ID, &bill.UserID, &bill.Title, &bill.TotalAmount, &bill.ServiceCharge,
-		&bill.Tax, &bill.SplitType, &bill.CreatedAt, &bill.UpdatedAt,
+		&bill.ID, &bill.UserID, &bill.Title, &bill.Merchant, &bill.TotalAmount, &bill.ServiceCharge, &bill.ServiceMode,
+		&bill.Tax, &bill.TaxMode, &bill.Discount, &bill.GrandTotal, &bill.Status,
+		&bill.SplitType, &bill.BillDate, &bill.CreatedAt, &bill.UpdatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Bill{}, domain.ErrNotFound
@@ -52,7 +54,7 @@ func (r *billRepository) GetByID(ctx context.Context, id string) (domain.Bill, e
 func (r *billRepository) GetByUserID(ctx context.Context, userID string, page, limit int, fromDate, toDate string) ([]domain.Bill, int, error) {
 	offset := (page - 1) * limit
 
-	baseQuery := `FROM bills WHERE user_id = $1`
+	baseQuery := `FROM bills WHERE user_id = $1 OR id IN (SELECT bill_id FROM persons WHERE user_id = $1 OR (user_id IS NULL AND is_payer AND bill_id IN (SELECT id FROM bills WHERE user_id = $1)))`
 	args := []interface{}{userID}
 
 	if fromDate != "" {
@@ -71,7 +73,7 @@ func (r *billRepository) GetByUserID(ctx context.Context, userID string, page, l
 	}
 
 	selectQuery := fmt.Sprintf(`
-		SELECT id, user_id, title, total_amount, service_charge, tax, split_type, created_at, updated_at
+		SELECT id, user_id, title, merchant, total_amount, service_charge, service_mode, tax, tax_mode, discount, grand_total, status, split_type, bill_date, created_at, updated_at
 		%s ORDER BY created_at DESC LIMIT $%d OFFSET $%d
 	`, baseQuery, len(args)+1, len(args)+2)
 	args = append(args, limit, offset)
@@ -86,8 +88,9 @@ func (r *billRepository) GetByUserID(ctx context.Context, userID string, page, l
 	for rows.Next() {
 		var bill domain.Bill
 		if err := rows.Scan(
-			&bill.ID, &bill.UserID, &bill.Title, &bill.TotalAmount, &bill.ServiceCharge,
-			&bill.Tax, &bill.SplitType, &bill.CreatedAt, &bill.UpdatedAt,
+			&bill.ID, &bill.UserID, &bill.Title, &bill.Merchant, &bill.TotalAmount, &bill.ServiceCharge, &bill.ServiceMode,
+			&bill.Tax, &bill.TaxMode, &bill.Discount, &bill.GrandTotal, &bill.Status,
+			&bill.SplitType, &bill.BillDate, &bill.CreatedAt, &bill.UpdatedAt,
 		); err != nil {
 			return nil, 0, err
 		}
@@ -102,13 +105,14 @@ func (r *billRepository) GetByUserID(ctx context.Context, userID string, page, l
 
 func (r *billRepository) GetByUserIDAndID(ctx context.Context, userID, billID string) (domain.Bill, error) {
 	query := `
-		SELECT id, user_id, title, total_amount, service_charge, tax, split_type, created_at, updated_at
-		FROM bills WHERE id = $1 AND user_id = $2
+		SELECT id, user_id, title, merchant, total_amount, service_charge, service_mode, tax, tax_mode, discount, grand_total, status, split_type, bill_date, created_at, updated_at
+		FROM bills WHERE id = $1 AND (user_id = $2 OR id IN (SELECT bill_id FROM persons WHERE user_id = $2 OR (user_id IS NULL AND name = (SELECT name FROM users WHERE id = $2))))
 	`
 	var bill domain.Bill
 	err := r.Pool.QueryRow(ctx, query, billID, userID).Scan(
-		&bill.ID, &bill.UserID, &bill.Title, &bill.TotalAmount, &bill.ServiceCharge,
-		&bill.Tax, &bill.SplitType, &bill.CreatedAt, &bill.UpdatedAt,
+		&bill.ID, &bill.UserID, &bill.Title, &bill.Merchant, &bill.TotalAmount, &bill.ServiceCharge, &bill.ServiceMode,
+		&bill.Tax, &bill.TaxMode, &bill.Discount, &bill.GrandTotal, &bill.Status,
+		&bill.SplitType, &bill.BillDate, &bill.CreatedAt, &bill.UpdatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Bill{}, domain.ErrNotFound
@@ -118,11 +122,13 @@ func (r *billRepository) GetByUserIDAndID(ctx context.Context, userID, billID st
 
 func (r *billRepository) Update(ctx context.Context, bill *domain.Bill) error {
 	query := `
-		UPDATE bills SET title = $1, total_amount = $2, service_charge = $3, 
-		       tax = $4, split_type = $5, updated_at = $6 WHERE id = $7
+		UPDATE bills SET title = $1, merchant = $2, total_amount = $3, service_charge = $4, service_mode = $5,
+		       tax = $6, tax_mode = $7, discount = $8, grand_total = $9, status = $10,
+		       split_type = $11, bill_date = $12, updated_at = $13 WHERE id = $14
 	`
-	_, err := r.Pool.Exec(ctx, query, bill.Title, bill.TotalAmount, bill.ServiceCharge,
-		bill.Tax, bill.SplitType, bill.UpdatedAt, bill.ID)
+	_, err := r.Pool.Exec(ctx, query, bill.Title, bill.Merchant, bill.TotalAmount, bill.ServiceCharge, bill.ServiceMode,
+		bill.Tax, bill.TaxMode, bill.Discount, bill.GrandTotal, bill.Status,
+		bill.SplitType, bill.BillDate, bill.UpdatedAt, bill.ID)
 	return err
 }
 
@@ -143,49 +149,54 @@ func (r *billRepository) CreateFull(ctx context.Context, bill *domain.Bill, item
 		bill.ID = uuid.New().String()
 	}
 	billQuery := `
-		INSERT INTO bills (id, user_id, title, total_amount, service_charge, tax, split_type, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		INSERT INTO bills (id, user_id, title, merchant, total_amount, service_charge, service_mode, tax, tax_mode, discount, grand_total, status, split_type, bill_date, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 	`
 	if _, err := tx.Exec(ctx, billQuery,
-		bill.ID, bill.UserID, bill.Title, bill.TotalAmount, bill.ServiceCharge, bill.Tax,
-		bill.SplitType, bill.CreatedAt, bill.UpdatedAt); err != nil {
+		bill.ID, bill.UserID, bill.Title, bill.Merchant, bill.TotalAmount, bill.ServiceCharge, bill.ServiceMode,
+		bill.Tax, bill.TaxMode, bill.Discount, bill.GrandTotal, bill.Status,
+		bill.SplitType, bill.BillDate, bill.CreatedAt, bill.UpdatedAt); err != nil {
 		return fmt.Errorf("insert bill: %w", err)
 	}
 
-	for _, item := range items {
-		if item.ID == "" {
-			item.ID = uuid.New().String()
+	for i := range items {
+		if items[i].ID == "" {
+			items[i].ID = uuid.New().String()
 		}
-		item.BillID = bill.ID
+		items[i].BillID = bill.ID
+		qty := items[i].Quantity
+		if qty < 1 {
+			qty = 1
+		}
 		if _, err := tx.Exec(ctx, `
-			INSERT INTO items (id, bill_id, name, price, created_at)
-			VALUES ($1, $2, $3, $4, $5)
-		`, item.ID, item.BillID, item.Name, item.Price, item.CreatedAt); err != nil {
+			INSERT INTO items (id, bill_id, name, price, quantity, created_at)
+			VALUES ($1, $2, $3, $4, $5, $6)
+		`, items[i].ID, items[i].BillID, items[i].Name, items[i].Price, qty, items[i].CreatedAt); err != nil {
 			return fmt.Errorf("insert item: %w", err)
 		}
 	}
 
-	for _, person := range persons {
-		if person.ID == "" {
-			person.ID = uuid.New().String()
+	for i := range persons {
+		if persons[i].ID == "" {
+			persons[i].ID = uuid.New().String()
 		}
-		person.BillID = bill.ID
+		persons[i].BillID = bill.ID
 		if _, err := tx.Exec(ctx, `
-			INSERT INTO persons (id, bill_id, name, is_payer, percentage, created_at)
-			VALUES ($1, $2, $3, $4, $5, $6)
-		`, person.ID, person.BillID, person.Name, person.IsPayer, person.Percentage, person.CreatedAt); err != nil {
+			INSERT INTO persons (id, bill_id, name, is_payer, percentage, payment_info, created_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7)
+		`, persons[i].ID, persons[i].BillID, persons[i].Name, persons[i].IsPayer, persons[i].Percentage, persons[i].PaymentInfo, persons[i].CreatedAt); err != nil {
 			return fmt.Errorf("insert person: %w", err)
 		}
 	}
 
-	for _, a := range assignments {
-		if a.ID == "" {
-			a.ID = uuid.New().String()
+	for i := range assignments {
+		if assignments[i].ID == "" {
+			assignments[i].ID = uuid.New().String()
 		}
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO item_assignments (id, item_id, person_id, created_at)
 			VALUES ($1, $2, $3, $4)
-		`, a.ID, a.ItemID, a.PersonID, a.CreatedAt); err != nil {
+		`, assignments[i].ID, assignments[i].ItemID, assignments[i].PersonID, assignments[i].CreatedAt); err != nil {
 			return fmt.Errorf("insert assignment: %w", err)
 		}
 	}

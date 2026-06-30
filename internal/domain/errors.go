@@ -10,6 +10,7 @@ var (
 	ErrTokenInvalid         = errors.New("invalid token")
 	ErrPremiumRequired      = errors.New("custom and percentage split are premium features")
 	ErrInvalidInput         = errors.New("invalid input")
+	ErrBillLimitExceeded    = errors.New("monthly bill limit reached")
 )
 
 type ValidationError struct {

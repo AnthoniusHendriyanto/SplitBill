@@ -2,6 +2,7 @@ package http
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 
 	"github.com/user/split-mate/internal/delivery/http/middleware"
@@ -10,11 +11,12 @@ import (
 )
 
 type PremiumHandler struct {
-	premiumUsecase usecase.PremiumUsecase
+	premiumUsecase      usecase.PremiumUsecase
+	callbackSecret      string
 }
 
-func NewPremiumHandler(pu usecase.PremiumUsecase) *PremiumHandler {
-	return &PremiumHandler{premiumUsecase: pu}
+func NewPremiumHandler(pu usecase.PremiumUsecase, callbackSecret string) *PremiumHandler {
+	return &PremiumHandler{premiumUsecase: pu, callbackSecret: callbackSecret}
 }
 
 func (h *PremiumHandler) Subscribe(w http.ResponseWriter, r *http.Request) {
@@ -40,6 +42,12 @@ func (h *PremiumHandler) Subscribe(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *PremiumHandler) Callback(w http.ResponseWriter, r *http.Request) {
+	if h.callbackSecret != "" && r.Header.Get("X-Callback-Secret") != h.callbackSecret {
+		log.Printf("Premium callback rejected: missing or invalid X-Callback-Secret")
+		writeError(w, http.StatusForbidden, "FORBIDDEN", "Invalid callback secret")
+		return
+	}
+
 	var req domain.PremiumCallbackRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "INVALID_INPUT", "Invalid request body")

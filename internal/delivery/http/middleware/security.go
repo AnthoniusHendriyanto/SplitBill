@@ -1,8 +1,25 @@
 package middleware
 
 import (
+	"context"
+	"encoding/json"
+	"log"
 	"net/http"
+	"strings"
+
+	"github.com/google/uuid"
 )
+
+type reqIDKey struct{}
+
+var RequestIDKey = reqIDKey{}
+
+func GetRequestID(ctx context.Context) string {
+	if id, ok := ctx.Value(RequestIDKey).(string); ok {
+		return id
+	}
+	return ""
+}
 
 func SecurityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -25,6 +42,39 @@ func BodyLimit(maxBytes int64) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+func RequestID(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		id := r.Header.Get("X-Request-ID")
+		if id == "" {
+			id = uuid.New().String()
+		}
+		ctx := context.WithValue(r.Context(), RequestIDKey, id)
+		w.Header().Set("X-Request-ID", id)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+func ContentTypeValidator(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		method := r.Method
+		if method == http.MethodPost || method == http.MethodPut || method == http.MethodPatch {
+			ct := r.Header.Get("Content-Type")
+			if ct == "" || (!strings.HasPrefix(ct, "application/json") && !strings.HasPrefix(ct, "multipart/form-data")) {
+				log.Printf("rejected request with Content-Type: %q", ct)
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusUnsupportedMediaType)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"success": false,
+					"message": "Content-Type must be application/json or multipart/form-data",
+					"error":   map[string]string{"code": "UNSUPPORTED_MEDIA_TYPE"},
+				})
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 

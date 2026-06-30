@@ -43,6 +43,13 @@ After EVERY code change, you MUST update all relevant `.md` files in the workspa
 - `DATABASE.md` — schema, indexes, migrations
 - `CONTRIBUTING.md` — setup guide
 
+### Phase 7 — Comprehensive Audit Fixes (July 2026)
+
+- **C1-C7**: All critical backend items fixed — panic recovery middleware, rate limiter Stop(), OCR body defer+check, `errors.Is()` everywhere, graceful shutdown, race-free `calculatePayments` (in-memory data)
+- **N1-N10**: CHECK constraints (migration 018), payments indexes, stub routes for unimplemented endpoints, focus traps on modals, `useCallback` for memo'd props, `setTimeout` cleanup, premium expiry at auth time, rounding in equal split, ContactUsecase layer
+- **N3 Premium callback auth**: Added `X-Callback-Secret` header check (config via `PREMIUM_CALLBACK_SECRET` env var)
+- **Clean bill_usecase.Create()**: Removed redundant `Update()` call after `CreatePayments()`
+
 ### Key Recent Fixes
 
 - `personTotals` `useMemo` dep `[calculateTotals]` → `[bill, settings, assignments]`
@@ -50,3 +57,8 @@ After EVERY code change, you MUST update all relevant `.md` files in the workspa
 - Auth refresh loop: `useRef` guard + dedup + raw fetch logout
 - OCR endpoint moved to public subrouter
 - Page refresh on upload: `type="button"` on all buttons
+- Primary OCR: Groq Llama 4 Scout vision (image→JSON), fallback PaddleOCR+Groq text
+- `resizeImage()` caps longest side at 1024px to control vision token cost
+- `completeBill()` passes client-side UUIDs for item/person FK assignment
+- Item-person `assignments` now stored for ALL split types (not just `custom`) — previously `assigned_to` was empty for shared_items/equal bills
+- Quantity fix: vision prompt strengthened with visual quantity reading, server-side guard for all-qty=1 + high prices

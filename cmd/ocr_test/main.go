@@ -32,7 +32,7 @@ func main() {
 		log.Fatalf("Failed to read image: %v", err)
 	}
 
-	ocrSvc := postgres.NewOCRService(cfg.GeminiAPIKey, cfg.GroqAPIKey, cfg.PythonPath)
+	ocrSvc := postgres.NewOCRService(cfg.GroqAPIKey, cfg.PythonPath)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
