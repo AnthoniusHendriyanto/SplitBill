@@ -9,7 +9,7 @@ import useIsMobile from '../hooks/useIsMobile';
 import { api } from '../lib/api';
 import { cn } from '../utils/cn';
 
-const avatarColors = ["bg-indigo-600", "bg-teal-500", "bg-violet-500", "bg-rose-500", "bg-amber-500"];
+const avatarColors = ["bg-indigo-600", "bg-teal-500", "bg-violet-500", "bg-red-500", "bg-amber-500"];
 
 function BillDetailPage() {
   const { id } = useParams();
@@ -103,8 +103,8 @@ function BillDetailPage() {
     return (
       <div className="min-h-screen bg-page flex items-center justify-center p-4">
         <div className="text-center">
-          <Icon name="receipt_long" className="text-6xl text-slate-300 mb-4" />
-          <h2 className="text-xl font-bold text-slate-600 mb-2">Bill not found</h2>
+          <Icon name="receipt_long" className="text-6xl text-primary mb-4" />
+          <h2 className="text-xl font-bold text-tertiary mb-2">Bill not found</h2>
           <button
             onClick={() => navigate('/')}
             className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all cursor-pointer"
@@ -120,12 +120,12 @@ function BillDetailPage() {
   const payer = persons.find(p => p.id === payerId);
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 font-inter antialiased">
+    <div className="min-h-screen bg-slate-50 dark:bg-surface-base font-inter antialiased">
       <div className={cn("max-w-4xl mx-auto", isMobile ? "p-4 pb-20" : "p-8")}>
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
           <button
             onClick={() => navigate('/')}
-            className="flex items-center gap-2 text-sm text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors mb-6 cursor-pointer"
+            className="flex items-center gap-2 text-sm text-tertiary hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors mb-6 cursor-pointer"
           >
             <Icon name="arrow_back" className="text-lg" />
             Back to Dashboard
@@ -133,43 +133,43 @@ function BillDetailPage() {
 
           <div className="flex items-center justify-between mb-8">
             <div>
-              <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">{bill.title}</h1>
-              <p className="text-sm text-slate-500 mt-1 font-medium">
+              <h1 className="text-3xl font-black text-primary tracking-tight">{bill.title}</h1>
+              <p className="text-sm text-tertiary mt-1 font-medium">
                 {new Date(bill.completedAt).toLocaleDateString('id-ID', {
                   day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
                 })}
               </p>
             </div>
             <div className="text-right">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Grand Total</p>
+              <p className="text-[10px] font-bold text-secondary uppercase tracking-widest mb-1">Grand Total</p>
               <p className="text-3xl font-black text-indigo-600">Rp {grandTotal.toLocaleString('id-ID')}</p>
             </div>
           </div>
 
           <div className="grid gap-6">
             {/* Items */}
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm">
-              <h2 className="font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+            <div className="bg-white dark:bg-surface-elevated border border-slate-200 dark:border-strong rounded-2xl p-6 shadow-sm">
+              <h2 className="font-bold text-primary mb-4 flex items-center gap-2">
                 <Icon name="receipt" className="text-indigo-600" />
                 Items
               </h2>
-              <div className="divide-y divide-slate-100 dark:divide-slate-800">
+              <div className="divide-y divide-slate-100 dark:divide-border">
                 {items.map(item => (
                   <div key={item.id} className="flex justify-between py-3">
-                    <span className="font-medium text-slate-700 dark:text-slate-300">{item.name}</span>
-                    <span className="font-bold text-slate-900 dark:text-white">Rp {item.price.toLocaleString('id-ID')}</span>
+                    <span className="font-medium text-tertiary dark:text-primary">{item.name}</span>
+                    <span className="font-bold text-primary">Rp {item.price.toLocaleString('id-ID')}</span>
                   </div>
                 ))}
               </div>
-              <div className="mt-4 pt-4 border-t-2 border-slate-200 dark:border-slate-700 flex justify-between">
-                <span className="font-bold text-slate-500 text-sm">Subtotal</span>
-                <span className="font-bold text-slate-900 dark:text-white">Rp {items.reduce((s, i) => s + i.price, 0).toLocaleString('id-ID')}</span>
+              <div className="mt-4 pt-4 border-t-2 border-slate-200 dark:border-strong flex justify-between">
+                <span className="font-bold text-tertiary text-sm">Subtotal</span>
+                <span className="font-bold text-primary">Rp {items.reduce((s, i) => s + i.price, 0).toLocaleString('id-ID')}</span>
               </div>
             </div>
 
             {/* Settlement */}
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm">
-              <h2 className="font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+            <div className="bg-white dark:bg-surface-elevated border border-slate-200 dark:border-strong rounded-2xl p-6 shadow-sm">
+              <h2 className="font-bold text-primary mb-4 flex items-center gap-2">
                 <Icon name="account_balance" className="text-indigo-600" />
                 Settlement
               </h2>
@@ -181,11 +181,11 @@ function BillDetailPage() {
                   </div>
                   <div>
                     <p className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest">Payer</p>
-                    <p className="font-bold text-slate-900 dark:text-white">{payer.name}</p>
+                    <p className="font-bold text-primary">{payer.name}</p>
                   </div>
                   <div className="ml-auto text-right">
-                    <p className="text-[10px] font-bold text-slate-500 uppercase">Paid</p>
-                    <p className="font-black text-slate-900 dark:text-white">Rp {grandTotal.toLocaleString('id-ID')}</p>
+                    <p className="text-[10px] font-bold text-tertiary uppercase">Paid</p>
+                    <p className="font-black text-primary">Rp {grandTotal.toLocaleString('id-ID')}</p>
                   </div>
                 </div>
               )}
@@ -193,14 +193,14 @@ function BillDetailPage() {
               <div className="space-y-3">
                 {totals.map((person, i) => {
                   return (
-                    <div key={person.id} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl">
+                    <div key={person.id} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-surface-raised/50 rounded-xl">
                       <div className="flex items-center gap-3">
                         <div className={cn("w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold", avatarColors[i % avatarColors.length])}>
                           {person.name?.charAt(0) || '?'}
                         </div>
                         <div>
-                          <p className="font-bold text-sm text-slate-900 dark:text-white">{person.name}</p>
-                          <p className="text-[10px] text-slate-500">
+                          <p className="font-bold text-sm text-primary">{person.name}</p>
+                          <p className="text-[10px] text-tertiary">
                             {person.id === payerId ? 'Paid the bill' : 'Owes'}
                           </p>
                         </div>
@@ -208,12 +208,12 @@ function BillDetailPage() {
                       <div className="text-right">
                         <p className={cn(
                           "font-black text-sm",
-                          person.id === payerId ? "text-emerald-600" : "text-slate-900 dark:text-white"
+                          person.id === payerId ? "text-emerald-600" : "text-primary"
                         )}>
                           Rp {person.total.toLocaleString('id-ID')}
                         </p>
                         {person.id !== payerId && (
-                          <p className="text-[10px] text-rose-500 font-bold">
+                          <p className="text-[10px] text-red-500 font-bold">
                             owes Rp {person.total.toLocaleString('id-ID')}
                           </p>
                         )}
@@ -229,19 +229,19 @@ function BillDetailPage() {
               {totals.map((person, i) => {
                 const assignedItems = items.filter(item => assignments[person.id]?.[item.id]);
                 return (
-                  <div key={person.id} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
+                  <div key={person.id} className="bg-white dark:bg-surface-elevated border border-slate-200 dark:border-strong rounded-2xl p-5 shadow-sm">
                     <div className="flex items-center gap-3 mb-4">
                       <div className={cn("w-10 h-10 rounded-full flex items-center justify-center text-white font-bold", avatarColors[i % avatarColors.length])}>
                         {person.name?.charAt(0) || '?'}
                       </div>
                       <div>
-                        <p className="font-bold text-slate-900 dark:text-white">{person.name}</p>
-                        <p className="text-[10px] text-slate-500 uppercase tracking-widest">
+                        <p className="font-bold text-primary">{person.name}</p>
+                        <p className="text-[10px] text-tertiary uppercase tracking-widest">
                           {assignedItems.length} item{assignedItems.length !== 1 ? 's' : ''}
                         </p>
                       </div>
                       <div className="ml-auto text-right">
-                        <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Total</p>
+                        <p className="text-[10px] text-secondary uppercase tracking-widest font-bold">Total</p>
                         <p className="font-black text-indigo-600">Rp {person.total.toLocaleString('id-ID')}</p>
                       </div>
                     </div>
@@ -250,9 +250,9 @@ function BillDetailPage() {
                         const sharers = persons.filter(p => assignments[p.id]?.[item.id]).length;
                         const share = sharers > 0 ? Math.round(item.price / sharers) : 0;
                         return (
-                          <div key={item.id} className="flex justify-between text-xs py-1.5 border-b border-slate-100 dark:border-slate-800 last:border-0">
-                            <span className="text-slate-600 dark:text-slate-400">{item.name}</span>
-                            <span className="font-bold text-slate-700 dark:text-slate-300">Rp {share.toLocaleString('id-ID')}</span>
+                          <div key={item.id} className="flex justify-between text-xs py-1.5 border-b border dark:border-strong last:border-0">
+                            <span className="text-tertiary dark:text-secondary">{item.name}</span>
+                            <span className="font-bold text-tertiary dark:text-primary">Rp {share.toLocaleString('id-ID')}</span>
                           </div>
                         );
                       })}

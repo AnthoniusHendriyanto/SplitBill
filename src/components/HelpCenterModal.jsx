@@ -70,29 +70,29 @@ function HelpCenterModal({ open, onClose }) {
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
             transition={{ type: 'spring', damping: 25, stiffness: 220 }}
-            className="fixed right-0 top-0 bottom-0 w-[450px] max-w-full bg-white dark:bg-slate-900 border-l border-gray-200 dark:border-gray-800 z-[100] shadow-2xl flex flex-col font-inter"
+            className="fixed right-0 top-0 bottom-0 w-[450px] max-w-full bg-white dark:bg-surface-elevated border-l border-gray-200 dark:border-gray-800 z-[100] shadow-2xl flex flex-col font-inter"
           >
             <div className="p-6 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="material-symbols-outlined text-indigo-600 dark:text-indigo-400 text-2xl">help</span>
-                <h2 className="text-xl font-bold text-slate-900 dark:text-white">Help Center & FAQ</h2>
+                <h2 className="text-xl font-bold text-primary">Help Center & FAQ</h2>
               </div>
               <button
                 onClick={onClose}
-                className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer outline-none text-slate-500"
+                className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-surface-raised transition-colors cursor-pointer outline-none text-tertiary"
               >
                 <span className="material-symbols-outlined text-xl">close</span>
               </button>
             </div>
             <div className="p-4 border-b border-gray-100 dark:border-gray-800">
               <div className="relative">
-                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-lg">search</span>
+                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-secondary text-lg">search</span>
                 <input
                   type="text"
                   placeholder="Search help articles..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 bg-slate-100 dark:bg-slate-800 border-none rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500/20"
+                  className="w-full pl-10 pr-4 py-2 bg-slate-100 dark:bg-surface-raised border-none rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500/20"
                 />
               </div>
             </div>
@@ -111,17 +111,17 @@ function HelpCenterModal({ open, onClose }) {
                     return (
                       <div
                         key={faq.id}
-                        className="border border-gray-100 dark:border-gray-800/80 rounded-xl overflow-hidden bg-slate-50 dark:bg-slate-900/30"
+                        className="border border-gray-100 dark:border-gray-800/80 rounded-xl overflow-hidden bg-slate-50 dark:bg-surface-elevated/30"
                       >
                         <button
                           onClick={() => setActiveFaq(isOpen ? null : faq.id)}
-                          className="w-full px-4 py-3 flex items-center justify-between text-left font-bold text-sm text-slate-800 dark:text-slate-200 hover:bg-slate-100/50 dark:hover:bg-slate-800/30 transition-colors"
+                          className="w-full px-4 py-3 flex items-center justify-between text-left font-bold text-sm text-primary hover:bg-slate-100/50 dark:hover:bg-surface-raised/30 transition-colors"
                         >
                           <span className="flex items-center gap-2">
                             <span className="material-symbols-outlined text-indigo-600/70 dark:text-indigo-400/70 text-lg">{faq.icon}</span>
                             {faq.title}
                           </span>
-                          <span className="material-symbols-outlined text-slate-400 transition-transform duration-200" style={{ transform: isOpen ? 'rotate(180deg)' : 'rotate(0)' }}>
+                          <span className="material-symbols-outlined text-secondary transition-transform duration-200" style={{ transform: isOpen ? 'rotate(180deg)' : 'rotate(0)' }}>
                             expand_more
                           </span>
                         </button>
@@ -133,7 +133,7 @@ function HelpCenterModal({ open, onClose }) {
                               exit={{ height: 0, opacity: 0 }}
                               className="overflow-hidden"
                             >
-                              <div className="px-4 pb-4 pt-1 text-xs text-slate-600 dark:text-slate-400 leading-relaxed border-t border-gray-100 dark:border-gray-800/50 mt-1">
+                              <div className="px-4 pb-4 pt-1 text-xs text-tertiary dark:text-secondary leading-relaxed border-t border-gray-100 dark:border-gray-800/50 mt-1">
                                 {faq.content}
                               </div>
                             </motion.div>
@@ -143,7 +143,7 @@ function HelpCenterModal({ open, onClose }) {
                     );
                   })
                 ) : (
-                  <div className="text-center py-8 text-slate-500 text-xs">
+                  <div className="text-center py-8 text-tertiary text-xs">
                     No matching FAQ articles found.
                   </div>
                 )}

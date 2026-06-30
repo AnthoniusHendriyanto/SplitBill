@@ -38,7 +38,7 @@ function ConfirmDialog({ open, title, message, confirmLabel = 'Confirm', cancelL
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
-            className="relative bg-card border border-slate-800 rounded-2xl p-6 shadow-2xl max-w-sm w-full mx-4"
+            className="relative bg-card border border-strong rounded-2xl p-6 shadow-2xl max-w-sm w-full mx-4"
           >
             <div className="flex items-center gap-3 mb-3">
               <div className={cn(
@@ -49,11 +49,11 @@ function ConfirmDialog({ open, title, message, confirmLabel = 'Confirm', cancelL
               </div>
               <h2 id="confirm-dialog-title" className="text-sm font-bold text-white">{title}</h2>
             </div>
-            <p className="text-xs text-slate-400 font-medium leading-relaxed mb-6">{message}</p>
+            <p className="text-xs text-secondary font-medium leading-relaxed mb-6">{message}</p>
             <div className="flex gap-3 justify-end">
               <button
                 onClick={onCancel}
-                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-slate-300 font-bold text-xs rounded-xl transition-all border-none outline-none cursor-pointer"
+                className="px-4 py-2 bg-surface-elevated hover:bg-surface-raised text-primary font-bold text-xs rounded-xl transition-all border-none outline-none cursor-pointer"
               >
                 {cancelLabel}
               </button>

@@ -43,24 +43,24 @@ function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-4 font-inter antialiased">
+    <div className="min-h-screen bg-slate-50 dark:bg-surface-base flex items-center justify-center p-4 font-inter antialiased">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className="w-full max-w-md"
       >
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-8 shadow-xl surface-molded">
+        <div className="bg-white dark:bg-surface-elevated border border-slate-200 dark:border-strong rounded-2xl p-8 shadow-xl surface-molded">
           <div className="text-center mb-8">
-            <div className="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-500/20 mx-auto mb-4">
+            <div className="w-12 h-12 bg-gradient-to-br from-indigo-600 to-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-500/20 mx-auto mb-4">
               <Icon name="payments" className="text-2xl" />
             </div>
-            <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Welcome back</h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 font-medium">Sign in to your SplitMate account</p>
+            <h1 className="text-2xl font-black text-primary tracking-tight">Welcome back</h1>
+            <p className="text-sm text-tertiary dark:text-secondary mt-1 font-medium">Sign in to your SplitMate account</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="relative group">
-              <label htmlFor="login-email" className="absolute -top-2 left-3 px-1 bg-white dark:bg-slate-900 text-[10px] font-bold text-indigo-600 uppercase tracking-wider z-10">
+              <label htmlFor="login-email" className="absolute -top-2 left-3 px-1 bg-white dark:bg-surface-elevated text-[10px] font-bold text-indigo-500 uppercase tracking-wider z-10">
                 Email
               </label>
               <input
@@ -69,14 +69,14 @@ function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="w-full px-4 py-4 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium text-sm outline-none dark:text-white"
+                className="w-full px-4 py-4 bg-slate-50 dark:bg-surface-raised/50 border border-slate-200 dark:border-strong rounded-xl focus:ring-2 ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium text-sm outline-none dark:text-white"
                 placeholder="you@example.com"
                 autoComplete="email"
               />
             </div>
 
             <div className="relative group">
-              <label htmlFor="login-password" className="absolute -top-2 left-3 px-1 bg-white dark:bg-slate-900 text-[10px] font-bold text-indigo-600 uppercase tracking-wider z-10">
+              <label htmlFor="login-password" className="absolute -top-2 left-3 px-1 bg-white dark:bg-surface-elevated text-[10px] font-bold text-indigo-500 uppercase tracking-wider z-10">
                 Password
               </label>
               <input
@@ -86,7 +86,7 @@ function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 minLength={8}
-                className="w-full px-4 py-4 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium text-sm outline-none dark:text-white"
+                className="w-full px-4 py-4 bg-slate-50 dark:bg-surface-raised/50 border border-slate-200 dark:border-strong rounded-xl focus:ring-2 ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium text-sm outline-none dark:text-white"
                 placeholder="Min. 8 characters"
                 autoComplete="current-password"
               />
@@ -108,7 +108,7 @@ function LoginPage() {
               whileTap={isLoggingIn ? {} : { scale: 0.99 }}
               type="submit"
               disabled={isLoggingIn}
-              className="w-full py-4 bg-indigo-600 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white rounded-xl font-bold text-sm shadow-lg shadow-indigo-500/20 hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-indigo-500"
+              className="w-full py-4 bg-gradient-to-r from-indigo-500 to-indigo-600 disabled:from-slate-300 disabled:to-slate-300 dark:disabled:from-slate-700 dark:disabled:to-slate-700 text-white rounded-xl font-bold text-sm shadow-lg shadow-indigo-500/20 hover:from-indigo-700 hover:to-indigo-700 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-indigo-500"
             >
               {isLoggingIn ? (
                 <>
@@ -128,7 +128,7 @@ function LoginPage() {
           </form>
 
           <div className="mt-6 text-center">
-            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+            <p className="text-xs text-tertiary dark:text-secondary font-medium">
               Don&apos;t have an account?{' '}
               <Link to="/register" className="text-indigo-600 dark:text-indigo-400 hover:underline font-bold">
                 Create one
@@ -136,10 +136,10 @@ function LoginPage() {
             </p>
           </div>
 
-          <div className="mt-8 pt-6 border-t border-slate-100 dark:border-slate-800">
+          <div className="mt-8 pt-6 border-t border dark:border-strong">
             <button
               onClick={handleGuest}
-              className="w-full flex items-center justify-center gap-2 text-xs text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors font-medium cursor-pointer"
+              className="w-full flex items-center justify-center gap-2 text-xs text-secondary hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors font-medium cursor-pointer"
             >
               <Icon name="person_off" className="text-sm" />
               Continue as guest

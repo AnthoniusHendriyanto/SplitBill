@@ -40,7 +40,7 @@ function MobileDrawer({ open, onClose, onHelpOpen }) {
             animate={{ x: 0 }}
             exit={{ x: '-100%' }}
             transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-            className="fixed left-0 top-0 bottom-0 w-[280px] bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-gray-800 flex flex-col py-6 z-50 shadow-2xl"
+            className="fixed left-0 top-0 bottom-0 w-[280px] bg-white dark:bg-surface-elevated border-r border-gray-200 dark:border-gray-800 flex flex-col py-6 z-50 shadow-2xl"
           >
             <div className="px-6 mb-8">
               <div className="flex items-center justify-between">
@@ -50,15 +50,15 @@ function MobileDrawer({ open, onClose, onHelpOpen }) {
                   </div>
                   <div className="flex flex-col">
                     <span className="text-lg font-bold tracking-tight text-indigo-600 dark:text-indigo-400">SplitMate</span>
-                    <span className="text-[9px] text-slate-500 uppercase tracking-widest">Financial Ledger</span>
+                    <span className="text-[9px] text-tertiary uppercase tracking-widest">Financial Ledger</span>
                   </div>
                 </Link>
                 <button
                   onClick={onClose}
-                  className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer outline-none"
+                  className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-surface-raised transition-colors cursor-pointer outline-none"
                   aria-label="Close menu"
                 >
-                  <Icon name="close" className="text-xl text-slate-500" />
+                  <Icon name="close" className="text-xl text-tertiary" />
                 </button>
               </div>
             </div>
@@ -66,23 +66,23 @@ function MobileDrawer({ open, onClose, onHelpOpen }) {
             {/* User info */}
             {isAuthenticated && user && (
               <div className="px-3 mb-4">
-                <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-slate-100 dark:bg-slate-800">
+                <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-slate-100 dark:bg-surface-raised">
                   <div className="w-9 h-9 rounded-full bg-indigo-600 flex items-center justify-center text-white text-sm font-bold">
                     {user.name?.charAt(0)?.toUpperCase() || 'U'}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{user.name || 'User'}</p>
-                    <p className="text-[10px] text-slate-500 uppercase tracking-wider">{user.tier || 'free'}</p>
+                    <p className="text-sm font-bold text-primary truncate">{user.name || 'User'}</p>
+                    <p className="text-[10px] text-tertiary uppercase tracking-wider">{user.tier || 'free'}</p>
                   </div>
                 </div>
               </div>
             )}
 
             <nav className="flex-1 px-3 space-y-1">
-              <p className="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Quick Actions</p>
+              <p className="px-4 py-2 text-[10px] font-bold text-secondary uppercase tracking-widest">Quick Actions</p>
               <button
                 onClick={() => { onClose(); onHelpOpen(); }}
-                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all cursor-pointer outline-none text-sm font-medium"
+                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-tertiary dark:text-secondary hover:bg-slate-50 dark:hover:bg-surface-raised transition-all cursor-pointer outline-none text-sm font-medium"
               >
                 <Icon name="help" className="text-lg" />
                 Help Center
@@ -90,7 +90,7 @@ function MobileDrawer({ open, onClose, onHelpOpen }) {
               {isAuthenticated ? (
                 <button
                   onClick={() => { logout(); onClose(); }}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-slate-500 hover:text-red-600 dark:hover:text-red-500 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-red-500 text-sm font-medium"
+                  className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-tertiary hover:text-red-600 dark:hover:text-red-500 hover:bg-slate-50 dark:hover:bg-surface-raised transition-all cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-red-500 text-sm font-medium"
                 >
                   <Icon name="logout" className="text-lg" />
                   Logout
@@ -108,11 +108,11 @@ function MobileDrawer({ open, onClose, onHelpOpen }) {
             </nav>
 
             <div className="mt-auto border-t border-gray-200 dark:border-gray-800 pt-4 px-3 space-y-4">
-              <p className="px-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Appearance</p>
+              <p className="px-4 text-[10px] font-bold text-secondary uppercase tracking-widest">Appearance</p>
               <div className="flex items-center justify-between px-4">
                 <div className="flex items-center gap-3">
-                  <Icon name={settings.darkMode ? "dark_mode" : "light_mode"} className="text-lg text-slate-500" />
-                  <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Dark Mode</span>
+                  <Icon name={settings.darkMode ? "dark_mode" : "light_mode"} className="text-lg text-tertiary" />
+                  <span className="text-sm font-medium text-tertiary dark:text-primary">Dark Mode</span>
                 </div>
                 <div role="switch" tabIndex={0} aria-checked={settings.darkMode}
                   onKeyDown={(e) => {

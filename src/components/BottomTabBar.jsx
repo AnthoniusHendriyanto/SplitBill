@@ -20,7 +20,7 @@ function BottomTabBar() {
   const setStep = (newStep) => updateUI({ step: typeof newStep === 'function' ? newStep(step) : newStep });
 
   return (
-    <nav aria-label="Bottom navigation" className="fixed bottom-0 left-0 right-0 h-16 bg-white dark:bg-slate-900 border-t border-gray-200 dark:border-gray-800 flex items-center justify-around z-50 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
+    <nav aria-label="Bottom navigation" className="fixed bottom-0 left-0 right-0 h-16 bg-white dark:bg-surface-elevated border-t border-gray-200 dark:border-gray-800 flex items-center justify-around z-50 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
       {TABS.map((tab) => {
         const isActive = activeTab === tab.id;
         return (
@@ -34,7 +34,7 @@ function BottomTabBar() {
             aria-label={tab.label}
             className={cn(
               "flex flex-col items-center justify-center gap-0.5 py-1 px-4 rounded-xl transition-all relative cursor-pointer outline-none",
-              isActive ? "text-indigo-600 dark:text-indigo-400" : "text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
+              isActive ? "text-indigo-600 dark:text-indigo-400" : "text-secondary dark:text-tertiary hover:text-tertiary dark:hover:text-primary"
             )}
           >
             {isActive && (

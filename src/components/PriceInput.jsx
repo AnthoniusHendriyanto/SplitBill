@@ -23,12 +23,12 @@ const PriceInput = memo(({
   if (variant === "ghost") {
     return (
       <div className={cn("flex items-center justify-end gap-2 group-focus-within:text-indigo-600 transition-colors", className)}>
-        <span className="text-xs font-black text-slate-400">Rp</span>
+        <span className="text-xs font-black text-secondary">Rp</span>
         <input 
           type="text"
           value={formatIDR(value === 0 ? '' : value)}
           onChange={handleInputChange}
-          className="w-32 bg-transparent border-none focus:ring-0 text-right font-black text-slate-900 dark:text-white p-0 text-xl outline-none"
+          className="w-32 bg-transparent border-none focus:ring-0 text-right font-black text-primary p-0 text-xl outline-none"
           placeholder={placeholder}
         />
       </div>
@@ -37,13 +37,13 @@ const PriceInput = memo(({
 
   return (
     <div className={cn("relative flex items-center", className)}>
-      <span className="absolute left-3 text-slate-400 font-bold text-xs">Rp</span>
+      <span className="absolute left-3 text-secondary font-bold text-xs">Rp</span>
       <input
         type="text"
         value={formatIDR(value)}
         onChange={handleInputChange}
         placeholder={placeholder}
-        className="w-full pl-9 pr-4 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-bold text-slate-900 dark:text-white outline-none ring-indigo-500/20 focus:ring-2 transition-all"
+        className="w-full pl-9 pr-4 py-2 bg-slate-50 dark:bg-surface-base border border-slate-200 dark:border-strong rounded-xl text-sm font-bold text-primary outline-none ring-indigo-500/20 focus:ring-2 transition-all"
       />
     </div>
   );

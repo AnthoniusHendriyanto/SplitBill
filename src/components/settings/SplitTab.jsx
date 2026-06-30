@@ -10,9 +10,9 @@ export default function SplitTab({ settings, updateSettings }) {
           <Icon name="call_split" className="text-indigo-400 text-base" />
           Split Preferences
         </h3>
-        <p className="text-[10px] text-slate-500 font-semibold">Establish calculation rules for tax, auto-save drafts, and default strategies.</p>
+        <p className="text-[10px] text-tertiary font-semibold">Establish calculation rules for tax, auto-save drafts, and default strategies.</p>
       </div>
-      <div className="space-y-4 p-4 bg-slate-950/30 border border-slate-950 rounded-xl font-semibold text-xs divide-y divide-slate-950">
+      <div className="space-y-4 p-4 bg-surface-base/30 border border rounded-xl font-semibold text-xs divide-y divide-border">
         {[
           { label: 'Default Split Strategy', desc: 'Default strategy loaded at the start of step 4.', value: settings.defaultSplitMode || 'equal', key: 'defaultSplitMode', options: [
             { v: 'equal', l: 'Equal Split' }, { v: 'item', l: 'Itemized Checklist Grid' }, { v: 'percent', l: 'Percentage Sliders' }, { v: 'custom', l: 'Custom Amounts' },
@@ -27,10 +27,10 @@ export default function SplitTab({ settings, updateSettings }) {
           <div key={s.key} className="flex items-center justify-between py-4 first:pb-4 first:pt-0 last:pt-4">
             <div>
               <p className="font-bold text-white">{s.label}</p>
-              <p className="text-[10px] text-slate-500">{s.desc}</p>
+              <p className="text-[10px] text-tertiary">{s.desc}</p>
             </div>
             <select value={s.value} onChange={(e) => updateSettings({ [s.key]: e.target.value })}
-              className="bg-slate-950 border border-slate-900 rounded-lg px-3 py-1.5 text-xs font-bold outline-none cursor-pointer text-slate-200"
+              className="bg-surface-base border border rounded-lg px-3 py-1.5 text-xs font-bold outline-none cursor-pointer text-primary"
             >
               {s.options.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
             </select>
@@ -39,7 +39,7 @@ export default function SplitTab({ settings, updateSettings }) {
         <div className="flex items-center justify-between pt-4">
           <div>
             <p className="font-bold text-white">AI OCR Auto-Scan</p>
-            <p className="text-[10px] text-slate-500">Instantly trigger AI scanner on uploading image receipts.</p>
+            <p className="text-[10px] text-tertiary">Instantly trigger AI scanner on uploading image receipts.</p>
           </div>
           <div role="switch" tabIndex={0} aria-checked={settings.autoScan}
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); updateSettings({ autoScan: !settings.autoScan }); } }}

@@ -40,7 +40,7 @@ function StepHeader({ currentStep, setStep, nextLabel, onNext, onBack, showActio
   return (
     <div className="flex flex-col gap-6 mb-8">
       {/* Premium Wizard Timeline Stepper */}
-      <div className="w-full bg-card border border-slate-900 rounded-2xl p-5 relative overflow-hidden">
+      <div className="w-full bg-card border border rounded-2xl p-5 relative overflow-hidden">
         <div className="flex items-center justify-between relative z-10 w-full overflow-x-auto hide-scrollbar py-2">
           {steps.map((s, i) => {
             const { unlocked, reason } = getStepAccess(i, bill, isScanning);
@@ -66,7 +66,7 @@ function StepHeader({ currentStep, setStep, nextLabel, onNext, onBack, showActio
                         ? "bg-indigo-600 border-indigo-500 text-white shadow-[0_0_10px_rgba(99,102,241,0.5)]" 
                         : isPast 
                           ? "bg-indigo-950/40 border-indigo-900/60 text-indigo-400" 
-                          : "bg-slate-950/40 border-slate-900 text-slate-500"
+                          : "bg-surface-base/40 border text-tertiary"
                     )}>
                       {isPast ? (
                         <Icon name="check" className="text-xs font-black" />
@@ -79,7 +79,7 @@ function StepHeader({ currentStep, setStep, nextLabel, onNext, onBack, showActio
                     {/* Step Name */}
                     <span className={cn(
                       "text-[9px] font-bold uppercase tracking-widest leading-none",
-                      isCurrent ? "text-white" : isPast ? "text-indigo-400" : "text-slate-500"
+                      isCurrent ? "text-white" : isPast ? "text-indigo-400" : "text-tertiary"
                     )}>
                       {s}
                     </span>
@@ -87,7 +87,7 @@ function StepHeader({ currentStep, setStep, nextLabel, onNext, onBack, showActio
                   
                   {/* Tooltip for locked nodes */}
                   {!unlocked && (
-                    <span className="absolute left-0 -top-8 z-50 hidden group-hover:block bg-slate-950 text-slate-200 text-[8px] font-bold px-2 py-1 rounded border border-slate-800 whitespace-nowrap shadow-xl">
+                    <span className="absolute left-0 -top-8 z-50 hidden group-hover:block bg-surface-base text-primary text-[8px] font-bold px-2 py-1 rounded border border-strong whitespace-nowrap shadow-xl">
                       Locked: {reason}
                     </span>
                   )}
@@ -95,7 +95,7 @@ function StepHeader({ currentStep, setStep, nextLabel, onNext, onBack, showActio
                 
                 {/* Connecting Line */}
                 {i < steps.length - 1 && (
-                  <div className="flex-1 mx-4 h-[2px] bg-slate-900 relative min-w-[20px]">
+                  <div className="flex-1 mx-4 h-[2px] bg-surface-elevated relative min-w-[20px]">
                     <div className={cn(
                       "absolute left-0 top-0 h-full transition-all duration-300",
                       isPast ? "w-full bg-indigo-500" : "w-0 bg-transparent"
@@ -115,7 +115,7 @@ function StepHeader({ currentStep, setStep, nextLabel, onNext, onBack, showActio
             <span className="w-1.5 h-6 bg-indigo-500 rounded-full inline-block"></span>
             {stepTitles[currentStep - 1] ?? 'Bill'}
           </h2>
-          <p className="text-slate-500 mt-1.5 text-xs md:text-sm font-medium">
+          <p className="text-tertiary mt-1.5 text-xs md:text-sm font-medium">
             {stepSubtitles[currentStep - 1] ?? ''}
           </p>
         </div>
@@ -126,10 +126,10 @@ function StepHeader({ currentStep, setStep, nextLabel, onNext, onBack, showActio
               onClick={onBack}
               disabled={currentStep === 1}
               className={cn(
-                "px-5 py-2.5 rounded-xl border border-slate-900 font-extrabold text-xs transition-all flex items-center justify-center gap-1.5 outline-none cursor-pointer",
+                "px-5 py-2.5 rounded-xl border border font-extrabold text-xs transition-all flex items-center justify-center gap-1.5 outline-none cursor-pointer",
                 currentStep === 1 
-                  ? "opacity-35 cursor-not-allowed text-slate-600" 
-                  : "bg-slate-950/40 text-slate-300 hover:bg-slate-900 hover:border-slate-800"
+                  ? "opacity-35 cursor-not-allowed text-tertiary" 
+                  : "bg-surface-base/40 text-primary hover:bg-surface-elevated hover:border-strong"
               )}
             >
               Back
@@ -140,7 +140,7 @@ function StepHeader({ currentStep, setStep, nextLabel, onNext, onBack, showActio
               className={cn(
                 "px-6 py-2.5 rounded-xl font-extrabold text-xs transition-all flex items-center justify-center gap-2 outline-none border-none",
                 nextDisabled 
-                  ? "bg-slate-900 text-slate-600 cursor-not-allowed shadow-none" 
+                  ? "bg-surface-elevated text-tertiary cursor-not-allowed shadow-none" 
                   : "bg-indigo-600 text-white shadow-lg shadow-indigo-600/20 hover:bg-indigo-500 cursor-pointer"
               )}
             >

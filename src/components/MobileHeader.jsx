@@ -7,13 +7,13 @@ function MobileHeader({ onHelpOpen }) {
 
   return (
     <>
-      <header className="h-14 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 flex items-center justify-between px-4 z-40 font-inter text-sm">
+      <header className="h-14 bg-white/80 dark:bg-surface-base/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 flex items-center justify-between px-4 z-40 font-inter text-sm">
         <button
           onClick={() => setDrawerOpen(true)}
-          className="p-2 -ml-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer outline-none"
+          className="p-2 -ml-2 rounded-lg hover:bg-slate-100 dark:hover:bg-surface-raised transition-colors cursor-pointer outline-none"
           aria-label="Open menu"
         >
-          <Icon name="menu" className="text-2xl text-slate-700 dark:text-slate-300" />
+          <Icon name="menu" className="text-2xl text-tertiary dark:text-primary" />
         </button>
 
         <div className="flex items-center gap-2">
@@ -24,10 +24,10 @@ function MobileHeader({ onHelpOpen }) {
         </div>
 
         <button
-          className="p-2 -mr-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer outline-none"
+          className="p-2 -mr-2 rounded-lg hover:bg-slate-100 dark:hover:bg-surface-raised transition-colors cursor-pointer outline-none"
           aria-label="Notifications"
         >
-          <Icon name="notifications" className="text-2xl text-slate-600 dark:text-slate-400" />
+          <Icon name="notifications" className="text-2xl text-tertiary dark:text-secondary" />
         </button>
       </header>
 
