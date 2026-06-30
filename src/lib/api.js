@@ -11,21 +11,17 @@ async function refreshAccessToken() {
   if (refreshPromise) return refreshPromise;
 
   refreshPromise = (async () => {
-    const refreshToken = useAuthStore.getState().refreshToken;
-    if (!refreshToken) return false;
-
     try {
       const res = await fetch(`${authBase}/refresh`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refresh_token: refreshToken }),
+        credentials: 'include',
       });
 
       if (!res.ok) return false;
 
       const body = await res.json();
       const data = body.data || body;
-      useAuthStore.getState().setTokens(data.access_token, data.refresh_token);
+      useAuthStore.getState().setTokens(data.access_token);
       return true;
     } catch {
       return false;
@@ -60,6 +56,7 @@ async function request(path, options = {}) {
       ...options,
       headers,
       signal,
+      credentials: 'include',
     });
     clearTimeout(timeoutId);
 
@@ -71,11 +68,15 @@ async function request(path, options = {}) {
       const refreshed = await refreshAccessToken();
       if (refreshed) {
         const newToken = useAuthStore.getState().accessToken;
+        const retryController = new AbortController();
+        const retryTimeout = setTimeout(() => retryController.abort(), 30000);
         const retryRes = await fetch(`${API.base}${path}`, {
           ...options,
           headers: { ...headers, Authorization: `Bearer ${newToken}` },
-          signal,
+          signal: retryController.signal,
+          credentials: 'include',
         });
+        clearTimeout(retryTimeout);
         if (retryRes.status === 204) return null;
         const retryBody = await retryRes.json().catch(() => ({}));
         if (retryBody.success) return retryBody.data;
@@ -119,12 +120,11 @@ export const api = {
       body: JSON.stringify({ name, email, password }),
     }),
 
-  logout: async (refreshToken) => {
+  logout: async () => {
     try {
       await fetch(`${authBase}/logout`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refresh_token: refreshToken }),
+        credentials: 'include',
       });
     } catch {
       // Ignore logout errors
@@ -145,6 +145,17 @@ export const api = {
     request('/api/v1/bills', {
       method: 'POST',
       body: JSON.stringify(billData),
+    }),
+
+  updateBillStatus: (id, status) =>
+    request(`/api/v1/bills/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    }),
+
+  markPersonPaid: (billId, personId) =>
+    request(`/api/v1/bills/${billId}/payments/${personId}`, {
+      method: 'PATCH',
     }),
 
   deleteBill: (id) =>
@@ -181,6 +192,18 @@ export const api = {
     method: 'PUT',
     body: JSON.stringify(data),
   }),
+
+  // Contacts
+  getContacts: () => request('/api/v1/contacts'),
+
+  createContact: (name) =>
+    request('/api/v1/contacts', {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    }),
+
+  deleteContact: (id) =>
+    request(`/api/v1/contacts/${id}`, { method: 'DELETE' }),
 
   // Usage
   getUsage: () => request('/api/v1/usage'),

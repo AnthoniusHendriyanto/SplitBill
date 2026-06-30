@@ -4,13 +4,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import useBillStore from '../store/useBillStore';
 import useAuthStore from '../store/useAuthStore';
 import Icon from './Icon';
-import { cn } from '../utils/cn';
+import ToggleSwitch from './ToggleSwitch';
 
 function MobileDrawer({ open, onClose, onHelpOpen }) {
   const settings = useBillStore((s) => s.settings);
   const updateSettings = useBillStore((s) => s.updateSettings);
   const user = useAuthStore((s) => s.user);
-  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const isAuthenticated = useAuthStore((s) => !!s.accessToken);
   const logout = useAuthStore((s) => s.logout);
 
   useEffect(() => {
@@ -114,32 +114,7 @@ function MobileDrawer({ open, onClose, onHelpOpen }) {
                   <Icon name={settings.darkMode ? "dark_mode" : "light_mode"} className="text-lg text-tertiary" />
                   <span className="text-sm font-medium text-tertiary dark:text-primary">Dark Mode</span>
                 </div>
-                <div role="switch" tabIndex={0} aria-checked={settings.darkMode}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      const newMode = !settings.darkMode;
-                      updateSettings({ darkMode: newMode });
-                      document.documentElement.classList.toggle('dark', newMode);
-                    }
-                  }}
-                  onClick={() => {
-                    const newMode = !settings.darkMode;
-                    updateSettings({ darkMode: newMode });
-                    document.documentElement.classList.toggle('dark', newMode);
-                  }}
-                  className={cn(
-                    "w-11 h-5 rounded-full relative cursor-pointer transition-colors duration-300",
-                    settings.darkMode ? "bg-indigo-600" : "bg-slate-300 dark:bg-slate-700"
-                  )}
-                >
-                  <motion.div
-                    layout
-                    animate={{ x: settings.darkMode ? 24 : 2 }}
-                    transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                    className="absolute top-0.5 w-4 h-4 bg-white rounded-full shadow-sm"
-                  />
-                </div>
+                <ToggleSwitch isOn={settings.darkMode} onChange={() => updateSettings({ darkMode: !settings.darkMode })} />
               </div>
             </div>
           </motion.aside>

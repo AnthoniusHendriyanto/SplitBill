@@ -1,54 +1,53 @@
 import { memo, useState } from 'react';
-import { motion } from 'framer-motion';
-import Icon from '../Icon';
 import ConfirmDialog from '../ConfirmDialog';
 
 function DangerTab({ setSessions, setSaveFeedback, logout, navigate }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+    <div className="space-y-8 animate-fade-in">
       <div>
-        <h3 className="text-sm font-black uppercase text-red-500 tracking-widest flex items-center gap-2 mb-1">
-          <Icon name="warning_amber" className="text-red-500 text-base" />
-          Danger Zone
-        </h3>
-        <p className="text-[10px] text-red-950/80 font-bold uppercase tracking-wider">High risk security credentials. Handle with absolute caution.</p>
+        <h3 className="text-lg font-bold text-[--text-primary] mb-1">Danger Zone</h3>
+        <p className="text-sm text-tertiary mb-6">Destructive actions that cannot be undone.</p>
       </div>
-      <div className="p-6 bg-red-950/10 border border-red-900/30 rounded-2xl space-y-6 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-red-500/5 rounded-full blur-3xl" />
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-6 border-b border-red-900/10">
-          <div>
-            <h4 className="text-xs font-bold text-white">Revoke All Other Sessions</h4>
-            <p className="text-[10px] text-tertiary font-medium">Instantly log out from all devices, browsers, and mobile platforms except this session.</p>
+
+      <div className="rounded-2xl overflow-hidden" style={{ boxShadow: '0 0 0 1px rgba(239,68,68,0.15)', background: 'rgba(239,68,68,0.04)' }}>
+        <div className="p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-[--text-primary]">Revoke All Sessions</p>
+              <p className="text-xs text-tertiary mt-0.5">Sign out from all devices except this one.</p>
+            </div>
+            <button onClick={() => { setSessions(prev => prev.filter(s => s.active)); setSaveFeedback('Sessions revoked.'); }}
+              className="px-4 py-2 rounded-xl text-xs font-medium text-[--text-primary] transition-all cursor-pointer border-none outline-none"
+              style={{ background: 'rgba(255,255,255,0.06)' }}>
+              Revoke
+            </button>
           </div>
-          <button onClick={() => { setSessions(prev => prev.filter(s => s.active)); setSaveFeedback('Other device sessions revoked.'); setTimeout(() => setSaveFeedback(null), 3000); }}
-            className="w-full sm:w-auto px-4 py-2.5 bg-surface-base hover:bg-surface-elevated border border hover:border-strong text-primary font-extrabold text-[10px] uppercase tracking-wider rounded-xl transition-all cursor-pointer outline-none"
-          >
-            Revoke Sessions
-          </button>
-        </div>
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pt-2">
-          <div>
-            <h4 className="text-xs font-bold text-red-400">Permanently Delete Account</h4>
-            <p className="text-[10px] text-tertiary font-medium">Wipe your profile information, payment configuration, scan statistics, and split history forever.</p>
+          <div style={{ borderTop: '1px solid rgba(239,68,68,0.1)' }} />
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-[--text-primary]">Delete Account</p>
+              <p className="text-xs text-tertiary mt-0.5">Permanently remove your account and all data.</p>
+            </div>
+            <button onClick={() => setShowDeleteConfirm(true)}
+              className="px-4 py-2 rounded-xl text-xs font-medium transition-all cursor-pointer border-none outline-none"
+              style={{ color: 'var(--semantic-error)', background: 'rgba(239,68,68,0.08)' }}>
+              Delete
+            </button>
           </div>
-          <button onClick={() => setShowDeleteConfirm(true)}
-            className="w-full sm:w-auto px-5 py-2.5 bg-red-950/30 hover:bg-red-900/40 text-red-400 border border-red-900/40 font-extrabold text-[10px] uppercase tracking-wider rounded-xl transition-all cursor-pointer outline-none"
-          >
-            Delete Account
-          </button>
         </div>
       </div>
+
       <ConfirmDialog
         open={showDeleteConfirm}
         title="Delete Account"
-        message="CAUTION: Are you absolutely sure you want to permanently delete your SplitMate account? This action is irreversible."
+        message="Are you sure you want to permanently delete your account? This action is irreversible."
         confirmLabel="Delete Account"
         variant="danger"
         onConfirm={() => { logout(); navigate('/auth'); }}
         onCancel={() => setShowDeleteConfirm(false)}
       />
-    </motion.div>
+    </div>
   );
 }
 

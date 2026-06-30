@@ -10,6 +10,7 @@ const useBillStore = create(
       bill: {
         id: createId(),
         title: '',
+        merchant: '',
         imageUrl: '',
         items: [],
         persons: [],
@@ -19,9 +20,11 @@ const useBillStore = create(
         serviceMode: 'percent',
         payerId: null,
         splitType: 'equal',
+        discount: 0,
         ocrConfidence: 0,
         ocrSubtotal: 0,
         ocrGrandTotal: 0,
+        date: new Date().toISOString().slice(0, 10),
       },
       
       updateBill: (data) => set((state) => ({ 
@@ -71,7 +74,7 @@ const useBillStore = create(
       addItem: () => set((state) => ({
         bill: {
           ...state.bill,
-          items: [...state.bill.items, { id: createId(), name: '', price: 0 }]
+          items: [...state.bill.items, { id: createId(), name: '', price: 0, quantity: 1 }]
         }
       })),
 
@@ -93,6 +96,7 @@ const useBillStore = create(
         bill: {
           id: createId(),
           title: '',
+          merchant: '',
           imageUrl: '',
           items: [],
           persons: [],
@@ -100,8 +104,11 @@ const useBillStore = create(
           taxMode: 'percent',
           serviceCharge: 5,
           serviceMode: 'percent',
+        discount: 0,
+        discountMode: 'amount',
           payerId: null,
           splitType: 'equal',
+          date: new Date().toISOString().slice(0, 10),
         },
         assignments: {},
       }),
@@ -113,32 +120,33 @@ const useBillStore = create(
       isSaving: false,
 
       fetchCompletedBills: async () => {
-        const isAuth = useAuthStore.getState().isAuthenticated;
+        const isAuth = !!useAuthStore.getState().accessToken;
         if (!isAuth) return;
         set({ isLoadingBills: true, billsError: null });
         try {
           const res = await api.getBills();
-          if (res && res.data) {
-            const mapped = res.data.map(bill => ({
+          set({
+            completedBills: (res && res.data ? res.data.map(bill => ({
               id: bill.id,
               title: bill.title,
+              merchant: bill.merchant || '',
               completedAt: bill.created_at,
               grandTotal: bill.grand_total,
+              user_share: bill.user_share || 0,
+              receivable: bill.receivable || 0,
+              payable: bill.payable || 0,
               personCount: bill.person_count,
+              status: bill.status || 'pending',
+              discount: bill.discount || 0,
+              payerName: bill.payer_name || '',
               totals: [],
               items: [],
               persons: [],
               assignments: {},
               serverData: bill,
-            }));
-            set((state) => ({
-              completedBills: mapped.map(serverBill => {
-                const local = state.completedBills.find(b => b.id === serverBill.id);
-                return local ? { ...local, serverData: serverBill.serverData } : serverBill;
-              })
-            }));
-          }
-          set({ isLoadingBills: false });
+            })) : []),
+            isLoadingBills: false,
+          });
         } catch (err) {
           console.error('Failed to fetch bills from server:', err);
           set({ isLoadingBills: false, billsError: err.message || 'Failed to load bills' });
@@ -147,18 +155,21 @@ const useBillStore = create(
 
       completeBill: async (customStatus = null) => {
         const state = get();
-        if (state.isSaving) return; // Prevent double-save
+        if (state.isSaving) throw new Error('Save already in progress');
         set({ isSaving: true });
 
-        const totals = state.calculateTotals();
-        const grandTotal = totals.reduce((sum, p) => sum + p.total, 0);
-        const isAuth = useAuthStore.getState().isAuthenticated;
+        const isAuth = !!useAuthStore.getState().accessToken;
 
-        // Prepare bill data for API
         const billData = {
           title: state.bill.title || 'Untitled Bill',
-          items: state.bill.items.map(item => ({ name: item.name, price: item.price })),
-          persons: state.bill.persons.map(p => ({ name: p.name })),
+          merchant: state.bill.merchant || '',
+          items: state.bill.items.map(item => ({ id: item.id, name: item.name, price: item.unitPrice ?? item.price, quantity: item.qty ?? item.quantity ?? 1 })),
+          persons: state.bill.persons.map(p => ({
+            id: p.id,
+            name: p.name,
+            payment_info: p.paymentInfo || {},
+            is_payer: p.id === state.bill.payerId,
+          })),
           split_type: state.bill.splitType || 'custom',
           assignments: Object.entries(state.assignments).flatMap(([personId, items]) =>
             Object.entries(items)
@@ -166,135 +177,76 @@ const useBillStore = create(
               .map(([itemId]) => ({ person_id: personId, item_id: itemId }))
           ),
           service_charge: state.bill.serviceCharge || 0,
+          service_mode: state.bill.serviceMode || 'percent',
           tax: state.bill.tax || 0,
+          tax_mode: state.bill.taxMode || 'percent',
+          discount: state.bill.discount || 0,
+          bill_date: state.bill.date || new Date().toISOString().slice(0, 10),
+          status: customStatus || (state.bill.persons.every(p => (p.id === (state.bill.payerId || state.bill.persons[0]?.id)) || false) ? 'completed' : 'pending'),
         };
 
-        let serverBill = null;
-
-        // Try to save to backend if authenticated
-        if (isAuth) {
-          try {
-            serverBill = await api.createBill(billData);
-          } catch (err) {
-            console.error('Failed to save bill to server:', err);
-            // Continue with local save
-          }
+        if (!isAuth) {
+          set({ isSaving: false });
+          throw new Error('Must be logged in to save bills');
         }
 
-        // Always save locally
-        const effectivePayerId = state.bill.payerId || state.bill.persons[0]?.id || null;
-        set((state) => {
-          const mappedPersons = state.bill.persons.map(p => {
-            const pTotal = totals.find(t => t.id === p.id)?.total || 0;
-            return {
-              ...p,
-              paid: (p.id === effectivePayerId || pTotal === 0) ? true : false,
-              paymentInfo: p.paymentInfo ? { ...p.paymentInfo } : undefined
-            };
+        try {
+          await api.createBill(billData);
+        } catch (err) {
+          set({ isSaving: false });
+          throw err;
+        }
+        try {
+          await get().fetchCompletedBills();
+        } catch (err) {
+          console.error('Bill saved but failed to refresh list:', err);
+        }
+        set({ isSaving: false });
+      },
+
+      loadBillDraft: async (id) => {
+        try {
+          const data = await api.getBill(id);
+          const billData = data.bill || data;
+          const persons = billData.persons || [];
+          const payer = persons.find(p => p.is_payer);
+
+          set({
+            bill: {
+              id: billData.id,
+              title: billData.title || '',
+              merchant: billData.merchant || '',
+              imageUrl: '',
+              items: (billData.items || []).map(item => ({ id: item.id, name: item.name, price: item.price, qty: item.quantity || 1, quantity: item.quantity || 1 })),
+              persons: persons.map(p => ({
+                id: p.id,
+                name: p.name,
+                paymentInfo: p.payment_info || { bank: '', accountNumber: '', qrisData: '' },
+              })),
+              tax: billData.tax || 0,
+              taxMode: billData.tax_mode || 'percent',
+              serviceCharge: billData.service_charge || 0,
+              serviceMode: billData.service_mode || 'percent',
+              discount: billData.discount || 0,
+              date: billData.bill_date || new Date().toISOString().slice(0, 10),
+              payerId: payer?.id || null,
+              splitType: 'equal',
+            },
+            assignments: {},
           });
-
-          const isAllPaid = mappedPersons.every(p => p.paid);
-          const finalStatus = customStatus || (isAllPaid ? 'completed' : 'pending');
-
-          return {
-            isSaving: false,
-            completedBills: [
-              {
-                id: serverBill?.id || state.bill.id || createId(),
-                title: state.bill.title || 'Untitled Bill',
-                completedAt: new Date().toISOString(),
-                imageUrl: state.bill.imageUrl || '',
-                items: state.bill.items.map(item => ({ ...item })),
-                persons: mappedPersons,
-                assignments: structuredClone(state.assignments),
-                payerId: state.bill.payerId,
-                serviceCharge: state.bill.serviceCharge,
-                serviceMode: state.bill.serviceMode,
-                tax: state.bill.tax,
-                taxMode: state.bill.taxMode,
-                totals: totals,
-                grandTotal: grandTotal,
-                status: finalStatus,
-                serverData: serverBill || null,
-              },
-              ...state.completedBills.filter(b => b.id !== (serverBill?.id || state.bill.id)),
-            ],
-          };
-        });
-
-        return serverBill;
-      },
-
-      loadBillDraft: (id) => {
-        const state = get();
-        const billToLoad = state.completedBills.find(b => b.id === id);
-        if (!billToLoad) return;
-
-        set({
-          bill: {
-            id: billToLoad.id,
-            title: billToLoad.title,
-            imageUrl: billToLoad.imageUrl || '',
-            items: billToLoad.items.map(item => ({ ...item })),
-            persons: billToLoad.persons.map(p => ({ 
-              id: p.id, 
-              name: p.name, 
-              paymentInfo: p.paymentInfo ? { ...p.paymentInfo } : { bank: '', accountNumber: '', qrisData: '' } 
-            })),
-            tax: billToLoad.tax,
-            taxMode: billToLoad.taxMode,
-            serviceCharge: billToLoad.serviceCharge,
-            serviceMode: billToLoad.serviceMode,
-            payerId: billToLoad.payerId,
-            splitType: 'equal',
-          },
-          assignments: structuredClone(billToLoad.assignments || {}),
-        });
-      },
-
-      getCompletedBill: (id) => {
-        return get().completedBills.find(b => b.id === id) || null;
+        } catch (err) {
+          console.error('Failed to load bill draft:', err);
+        }
       },
 
       deleteCompletedBill: async (id) => {
-        const state = get();
-        const bill = state.completedBills.find(b => b.id === id);
-        
-        // Try to delete from server if authenticated and has server ID
-        const isAuth = useAuthStore.getState().isAuthenticated;
-        if (isAuth && bill?.serverData?.id) {
-          try {
-            await api.deleteBill(bill.serverData.id);
-          } catch (err) {
-            console.error('Failed to delete bill from server:', err);
-          }
+        try {
+          await api.deleteBill(id);
+          await get().fetchCompletedBills();
+        } catch (err) {
+          console.error('Failed to delete bill from server:', err);
         }
-        
-        // Always delete locally
-        set((state) => ({
-          completedBills: state.completedBills.filter(b => b.id !== id),
-        }));
       },
-
-      togglePersonPaid: (billId, personId) => set((state) => ({
-        completedBills: state.completedBills.map(b => {
-          if (b.id === billId) {
-            const updatedPersons = b.persons.map(p => {
-              if (p.id === personId) {
-                return { ...p, paid: !p.paid };
-              }
-              return p;
-            });
-            const allPaid = updatedPersons.every(p => p.paid);
-            return {
-              ...b,
-              persons: updatedPersons,
-              status: allPaid ? 'completed' : 'pending'
-            };
-          }
-          return b;
-        })
-      })),
 
       assignments: {}, // { personId: { itemId: boolean } }
 
@@ -314,7 +266,8 @@ const useBillStore = create(
       // Selection Strategy: Calculate Shares
       calculateTotals: () => {
         const { bill, assignments, settings } = get();
-        const totalBillSubtotal = bill.items.reduce((sum, item) => sum + item.price, 0);
+        const lineTotal = (item) => (item.unitPrice ?? item.price) * (item.qty ?? item.quantity ?? 1);
+        const totalBillSubtotal = bill.items.reduce((sum, item) => sum + lineTotal(item), 0);
 
         const totalTax = bill.taxMode === 'percent'
           ? totalBillSubtotal * (bill.tax / 100)
@@ -384,7 +337,7 @@ const useBillStore = create(
             const sharers = assignedPersons.length > 0 ? assignedPersons : bill.persons;
             const isAssigned = assignedPersons.length > 0 ? (assignments[person.id]?.[item.id] || false) : true;
             if (isAssigned && sharers.length > 0) {
-              subtotal += item.price / sharers.length;
+              subtotal += lineTotal(item) / sharers.length;
             }
           });
 
@@ -404,7 +357,6 @@ const useBillStore = create(
 
       settings: {
         darkMode: true,
-        animations: true,
         currency: 'IDR',
         autoScan: true,
         roundNumbers: true,
@@ -429,11 +381,21 @@ const useBillStore = create(
       name: 'splitmate-storage',
       partialize: (state) => ({
         settings: state.settings,
-        completedBills: state.completedBills.map(b => ({ ...b, imageUrl: '' })),
-        bill: { ...state.bill, imageUrl: '' },
+        bill: state.bill,
         assignments: state.assignments,
         ui: state.ui,
       }),
+      merge: (persisted, current) => {
+        const merged = { ...current, ...persisted };
+        merged.bill = { ...current.bill, ...persisted.bill };
+        if (merged.bill.persons) {
+          merged.bill.persons = merged.bill.persons.map(p => ({
+            ...p,
+            id: /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(String(p.id)) ? p.id : crypto.randomUUID(),
+          }));
+        }
+        return merged;
+      },
     }
   )
 );

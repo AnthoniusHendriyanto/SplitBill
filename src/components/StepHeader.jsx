@@ -38,67 +38,64 @@ const stepSubtitles = [
 
 function StepHeader({ currentStep, setStep, nextLabel, onNext, onBack, showActions = true, nextDisabled = false, bill, isScanning }) {
   return (
-    <div className="flex flex-col gap-6 mb-8">
+    <div className="flex flex-col gap-4">
       {/* Premium Wizard Timeline Stepper */}
-      <div className="w-full bg-card border border rounded-2xl p-5 relative overflow-hidden">
-        <div className="flex items-center justify-between relative z-10 w-full overflow-x-auto hide-scrollbar py-2">
+      <div className="w-full bg-surface-elevated/80 backdrop-blur-xl border border-white/[0.04] rounded-3xl p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_8px_32px_rgba(0,0,0,0.3)]">
+        <div className="flex items-center justify-between relative w-full overflow-x-auto hide-scrollbar py-1">
           {steps.map((s, i) => {
             const { unlocked, reason } = getStepAccess(i, bill, isScanning);
             const isCurrent = currentStep === i + 1;
             const isPast = currentStep > i + 1;
 
             return (
-              <div key={s} className="flex items-center flex-1 last:flex-none min-w-[120px]">
+              <div key={s} className="flex items-center flex-1 last:flex-none min-w-[100px]">
                 <button
                   onClick={() => unlocked ? setStep(i + 1) : null}
                   disabled={!unlocked}
                   className={cn(
-                    "flex flex-col items-start gap-1.5 transition-all text-left outline-none relative group border-none bg-transparent cursor-pointer",
-                    isCurrent ? "scale-105" : "",
-                    !unlocked ? "cursor-not-allowed opacity-40" : "hover:opacity-90"
+                    "flex flex-col items-center gap-2 transition-all text-center outline-none relative group border-none bg-transparent cursor-pointer px-1",
+                    !unlocked ? "cursor-not-allowed opacity-30" : "hover:opacity-80"
                   )}
                 >
-                  <div className="flex items-center gap-2">
-                    {/* Circle Node */}
-                    <div className={cn(
-                      "w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold transition-all border",
-                      isCurrent 
-                        ? "bg-indigo-600 border-indigo-500 text-white shadow-[0_0_10px_rgba(99,102,241,0.5)]" 
-                        : isPast 
-                          ? "bg-indigo-950/40 border-indigo-900/60 text-indigo-400" 
-                          : "bg-surface-base/40 border text-tertiary"
-                    )}>
-                      {isPast ? (
-                        <Icon name="check" className="text-xs font-black" />
-                      ) : !unlocked ? (
-                        <Icon name="lock" className="text-[10px]" />
-                      ) : (
-                        i + 1
-                      )}
-                    </div>
-                    {/* Step Name */}
-                    <span className={cn(
-                      "text-[9px] font-bold uppercase tracking-widest leading-none",
-                      isCurrent ? "text-white" : isPast ? "text-indigo-400" : "text-tertiary"
-                    )}>
-                      {s}
-                    </span>
+                  {/* Circle Node */}
+                  <div className={cn(
+                    "w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 border-2",
+                    isCurrent
+                      ? "border-brand-primary bg-gradient-to-br from-brand-primary/20 to-indigo-500/10 text-brand-primary shadow-[0_0_16px_var(--brand-primary-glow)]"
+                      : isPast
+                        ? "border-emerald-500/50 bg-emerald-950/20 text-emerald-400"
+                        : "border-white/[0.06] bg-white/[0.02] text-tertiary"
+                  )}>
+                    {isPast ? (
+                      <Icon name="check" className="text-sm font-black" />
+                    ) : !unlocked ? (
+                      <Icon name="lock" className="text-xs" />
+                    ) : (
+                      <span className={cn("text-sm", isCurrent && "font-extrabold")}>{i + 1}</span>
+                    )}
                   </div>
-                  
+                  {/* Step Name */}
+                  <span className={cn(
+                    "text-[10px] font-semibold tracking-wider leading-tight transition-colors duration-300",
+                    isCurrent ? "text-primary" : isPast ? "text-emerald-400/70" : "text-tertiary"
+                  )}>
+                    {s}
+                  </span>
+
                   {/* Tooltip for locked nodes */}
                   {!unlocked && (
-                    <span className="absolute left-0 -top-8 z-50 hidden group-hover:block bg-surface-base text-primary text-[8px] font-bold px-2 py-1 rounded border border-strong whitespace-nowrap shadow-xl">
-                      Locked: {reason}
+                    <span className="absolute -top-10 z-50 hidden group-hover:block bg-surface-base text-primary text-[8px] font-medium px-2.5 py-1.5 rounded-xl border border-white/[0.06] whitespace-nowrap shadow-xl">
+                      {reason}
                     </span>
                   )}
                 </button>
-                
+
                 {/* Connecting Line */}
                 {i < steps.length - 1 && (
-                  <div className="flex-1 mx-4 h-[2px] bg-surface-elevated relative min-w-[20px]">
+                  <div className="flex-1 mx-3 h-[3px] bg-white/[0.04] relative min-w-[16px] rounded-full overflow-hidden">
                     <div className={cn(
-                      "absolute left-0 top-0 h-full transition-all duration-300",
-                      isPast ? "w-full bg-indigo-500" : "w-0 bg-transparent"
+                      "absolute left-0 top-0 h-full rounded-full transition-all duration-500",
+                      isPast ? "w-full bg-gradient-to-r from-emerald-500 to-emerald-400" : "w-0"
                     )} />
                   </div>
                 )}
@@ -109,27 +106,27 @@ function StepHeader({ currentStep, setStep, nextLabel, onNext, onBack, showActio
       </div>
 
       {/* Main Title & Action Bar */}
-      <div className="flex flex-col md:flex-row justify-between md:items-end gap-4">
+      <div className="flex flex-col md:flex-row justify-between md:items-end gap-3">
         <div>
-          <h2 className="text-2xl md:text-3xl font-black text-white tracking-tight flex items-center gap-2">
-            <span className="w-1.5 h-6 bg-indigo-500 rounded-full inline-block"></span>
+          <h2 className="text-2xl md:text-3xl font-extrabold text-primary tracking-tight flex items-center gap-2">
+            <span className="w-1 h-5 bg-brand-primary rounded-full inline-block"></span>
             {stepTitles[currentStep - 1] ?? 'Bill'}
           </h2>
-          <p className="text-tertiary mt-1.5 text-xs md:text-sm font-medium">
+          <p className="text-xs text-secondary mt-0.5 font-medium">
             {stepSubtitles[currentStep - 1] ?? ''}
           </p>
         </div>
 
         {showActions && (
-          <div className="flex items-center gap-3 w-full md:w-auto mt-4 md:mt-0">
+          <div className="flex items-center gap-2.5 w-full md:w-auto">
             <button
               onClick={onBack}
               disabled={currentStep === 1}
               className={cn(
-                "px-5 py-2.5 rounded-xl border border font-extrabold text-xs transition-all flex items-center justify-center gap-1.5 outline-none cursor-pointer",
-                currentStep === 1 
-                  ? "opacity-35 cursor-not-allowed text-tertiary" 
-                  : "bg-surface-base/40 text-primary hover:bg-surface-elevated hover:border-strong"
+                "h-10 px-4 rounded-2xl border border-white/[0.06] text-xs font-medium transition-all flex items-center justify-center gap-1.5 outline-none cursor-pointer",
+                currentStep === 1
+                  ? "opacity-30 cursor-not-allowed text-tertiary"
+                  : "bg-transparent text-secondary hover:bg-white/[0.04] hover:text-primary hover:border-white/[0.1]"
               )}
             >
               Back
@@ -138,10 +135,10 @@ function StepHeader({ currentStep, setStep, nextLabel, onNext, onBack, showActio
               onClick={nextDisabled ? undefined : onNext}
               disabled={nextDisabled}
               className={cn(
-                "px-6 py-2.5 rounded-xl font-extrabold text-xs transition-all flex items-center justify-center gap-2 outline-none border-none",
-                nextDisabled 
-                  ? "bg-surface-elevated text-tertiary cursor-not-allowed shadow-none" 
-                  : "bg-indigo-600 text-white shadow-lg shadow-indigo-600/20 hover:bg-indigo-500 cursor-pointer"
+                "h-10 px-5 rounded-2xl text-xs font-semibold transition-all flex items-center justify-center gap-2 outline-none border-none",
+                nextDisabled
+                  ? "bg-white/[0.04] text-tertiary cursor-not-allowed"
+                  : "bg-gradient-to-r from-brand-primary to-indigo-500 text-white shadow-xl shadow-brand-primary/20 hover:shadow-[0_0_24px_var(--brand-primary-glow)] cursor-pointer"
               )}
             >
               {nextLabel}

@@ -1,73 +1,71 @@
-import { motion } from 'framer-motion';
 import Icon from '../Icon';
-import { cn } from '../../utils/cn';
+import ToggleSwitch from '../ToggleSwitch';
+
+const inputClass = "w-full h-12 px-4 rounded-2xl text-sm font-medium text-[--text-primary] outline-none transition-all duration-200 focus:ring-1 focus:ring-[--brand-primary] focus:ring-opacity-50";
 
 export default function SecurityTab({ securityForm, setSecurityForm, handleUpdatePassword, handleRevokeSession, sessions }) {
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+    <div className="space-y-8 animate-fade-in">
       <div>
-        <h3 className="text-sm font-black uppercase text-white tracking-widest flex items-center gap-2 mb-1">
-          <Icon name="shield" className="text-indigo-400 text-base" />
-          Security Settings
-        </h3>
-        <p className="text-[10px] text-tertiary font-semibold">Tweak password locks, activate two-factor authentication, and monitor active sessions.</p>
+        <h3 className="text-lg font-bold text-[--text-primary] mb-1">Security</h3>
+        <p className="text-sm text-tertiary mb-6">Manage your password and active sessions.</p>
       </div>
-      <div className="p-5 bg-surface-base/20 border border rounded-2xl space-y-5">
-        <span className="text-[10px] font-bold text-tertiary uppercase tracking-widest block">Change Profile Password</span>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+
+      {/* Password */}
+      <div className="p-5 rounded-2xl" style={{ background: 'rgba(255,255,255,0.02)', boxShadow: '0 0 0 1px rgba(255,255,255,0.06)' }}>
+        <h4 className="text-sm font-semibold text-[--text-primary] mb-4">Change Password</h4>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
           {['Current Password', 'New Password', 'Confirm Password'].map((label) => {
-            const fieldId = `sec-${label.toLowerCase().replace(/\s+/g, '-')}`;
+            const key = label.toLowerCase().replace(/\s+/g, '');
             return (
-            <div key={label} className="relative group">
-              <label htmlFor={fieldId} className="absolute -top-2 left-3 px-1 bg-card text-[9px] font-bold text-indigo-400 uppercase tracking-widest z-10">{label}</label>
-              <input id={fieldId} type="password" value={securityForm[label.toLowerCase().replace(/\s+/g, '')]}
-                onChange={(e) => setSecurityForm({ ...securityForm, [label.toLowerCase().replace(/\s+/g, '')]: e.target.value })}
-                className="w-full px-4 py-3 bg-surface-base/40 border border rounded-xl focus:border-indigo-500 outline-none text-xs font-bold text-white transition-all"
-              />
-            </div>
+              <div key={label}>
+                <label className="text-xs font-medium text-tertiary mb-2 block">{label}</label>
+                <input className={inputClass} type="password" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}
+                  value={securityForm[key] || ''}
+                  onChange={(e) => setSecurityForm({ ...securityForm, [key]: e.target.value })} />
+              </div>
             );
           })}
         </div>
-        <div className="flex justify-end pt-2">
+        <div className="flex justify-end">
           <button onClick={handleUpdatePassword}
-            className="px-4 py-2 bg-surface-elevated hover:bg-surface-raised text-white font-extrabold text-[9px] uppercase tracking-wider rounded-lg transition-all border border-strong cursor-pointer outline-none"
-          >
+            className="px-4 py-2 rounded-xl text-xs font-medium text-[--text-primary] transition-all cursor-pointer border-none outline-none"
+            style={{ background: 'rgba(255,255,255,0.06)' }}>
             Update Password
           </button>
         </div>
       </div>
-      <div className="p-5 bg-surface-base/20 border border rounded-2xl flex justify-between items-center">
+
+      {/* 2FA */}
+      <div className="flex items-center justify-between p-5 rounded-2xl" style={{ background: 'rgba(255,255,255,0.02)', boxShadow: '0 0 0 1px rgba(255,255,255,0.06)' }}>
         <div>
-          <p className="text-xs font-bold text-white">Two-Factor Authentication (2FA)</p>
-          <p className="text-[10px] text-tertiary">Protect account credentials with standard verification codes.</p>
+          <p className="text-sm font-medium text-[--text-primary]">Two-Factor Authentication</p>
+          <p className="text-xs text-tertiary mt-0.5">Add an extra layer of security to your account.</p>
         </div>
-        <div onClick={() => setSecurityForm({ ...securityForm, twoFactorEnabled: !securityForm.twoFactorEnabled })}
-          className={cn("w-12 h-6 rounded-full relative cursor-pointer transition-colors duration-300", securityForm.twoFactorEnabled ? "bg-indigo-600" : "bg-slate-200 dark:bg-slate-700")}
-        >
-          <motion.div layout animate={{ x: securityForm.twoFactorEnabled ? 28 : 4 }} transition={{ type: "spring", stiffness: 500, damping: 30 }}
-            className="absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm" />
-        </div>
+        <ToggleSwitch isOn={securityForm.twoFactorEnabled} onChange={() => setSecurityForm({ ...securityForm, twoFactorEnabled: !securityForm.twoFactorEnabled })} />
       </div>
-      <div className="p-5 bg-surface-base/20 border border rounded-2xl space-y-4">
-        <span className="text-[10px] font-bold text-tertiary uppercase tracking-widest block">Active Session Devices</span>
+
+      {/* Sessions */}
+      <div className="p-5 rounded-2xl" style={{ background: 'rgba(255,255,255,0.02)', boxShadow: '0 0 0 1px rgba(255,255,255,0.06)' }}>
+        <h4 className="text-sm font-semibold text-[--text-primary] mb-4">Active Sessions</h4>
         {sessions.length > 0 ? (
-          <div className="divide-y divide-border space-y-3 font-semibold text-xs">
+          <div className="space-y-3">
             {sessions.map((s) => (
-              <div key={s.id} className="flex justify-between items-center pt-3 first:pt-0">
-                <div className="flex gap-3 items-start">
-                  <Icon name={s.device.includes('iPhone') ? 'phone_iphone' : 'laptop_mac'} className="text-tertiary text-lg mt-0.5 flex-shrink-0" />
+              <div key={s.id} className="flex items-center justify-between py-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                <div className="flex items-center gap-3">
+                  <Icon name={s.device.includes('iPhone') ? 'phone_iphone' : 'laptop_mac'} className="text-tertiary text-lg" />
                   <div>
-                    <p className="text-white font-bold flex items-center gap-1.5">
+                    <p className="text-sm font-medium text-[--text-primary] flex items-center gap-2">
                       {s.device}
-                      {s.active && <span className="text-[7px] font-bold text-emerald-400 bg-emerald-950/40 border border-emerald-900/30 px-1.5 py-0.5 rounded uppercase tracking-wider">Current</span>}
+                      {s.active && <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-md" style={{ background: 'rgba(34,197,94,0.1)', color: 'var(--semantic-success)' }}>Current</span>}
                     </p>
-                    <p className="text-[9px] text-tertiary mt-0.5">{s.location} • IP: {s.ip}</p>
+                    <p className="text-xs text-tertiary">{s.location} · {s.ip}</p>
                   </div>
                 </div>
                 {!s.active && (
                   <button onClick={() => handleRevokeSession(s.id)}
-                    className="px-2.5 py-1 text-[9px] font-bold text-red-400 hover:text-red-300 bg-red-950/10 hover:bg-red-950/30 border border-red-900/30 rounded transition-all cursor-pointer outline-none"
-                  >
+                    className="px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer border-none outline-none"
+                    style={{ color: 'var(--semantic-error)', background: 'rgba(239,68,68,0.08)' }}>
                     Revoke
                   </button>
                 )}
@@ -75,9 +73,9 @@ export default function SecurityTab({ securityForm, setSecurityForm, handleUpdat
             ))}
           </div>
         ) : (
-          <p className="text-[10px] text-tertiary font-semibold italic text-center py-4">No active devices monitored.</p>
+          <p className="text-xs text-tertiary py-4 text-center">No active sessions.</p>
         )}
       </div>
-    </motion.div>
+    </div>
   );
 }

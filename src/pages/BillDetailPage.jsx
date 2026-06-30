@@ -1,7 +1,6 @@
-import { memo, useMemo, useState, useEffect } from 'react';
+import { memo, useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import useBillStore from '../store/useBillStore';
 import useAuthStore from '../store/useAuthStore';
 import Icon from '../components/Icon';
 import Skeleton from '../components/Skeleton';
@@ -15,64 +14,53 @@ function BillDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
-  const getCompletedBill = useBillStore((s) => s.getCompletedBill);
-  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-  const [serverBill, setServerBill] = useState(null);
+  const isAuthenticated = useAuthStore((s) => !!s.accessToken);
+  const [bill, setBill] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const localBill = useMemo(() => getCompletedBill(id), [id, getCompletedBill]);
-
   useEffect(() => {
-    const timer = setTimeout(() => {
-      if (isAuthenticated && !localBill) {
-        setLoading(true);
-        api.getBill(id)
-          .then(data => {
-            const billData = data.bill || data;
-            const persons = billData.persons || [];
-            const items = billData.items || [];
-            const payer = persons.find(p => p.is_payer);
+    if (isAuthenticated) {
+      api.getBill(id)
+        .then(data => {
+          const billData = data.bill || data;
+          const persons = billData.persons || [];
+          const items = billData.items || [];
+          const payer = persons.find(p => p.is_payer);
 
-            const normalized = {
-              id: billData.id,
-              title: billData.title,
-              completedAt: billData.created_at,
-              grandTotal: billData.grand_total,
-              items,
-              persons,
-              payerId: payer?.id || null,
-              serviceCharge: billData.service_charge,
-              tax: billData.tax,
-              assignments: {},
-              totals: persons.map(p => {
-                const personItems = items.filter(item =>
-                  item.assigned_to?.includes(p.name)
-                );
-                const subtotal = personItems.reduce((sum, item) => sum + item.price, 0);
-                const serviceShare = subtotal * ((billData.service_charge || 0) / 100);
-                const taxShare = subtotal * ((billData.tax || 0) / 100);
-                return {
-                  ...p,
-                  subtotal,
-                  tax: taxShare,
-                  service: serviceShare,
-                  total: subtotal + serviceShare + taxShare,
-                };
-              }),
-              serverData: billData,
-            };
-            setServerBill(normalized);
-          })
-          .catch(err => console.error('Failed to fetch bill:', err))
-          .finally(() => setLoading(false));
-      } else {
-        setLoading(false);
-      }
-    }, 0);
-    return () => clearTimeout(timer);
-  }, [id, isAuthenticated, localBill]);
-
-  const bill = localBill || serverBill;
+          setBill({
+            id: billData.id,
+            title: billData.title,
+            completedAt: billData.created_at,
+            grandTotal: billData.grand_total,
+            items,
+            persons,
+            payerId: payer?.id || null,
+            serviceCharge: billData.service_charge,
+            tax: billData.tax,
+            assignments: {},
+            totals: persons.map(p => {
+              const personItems = items.filter(item =>
+                item.assigned_to?.includes(p.name)
+              );
+              const subtotal = personItems.reduce((sum, item) => sum + item.price, 0);
+              const serviceShare = subtotal * ((billData.service_charge || 0) / 100);
+              const taxShare = subtotal * ((billData.tax || 0) / 100);
+              return {
+                id: p.id, name: p.name,
+                subtotal,
+                tax: taxShare,
+                service: serviceShare,
+                total: subtotal + serviceShare + taxShare,
+              };
+            }),
+          });
+        })
+        .catch(err => console.error('Failed to fetch bill:', err))
+        .finally(() => setLoading(false));
+    } else {
+      setLoading(false);
+    }
+  }, [id, isAuthenticated]);
 
   if (loading) {
     return (
@@ -135,9 +123,13 @@ function BillDetailPage() {
             <div>
               <h1 className="text-3xl font-black text-primary tracking-tight">{bill.title}</h1>
               <p className="text-sm text-tertiary mt-1 font-medium">
-                {new Date(bill.completedAt).toLocaleDateString('id-ID', {
-                  day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
-                })}
+                {bill.bill_date
+                  ? new Date(bill.bill_date + 'T12:00:00').toLocaleDateString('id-ID', {
+                      day: 'numeric', month: 'long', year: 'numeric'
+                    })
+                  : new Date(bill.completedAt).toLocaleDateString('id-ID', {
+                      day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                    })}
               </p>
             </div>
             <div className="text-right">

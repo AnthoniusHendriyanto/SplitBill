@@ -1,209 +1,58 @@
-/* ==========================================================================
-   Design Tokens — OKLCH Color System
-   Three-tier architecture: Global → Semantic → Component
-   ========================================================================== */
-
-/* --------------------------------------------------------------------------
-   1. GLOBAL COLOR TOKENS (raw primitives)
-   Tailwind-standard OKLCH values — perceptually uniform, wide gamut
-   -------------------------------------------------------------------------- */
 :root {
-  --color-indigo-50: oklch(0.962 0.018 272.3);
-  --color-indigo-100: oklch(0.930 0.034 272.8);
-  --color-indigo-200: oklch(0.870 0.065 274.0);
-  --color-indigo-300: oklch(0.785 0.115 274.7);
-  --color-indigo-400: oklch(0.673 0.182 276.9);
-  --color-indigo-500: oklch(0.585 0.233 277.1);
-  --color-indigo-600: oklch(0.511 0.262 276.9);
-  --color-indigo-700: oklch(0.420 0.239 278.0);
-  --color-indigo-800: oklch(0.348 0.193 279.1);
-  --color-indigo-900: oklch(0.282 0.152 281.5);
-  --color-indigo-950: oklch(0.193 0.100 280.4);
+  --surface-base: #050816;
+  --surface-elevated: #0B1020;
+  --surface-raised: #111827;
+  --surface-overlay: rgba(0,0,0,0.5);
 
-  --color-slate-50: oklch(0.984 0.003 247.9);
-  --color-slate-100: oklch(0.968 0.007 247.9);
-  --color-slate-200: oklch(0.929 0.013 255.5);
-  --color-slate-300: oklch(0.869 0.022 252.9);
-  --color-slate-400: oklch(0.704 0.040 256.8);
-  --color-slate-500: oklch(0.554 0.046 257.4);
-  --color-slate-600: oklch(0.446 0.043 257.3);
-  --color-slate-700: oklch(0.372 0.044 257.3);
-  --color-slate-800: oklch(0.279 0.041 260.0);
-  --color-slate-900: oklch(0.208 0.042 265.8);
-  --color-slate-950: oklch(0.129 0.042 264.7);
+  --text-primary: #F1F5F9;
+  --text-secondary: #94A3B8;
+  --text-tertiary: #64748B;
+  --text-inverse: #050816;
 
-  --color-emerald-50: oklch(0.979 0.021 166.1);
-  --color-emerald-100: oklch(0.950 0.052 163.1);
-  --color-emerald-200: oklch(0.905 0.093 164.2);
-  --color-emerald-300: oklch(0.845 0.143 164.9);
-  --color-emerald-400: oklch(0.765 0.177 163.2);
-  --color-emerald-500: oklch(0.696 0.170 162.5);
-  --color-emerald-600: oklch(0.596 0.145 163.2);
-  --color-emerald-700: oklch(0.508 0.118 165.0);
-  --color-emerald-800: oklch(0.432 0.095 166.9);
-  --color-emerald-900: oklch(0.356 0.072 169.2);
-  --color-emerald-950: oklch(0.262 0.051 172.5);
+  --border: rgba(255,255,255,0.06);
+  --border-strong: rgba(255,255,255,0.10);
+  --border-focus: #7C5CFF;
 
-  --color-amber-50: oklch(0.987 0.022 95.3);
-  --color-amber-100: oklch(0.962 0.059 95.6);
-  --color-amber-200: oklch(0.924 0.120 95.6);
-  --color-amber-300: oklch(0.879 0.169 91.6);
-  --color-amber-400: oklch(0.828 0.189 84.4);
-  --color-amber-500: oklch(0.769 0.188 70.1);
-  --color-amber-600: oklch(0.666 0.179 58.3);
-  --color-amber-700: oklch(0.555 0.163 48.3);
-  --color-amber-800: oklch(0.473 0.137 46.5);
-  --color-amber-900: oklch(0.414 0.112 45.9);
-  --color-amber-950: oklch(0.279 0.077 45.6);
+  --brand-primary: #7C5CFF;
+  --brand-primary-hover: #6A4BE8;
+  --brand-primary-active: #5A3DD6;
+  --brand-primary-subtle: rgba(124,92,255,0.10);
+  --brand-primary-glow: rgba(124,92,255,0.15);
 
-  --color-red-50: oklch(0.971 0.013 17.4);
-  --color-red-100: oklch(0.936 0.032 17.7);
-  --color-red-200: oklch(0.885 0.062 18.3);
-  --color-red-300: oklch(0.808 0.114 19.6);
-  --color-red-400: oklch(0.704 0.191 22.2);
-  --color-red-500: oklch(0.637 0.237 25.3);
-  --color-red-600: oklch(0.577 0.245 27.3);
-  --color-red-700: oklch(0.505 0.213 27.5);
-  --color-red-800: oklch(0.444 0.177 26.9);
-  --color-red-900: oklch(0.396 0.141 25.7);
-  --color-red-950: oklch(0.258 0.092 26.0);
-}
+  --semantic-success: #22C55E;
+  --semantic-success-bg: rgba(34,197,94,0.10);
+  --semantic-warning: #F59E0B;
+  --semantic-warning-bg: rgba(245,158,11,0.10);
+  --semantic-error: #EF4444;
+  --semantic-error-bg: rgba(239,68,68,0.10);
+  --semantic-info: #7C5CFF;
+  --semantic-info-bg: rgba(124,92,255,0.10);
 
-/* --------------------------------------------------------------------------
-   2. SEMANTIC TOKENS (context-mapped per theme)
-   Light theme as default (:root), Dark theme under .dark
-   -------------------------------------------------------------------------- */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.2);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.25);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.3);
+  --shadow-xl: 0 16px 48px rgba(0,0,0,0.35);
+  --shadow-glow: 0 0 24px var(--brand-primary-glow), 0 4px 16px rgba(0,0,0,0.2);
+  --shadow-card: 0 1px 3px rgba(0,0,0,0.2), 0 0 0 1px rgba(255,255,255,0.04);
+  --shadow-card-hover: 0 8px 32px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.06);
 
-/* --- Light Theme --- */
-:root {
-  --surface-base: var(--color-slate-100);
-  --surface-elevated: var(--color-slate-50);
-  --surface-raised: oklch(1 0 0);
-  --surface-overlay: oklch(0 0 0 / 0.3);
+  --glass-bg: rgba(11,16,32,0.8);
+  --glass-border: rgba(255,255,255,0.04);
+  --glass-shadow: 0 8px 32px rgba(0,0,0,0.3);
 
-  --text-primary: var(--color-slate-900);
-  --text-secondary: var(--color-slate-500);
-  --text-tertiary: var(--color-slate-400);
-  --text-inverse: var(--color-slate-50);
-
-  --border: var(--color-slate-200);
-  --border-strong: var(--color-slate-300);
-  --border-focus: var(--color-indigo-500);
-
-  --brand-primary: var(--color-indigo-500);
-  --brand-primary-hover: var(--color-indigo-600);
-  --brand-primary-active: var(--color-indigo-700);
-  --brand-primary-subtle: var(--color-indigo-50);
-  --brand-primary-glow: oklch(0.585 0.233 277.1 / 0.15);
-
-  --semantic-success: var(--color-emerald-500);
-  --semantic-success-bg: var(--color-emerald-50);
-  --semantic-warning: var(--color-amber-500);
-  --semantic-warning-bg: var(--color-amber-50);
-  --semantic-error: var(--color-red-500);
-  --semantic-error-bg: var(--color-red-50);
-  --semantic-info: oklch(0.6 0.18 250);
-  --semantic-info-bg: oklch(0.95 0.03 250);
-
-  --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.06);
-  --shadow-md: 0 4px 12px oklch(0 0 0 / 0.08);
-  --shadow-lg: 0 8px 30px oklch(0 0 0 / 0.10);
-  --shadow-glow: 0 0 20px var(--brand-primary-glow), 0 4px 12px oklch(0 0 0 / 0.06);
-
-  --glass-bg: oklch(1 0 0 / 0.6);
-  --glass-border: oklch(1 0 0 / 0.3);
-}
-
-/* --- Dark Theme --- */
-.dark {
-  --surface-base: var(--color-slate-950);
-  --surface-elevated: var(--color-slate-900);
-  --surface-raised: var(--color-slate-800);
-  --surface-overlay: oklch(0 0 0 / 0.5);
-
-  --text-primary: var(--color-slate-200);
-  --text-secondary: var(--color-slate-400);
-  --text-tertiary: var(--color-slate-500);
-  --text-inverse: var(--color-slate-900);
-
-  --border: var(--color-slate-800);
-  --border-strong: var(--color-slate-700);
-  --border-focus: var(--color-indigo-400);
-
-  --brand-primary: var(--color-indigo-400);
-  --brand-primary-hover: var(--color-indigo-300);
-  --brand-primary-active: var(--color-indigo-200);
-  --brand-primary-subtle: var(--color-indigo-950);
-  --brand-primary-glow: oklch(0.673 0.182 276.9 / 0.15);
-
-  --semantic-success: var(--color-emerald-400);
-  --semantic-success-bg: var(--color-emerald-950);
-  --semantic-warning: var(--color-amber-400);
-  --semantic-warning-bg: var(--color-amber-950);
-  --semantic-error: var(--color-red-400);
-  --semantic-error-bg: var(--color-red-950);
-  --semantic-info: oklch(0.7 0.15 250);
-  --semantic-info-bg: oklch(0.2 0.08 250);
-
-  --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.15);
-  --shadow-md: 0 4px 12px oklch(0 0 0 / 0.2);
-  --shadow-lg: 0 8px 30px oklch(0 0 0 / 0.25);
-  --shadow-glow: 0 0 20px var(--brand-primary-glow), 0 4px 12px oklch(0 0 0 / 0.2);
-
-  --glass-bg: oklch(0.15 0 0 / 0.6);
-  --glass-border: oklch(1 1 1 / 0.08);
-}
-
-/* --------------------------------------------------------------------------
-   3. COMPONENT TOKENS (scoped to specific components)
-   Defined here; consumed in component CSS or via Tailwind
-   -------------------------------------------------------------------------- */
-:root {
-  --btn-primary-bg: var(--brand-primary);
-  --btn-primary-text: var(--text-inverse);
-  --btn-primary-hover-bg: var(--brand-primary-hover);
-  --btn-primary-active-bg: var(--brand-primary-active);
-
-  --card-bg: var(--surface-elevated);
-  --card-border: var(--border);
-  --card-shadow: var(--shadow-md);
-
-  --toast-success-bg: var(--semantic-success-bg);
-  --toast-error-bg: var(--semantic-error-bg);
-}
-
-/* --------------------------------------------------------------------------
-   4. LEGACY COMPATIBILITY TOKENS (for gradual migration)
-   These bridge old CSS vars so existing components still render
-   -------------------------------------------------------------------------- */
-:root {
   --page-bg: var(--surface-base);
   --card-bg: var(--surface-elevated);
-}
-.dark {
-  --page-bg: var(--surface-base);
-  --card-bg: var(--surface-elevated);
+  --card-alt-bg: #111827;
+  --table-hover-bg: #151F33;
+  --toast-error-bg: var(--semantic-error-bg);
+  --toast-success-bg: var(--semantic-success-bg);
+  --btn-success-hover-bg: #16a34a;
+  --error-boundary-bg: #450a0a;
+
+  --input-bg: rgba(255,255,255,0.04);
+  --input-border: rgba(255,255,255,0.06);
+  --input-height: 48px;
+  --input-radius: 14px;
 }
 
-:root {
-  --card-alt-bg: var(--color-slate-200);
-  --card-elevated-bg: var(--color-slate-100);
-  --gradient-start: var(--surface-elevated);
-  --gradient-end: var(--surface-base);
-  --table-hover-bg: var(--color-slate-200);
-  --toast-error-bg: var(--semantic-error-bg);
-  --toast-success-bg: var(--semantic-success-bg);
-  --btn-success-hover-bg: var(--color-emerald-700);
-  --error-boundary-bg: var(--color-red-950);
-}
-.dark {
-  --card-alt-bg: var(--color-slate-800);
-  --card-elevated-bg: var(--color-slate-750);
-  --gradient-start: var(--surface-elevated);
-  --gradient-end: var(--surface-base);
-  --table-hover-bg: var(--color-slate-800);
-  --toast-error-bg: var(--semantic-error-bg);
-  --toast-success-bg: var(--semantic-success-bg);
-  --btn-success-hover-bg: var(--color-emerald-800);
-  --error-boundary-bg: var(--color-red-950);
-}
+/* ponytail: single dark mode, no light mode - premium fintech is dark */

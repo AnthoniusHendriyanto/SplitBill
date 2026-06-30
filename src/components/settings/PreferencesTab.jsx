@@ -1,68 +1,37 @@
-import { motion } from 'framer-motion';
-import Icon from '../Icon';
-import { cn } from '../../utils/cn';
+import ToggleSwitch from '../ToggleSwitch';
+
+const selectClass = "h-12 px-4 rounded-2xl text-sm font-medium text-[--text-primary] outline-none transition-all duration-200 cursor-pointer";
 
 export default function PreferencesTab({ settings, updateSettings }) {
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+    <div className="space-y-8 animate-fade-in">
       <div>
-        <h3 className="text-sm font-black uppercase text-white tracking-widest flex items-center gap-2 mb-1">
-          <Icon name="tune" className="text-indigo-400 text-base" />
-          Application Preferences
-        </h3>
-        <p className="text-[10px] text-tertiary font-semibold">Tweak structural visual metrics, currency overlays, and animations preferences.</p>
+        <h3 className="text-lg font-bold text-[--text-primary] mb-1">Preferences</h3>
+        <p className="text-sm text-tertiary mb-6">Application appearance and regional settings.</p>
       </div>
-      <div className="space-y-4 p-4 bg-surface-base/30 border border rounded-xl font-semibold text-xs divide-y divide-border">
-        <div className="flex items-center justify-between pb-4">
+
+      <div className="space-y-1 rounded-2xl overflow-hidden" style={{ boxShadow: '0 0 0 1px rgba(255,255,255,0.06)' }}>
+        <div className="flex items-center justify-between px-5 py-4" style={{ background: 'rgba(255,255,255,0.02)' }}>
           <div>
-            <p className="font-bold text-white">Dark Mode</p>
-            <p className="text-[10px] text-tertiary">Enable dark mode for reduced eye strain in low light.</p>
+            <p className="text-sm font-medium text-[--text-primary]">Dark Mode</p>
+            <p className="text-xs text-tertiary mt-0.5">Enable dark theme across the application.</p>
           </div>
-          <div role="switch" tabIndex={0} aria-checked={settings.darkMode}
-            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); const v = !settings.darkMode; updateSettings({ darkMode: v }); document.documentElement.classList.toggle('dark', v); } }}
-            onClick={() => { const v = !settings.darkMode; updateSettings({ darkMode: v }); document.documentElement.classList.toggle('dark', v); }}
-            className={cn("w-12 h-6 rounded-full relative cursor-pointer transition-colors duration-300", settings.darkMode ? "bg-indigo-600" : "bg-slate-200 dark:bg-slate-700")}
-          >
-            <motion.div layout animate={{ x: settings.darkMode ? 28 : 4 }} transition={{ type: "spring", stiffness: 500, damping: 30 }}
-              className="absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm" />
-          </div>
+          <ToggleSwitch isOn={settings.darkMode} onChange={() => updateSettings({ darkMode: !settings.darkMode })} />
         </div>
-        <div className="flex items-center justify-between py-4">
+        <div className="flex items-center justify-between px-5 py-4" style={{ borderTop: '1px solid rgba(255,255,255,0.04)', background: 'rgba(255,255,255,0.02)' }}>
           <div>
-            <p className="font-bold text-white">Animations</p>
-            <p className="text-[10px] text-tertiary">Enable fluid spring animations and micro-interactions.</p>
+            <p className="text-sm font-medium text-[--text-primary]">Round Numbers</p>
+            <p className="text-xs text-tertiary mt-0.5">Automatically round split amounts for neat balances.</p>
           </div>
-          <div role="switch" tabIndex={0} aria-checked={settings.animations}
-            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); updateSettings({ animations: !settings.animations }); } }}
-            onClick={() => updateSettings({ animations: !settings.animations })}
-            className={cn("w-12 h-6 rounded-full relative cursor-pointer transition-colors duration-300", settings.animations ? "bg-indigo-600" : "bg-slate-200 dark:bg-slate-700")}
-          >
-            <motion.div layout animate={{ x: settings.animations ? 28 : 4 }} transition={{ type: "spring", stiffness: 500, damping: 30 }}
-              className="absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm" />
-          </div>
+          <ToggleSwitch isOn={settings.roundNumbers} onChange={() => updateSettings({ roundNumbers: !settings.roundNumbers })} />
         </div>
-        <div className="flex items-center justify-between py-4">
+        <div className="flex items-center justify-between px-5 py-4" style={{ borderTop: '1px solid rgba(255,255,255,0.04)', background: 'rgba(255,255,255,0.02)' }}>
           <div>
-            <p className="font-bold text-white">Round Numbers</p>
-            <p className="text-[10px] text-tertiary">Automatically round fractions for neat balances.</p>
+            <p className="text-sm font-medium text-[--text-primary]">Currency</p>
+            <p className="text-xs text-tertiary mt-0.5">Preferred currency format across all ledgers.</p>
           </div>
-          <div role="switch" tabIndex={0} aria-checked={settings.roundNumbers}
-            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); updateSettings({ roundNumbers: !settings.roundNumbers }); } }}
-            onClick={() => updateSettings({ roundNumbers: !settings.roundNumbers })}
-            className={cn("w-12 h-6 rounded-full relative cursor-pointer transition-colors duration-300", settings.roundNumbers ? "bg-indigo-600" : "bg-slate-200 dark:bg-slate-700")}
-          >
-            <motion.div layout animate={{ x: settings.roundNumbers ? 28 : 4 }} transition={{ type: "spring", stiffness: 500, damping: 30 }}
-              className="absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm" />
-          </div>
-        </div>
-        <div className="flex items-center justify-between pt-4">
-          <div>
-            <p className="font-bold text-white">Primary Currency Display</p>
-            <p className="text-[10px] text-tertiary">Preferred standard currency format across all ledgers.</p>
-          </div>
-          <select value={settings.currency || 'IDR'} onChange={(e) => updateSettings({ currency: e.target.value })}
-            className="bg-surface-base border border rounded-lg px-3 py-1.5 text-xs font-bold outline-none ring-indigo-500/20 cursor-pointer text-primary"
-          >
+          <select className={selectClass} style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}
+            value={settings.currency || 'IDR'} onChange={(e) => updateSettings({ currency: e.target.value })}>
             <option value="IDR">IDR (Rp)</option>
             <option value="USD">USD ($)</option>
             <option value="EUR">EUR (€)</option>
@@ -70,6 +39,6 @@ export default function PreferencesTab({ settings, updateSettings }) {
           </select>
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 }

@@ -2,29 +2,25 @@ import { memo, useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import useBillStore from '../store/useBillStore';
 import PriceInput from './PriceInput';
+import QuantityInput from './QuantityInput';
+import ReceiptSummary from './ReceiptSummary';
+import ReceiptViewer from './ReceiptViewer';
 import Icon from './Icon';
 import { cn } from '../utils/cn';
 
 function Step2Ledger({
-  receiptSubtotal, receiptService, receiptTax, receiptGrandTotal,
+  receiptSubtotal, receiptService, receiptTax, receiptDiscount, receiptGrandTotal,
   handleServiceModeChange, handleTaxModeChange, setStep
 }) {
   const bill = useBillStore((s) => s.bill);
   const updateBill = useBillStore((s) => s.updateBill);
+  const resetBill = useBillStore((s) => s.resetBill);
   const addItem = useBillStore((s) => s.addItem);
   const updateItem = useBillStore((s) => s.updateItem);
   const removeItem = useBillStore((s) => s.removeItem);
-  const [receiptTab, setReceiptTab] = useState('original');
-  const [zoomLevel, setZoomLevel] = useState(1);
-  const [billBackup, setBillBackup] = useState(null);
+  const [receiptCollapsed, setReceiptCollapsed] = useState(false);
   const [saveFeedback, setSaveFeedback] = useState(null);
   const [hoveredRowId, setHoveredRowId] = useState(null);
-
-  useEffect(() => {
-    if (billBackup || bill.items.length === 0) return;
-    const timer = setTimeout(() => setBillBackup(structuredClone(bill)), 0);
-    return () => clearTimeout(timer);
-  }, [billBackup, bill]);
 
   const handleItemUpdate = useCallback((itemId, fields) => {
     const item = bill.items.find(i => i.id === itemId);
@@ -51,385 +47,309 @@ function Step2Ledger({
   }, [addItem, updateItem]);
 
   const handleRerunOCR = useCallback(() => {
+    resetBill();
     setStep(1);
-  }, [setStep]);
-
-  const handleUndo = useCallback(() => {
-    if (billBackup) {
-      updateBill(structuredClone(billBackup));
-      setSaveFeedback('Reverted all changes to initial snapshot');
-      setTimeout(() => setSaveFeedback(null), 3000);
-    }
-  }, [billBackup, updateBill]);
+  }, [resetBill, setStep]);
 
   const handleSaveDraft = useCallback(() => {
-    setSaveFeedback('Ledger draft saved successfully!');
+    setSaveFeedback('Draft saved!');
     setTimeout(() => setSaveFeedback(null), 3000);
   }, []);
 
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0.98 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.98 }}
-      className="flex flex-col xl:flex-row gap-8 w-full flex-1"
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -10 }}
+      className="flex flex-col xl:flex-row gap-6 w-full flex-1"
     >
-      <div className="w-full xl:w-[420px] bg-card/80 border border rounded-2xl flex flex-col group relative shadow-premium overflow-hidden backdrop-blur-md">
-        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 via-indigo-500 to-indigo-600"></div>
-        {bill.imageUrl ? (
-          <div className="p-4 border-b border flex bg-surface-base/20 items-center justify-between">
-            <div className="flex bg-surface-base p-1 rounded-xl w-3/4 border border">
-              <button
-                onClick={() => setReceiptTab('original')}
-                className={cn(
-                  "flex-1 py-1.5 px-3 text-[10px] font-bold uppercase rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer border-none outline-none",
-                  receiptTab === 'original' ? "bg-surface-elevated text-indigo-400 shadow-sm" : "text-tertiary hover:text-slate-350"
-                )}
-              >
-                <Icon name="photo_library" className="text-xs" /> Original
-              </button>
-              <button
-                onClick={() => setReceiptTab('ledger')}
-                className={cn(
-                  "flex-1 py-1.5 px-3 text-[10px] font-bold uppercase rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer border-none outline-none",
-                  receiptTab === 'ledger' ? "bg-surface-elevated text-indigo-400 shadow-sm" : "text-tertiary hover:text-slate-355"
-                )}
-              >
-                <Icon name="receipt_long" className="text-xs" /> Ledger View
-              </button>
-            </div>
-            {receiptTab === 'original' && (
-              <button
-                onClick={() => setZoomLevel(prev => prev === 1 ? 1.6 : 1)}
-                className="p-2 bg-surface-base hover:bg-surface-elevated border border text-secondary hover:text-white rounded-lg transition-colors cursor-pointer"
-                title={zoomLevel === 1 ? "Zoom In Receipt" : "Zoom Out Receipt"}
-              >
-                <Icon name={zoomLevel === 1 ? "zoom_in" : "zoom_out"} className="text-sm" />
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="p-6 border-b border flex justify-between items-center bg-surface-base/20">
-            <h3 className="font-bold text-white flex items-center gap-2 text-sm">
-              <Icon name="document_scanner" className="text-indigo-400" />
-              Receipt Ledger
-            </h3>
-            <span className="text-[9px] font-bold text-indigo-455 bg-indigo-950/50 border border-indigo-900/30 px-2 py-0.5 rounded uppercase tracking-wider">Manual entry</span>
-          </div>
-        )}
-        <div className="flex-1 p-6 overflow-y-auto bg-surface-base/30 flex flex-col gap-6 hide-scrollbar">
-          {(!bill.imageUrl || receiptTab === 'ledger') ? (
-            <div className="bg-card-alt p-6 shadow-2xl rounded-xl border border min-h-[460px] flex flex-col justify-between relative overflow-hidden">
-              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-500 to-indigo-500 opacity-60"></div>
-              <div className="text-center mb-6 mt-2">
-                <p className="font-black text-sm uppercase tracking-[0.25em] text-white leading-tight">{bill.title || "SPLITMATE LEDGER"}</p>
-                <p className="text-[8px] text-indigo-400/80 font-bold mt-2 uppercase tracking-widest bg-indigo-950/30 border border-indigo-900/20 py-1 px-3 rounded-full inline-block">
-                  RECEIPT • {new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }).toUpperCase()}
-                </p>
+      {/* Receipt Preview — 25% */}
+      <div className={cn(
+        "w-full xl:w-1/4 flex-shrink-0 transition-all duration-300",
+        receiptCollapsed && "xl:w-16"
+      )}>
+        <div className={cn(
+          "bg-surface-elevated/80 backdrop-blur-xl border border-white/[0.04] rounded-3xl shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_8px_32px_rgba(0,0,0,0.3)] relative sticky top-0",
+          !receiptCollapsed && "overflow-hidden"
+        )}>
+          {/* Collapse / Expand toggle */}
+          {receiptCollapsed ? (
+            <button
+              onClick={() => setReceiptCollapsed(false)}
+              className="w-full h-full min-h-[200px] flex items-center justify-center rounded-3xl bg-transparent hover:bg-white/[0.02] transition-colors text-tertiary hover:text-primary cursor-pointer outline-none"
+              title="Show receipt preview"
+            >
+              <div className="flex flex-col items-center gap-2">
+                <Icon name="keyboard_arrow_right" className="text-lg" />
+                <span className="text-[7px] font-semibold uppercase tracking-widest [writing-mode:vertical-rl]">Receipt</span>
               </div>
-              <div className="space-y-3 flex-1 mt-6">
-                {bill.items.map(item => {
-                  const qty = item.qty || 1;
-                  const unitPrice = item.unitPrice !== undefined ? item.unitPrice : item.price;
-                  return (
-                    <div key={item.id} className="flex justify-between text-[11px] py-2.5 border-b border border-dashed font-semibold font-numeric">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[9px] text-tertiary bg-surface-base border border px-1.5 py-0.5 rounded font-bold">{qty}x</span>
-                        <span className="text-secondary uppercase text-[9px] tracking-wider font-bold max-w-[160px] truncate">{item.name || "UNNAMED ITEM"}</span>
-                      </div>
-                      <span className="text-primary">Rp {(qty * unitPrice).toLocaleString('id-ID')}</span>
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="mt-8 pt-4 border-t border space-y-2 text-[9px] font-bold text-tertiary uppercase tracking-widest font-numeric">
-                <div className="flex justify-between items-center">
-                  <span>Subtotal</span>
-                  <span className="text-slate-350 text-xs font-bold">Rp {receiptSubtotal.toLocaleString('id-ID')}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span>Service Charge</span>
-                  <span className="text-slate-355 text-xs font-bold">Rp {receiptService.toLocaleString('id-ID')}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span>Tax / PB1</span>
-                  <span className="text-slate-360 text-xs font-bold">Rp {receiptTax.toLocaleString('id-ID')}</span>
-                </div>
-              </div>
-              <div className="mt-4 pt-4 border-t-2 border border-double flex justify-between items-center font-numeric">
-                <span className="font-black text-xs tracking-wider text-secondary">GRAND TOTAL</span>
-                <span className="text-lg font-black text-indigo-400">Rp {receiptGrandTotal.toLocaleString('id-ID')}</span>
-              </div>
-            </div>
+            </button>
           ) : (
-            <div className="bg-card-alt p-2 shadow-xl rounded-xl border border flex flex-col gap-3 min-h-[460px] justify-center items-center relative overflow-hidden group/image">
-              <div className="w-full h-full min-h-[420px] max-h-[460px] flex items-center justify-center overflow-auto rounded-lg hide-scrollbar relative">
-                <img
-                  src={bill.imageUrl}
-                  alt="Original Receipt"
-                  className="max-w-full h-auto object-contain max-h-[440px] rounded-lg transition-transform duration-350 ease-out origin-center"
-                  style={{ transform: `scale(${zoomLevel})` }}
-                />
-              </div>
-            </div>
+            <button
+              onClick={() => setReceiptCollapsed(true)}
+              className="absolute top-3 right-3 z-20 w-6 h-6 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] flex items-center justify-center text-tertiary hover:text-secondary transition-all border-none outline-none cursor-pointer"
+            >
+              <Icon name="keyboard_arrow_left" className="text-sm" />
+            </button>
           )}
-          <div className="bg-card-alt p-5 shadow-xl rounded-xl border border space-y-4">
-            <div className="flex justify-between items-center pb-2 border-b border">
-              <span className="text-[10px] font-bold text-tertiary uppercase tracking-widest flex items-center gap-1.5">
-                <Icon name="settings" className="text-xs text-indigo-400" />
-                Metadata Parameters
-              </span>
-            </div>
-            <div className="space-y-4">
-              <div className="relative group">
-                <label htmlFor="ledger-title" className="absolute -top-2 left-3 px-1.5 bg-card-alt text-[9px] font-bold text-indigo-400 uppercase tracking-widest z-10 transition-colors group-focus-within:text-purple-400">
-                  Restaurant Name
-                </label>
-                <input
-                  id="ledger-title"
-                  value={bill.title}
-                  onChange={(e) => updateBill({ title: e.target.value })}
-                  className="w-full px-3 py-2.5 bg-surface-base/50 border border-slate-905 focus:border-indigo-500 rounded-lg outline-none font-bold text-xs md:text-sm text-white transition-colors"
-                  placeholder="e.g. Kopikina Cilandak"
-                />
+
+          {!receiptCollapsed && (
+            <>
+              {/* Header */}
+              <div className="p-5 border-b border-white/[0.04]">
+                <h3 className="text-xs font-semibold text-primary flex items-center gap-2">
+                  <Icon name="document_scanner" className="text-brand-primary text-sm" />
+                  Receipt Preview
+                  {bill.ocrConfidence > 0 && (
+                    <span className="text-[9px] font-bold text-emerald-400/80 bg-emerald-500/10 px-2 py-0.5 rounded-md ml-auto">
+                      AI {Math.round(bill.ocrConfidence)}%
+                    </span>
+                  )}
+                </h3>
+                {bill.imageUrl && (
+                  <div className="flex gap-1.5 mt-2">
+                    <button onClick={handleRerunOCR}
+                      className="p-1.5 bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.04] text-tertiary hover:text-secondary rounded-lg transition-colors cursor-pointer border-none outline-none"
+                      title="Scan a different receipt"
+                    >
+                      <Icon name="autorenew" className="text-sm" />
+                    </button>
+                  </div>
+                )}
               </div>
-              <div className="text-[9px] text-tertiary font-semibold text-center">
-                {new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div className="flex-1 bg-card/80 border border rounded-2xl shadow-premium flex flex-col overflow-hidden backdrop-blur-md relative">
-        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 via-indigo-500 to-indigo-600"></div>
-        <div className="p-6 border-b border flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-surface-base/20">
-          <div>
-            <h3 className="font-black text-sm text-white uppercase tracking-wider flex items-center gap-2">
-              <span className="w-1.5 h-3 bg-indigo-500 rounded-full inline-block"></span>
-              Detected Ledger Rows
-            </h3>
-            <p className="text-[10px] text-tertiary font-semibold mt-1">Review, edit, or adjust items extracted by SplitMate AI</p>
-            {bill.ocrConfidence > 0 && (
-              <div className="flex items-center gap-1.5 mt-2">
-                <div className={cn(
-                  "h-1.5 w-16 rounded-full overflow-hidden bg-surface-raised",
-                )}>
-                  <div
-                    className={cn(
-                      "h-full rounded-full transition-all",
-                      bill.ocrConfidence >= 80 ? "bg-emerald-500" : bill.ocrConfidence >= 50 ? "bg-amber-500" : "bg-red-500"
+
+              {/* Receipt image or styled view */}
+              <div className="overflow-y-auto max-h-[320px] hide-scrollbar">
+                {bill.imageUrl ? (
+                  <div className="p-3">
+                    <ReceiptViewer src={bill.imageUrl} alt="Receipt" className="w-full h-[320px]" />
+                  </div>
+                ) : (
+                  <div className="p-4 bg-black/20 mx-3 my-3 rounded-2xl border border-white/[0.04] min-h-[200px] flex flex-col justify-between">
+                    <div className="text-center mt-3">
+                      <p className="text-xs font-bold text-primary uppercase tracking-wider">{bill.title || "MANUAL LEDGER"}</p>
+                      <p className="text-[8px] text-tertiary mt-1 font-medium uppercase tracking-widest">
+                        {new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }).toUpperCase()}
+                      </p>
+                    </div>
+                    <div className="space-y-1.5 mt-4">
+                      {bill.items.slice(0, 6).map(item => {
+                        const qty = item.qty ?? item.quantity ?? 1;
+                        const unitPrice = item.unitPrice !== undefined ? item.unitPrice : item.price;
+                        return (
+                          <div key={item.id} className="flex justify-between text-[10px] font-medium text-secondary">
+                            <span className="truncate max-w-[100px]">{item.name || "Item"}</span>
+                            <span className="text-primary font-numeric">Rp {(qty * unitPrice).toLocaleString('id-ID')}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {bill.items.length > 6 && (
+                      <p className="text-[9px] text-tertiary text-center mt-2">+{bill.items.length - 6} more items</p>
                     )}
-                    style={{ width: `${bill.ocrConfidence}%` }}
+                  </div>
+                )}
+              </div>
+
+              {/* Bill Details */}
+              <div className="p-5 border-t border-white/[0.04] space-y-4">
+                <h4 className="text-[10px] font-semibold text-tertiary uppercase tracking-wider flex items-center gap-1.5">
+                  <Icon name="info" className="text-xs" />
+                  Bill Details
+                </h4>
+                <div>
+                  <label className="text-[9px] font-medium text-tertiary tracking-wide block mb-1">Merchant</label>
+                  <input
+                    value={bill.title}
+                    onChange={(e) => updateBill({ title: e.target.value })}
+                    className="w-full h-9 px-3 bg-black/20 border border-white/[0.06] rounded-xl text-xs font-medium text-primary placeholder:text-tertiary/60 transition-all hover:border-white/[0.12] focus:border-brand-primary/50 focus:shadow-[0_0_0_1px_var(--brand-primary)] focus:outline-none"
+                    placeholder="Restaurant or store name"
                   />
                 </div>
-                <span className={cn(
-                  "text-[10px] font-bold",
-                  bill.ocrConfidence >= 80 ? "text-emerald-400" : bill.ocrConfidence >= 50 ? "text-amber-400" : "text-red-400"
-                )}>
-                  {Math.round(bill.ocrConfidence)}%
-                </span>
+                <div>
+                  <label className="text-[9px] font-medium text-tertiary tracking-wide block mb-1">Date</label>
+                  <input type="date" value={bill.date || new Date().toISOString().slice(0, 10)}
+                    onChange={(e) => updateBill({ date: e.target.value })}
+                    className="w-full h-9 px-3 bg-black/20 border border-white/[0.06] rounded-xl text-xs font-medium text-primary placeholder:text-tertiary/60 transition-all hover:border-white/[0.12] focus:border-brand-primary/50 focus:shadow-[0_0_0_1px_var(--brand-primary)] focus:outline-none [color-scheme:dark]"
+                  />
+                </div>
               </div>
-            )}
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Bill Items — 75% */}
+      <div className="flex-1 bg-surface-elevated/80 backdrop-blur-xl border border-white/[0.04] rounded-3xl flex flex-col overflow-hidden shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_8px_32px_rgba(0,0,0,0.3)] relative">
+        <AnimatePresence>
+          {saveFeedback && (
+            <motion.div
+              initial={{ opacity: 0, y: -16 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -16 }}
+              className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-emerald-950/80 backdrop-blur-md border border-emerald-500/30 rounded-xl px-4 py-2.5 shadow-xl flex items-center gap-2 text-emerald-400 font-semibold text-xs"
+              role="status" aria-live="polite"
+            >
+              <Icon name="check_circle" className="text-sm" />
+              {saveFeedback}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Header */}
+        <div className="p-5 border-b border-white/[0.04] flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+          <div>
+            <h2 className="text-base font-bold text-primary flex items-center gap-2">
+              <span className="w-1 h-4 bg-brand-primary rounded-full inline-block" />
+              Receipt Items
+            </h2>
+            <p className="text-[11px] text-secondary mt-0.5">Review, edit or add missing items.</p>
           </div>
-          <div className="flex items-center gap-2 self-stretch md:self-auto justify-end">
-            <button onClick={handleUndo} disabled={!billBackup}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-955 border border hover:bg-surface-elevated disabled:opacity-40 disabled:cursor-not-allowed text-primary hover:text-white font-extrabold text-[10px] uppercase tracking-wider transition-all cursor-pointer"
-              title="Undo all changes since mounting"
-            >
-              <Icon name="undo" className="text-xs" /> Undo
-            </button>
+          <div className="flex items-center gap-2">
             <button onClick={handleRerunOCR}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-955 border border hover:bg-surface-elevated text-slate-350 hover:text-white font-extrabold text-[10px] uppercase tracking-wider transition-all cursor-pointer"
+              className="h-8 px-3 rounded-xl bg-transparent hover:bg-white/[0.04] border border-white/[0.06] text-tertiary hover:text-secondary text-[10px] font-medium transition-all flex items-center gap-1.5 cursor-pointer outline-none"
             >
-              <Icon name="autorenew" className="text-xs text-purple-400" /> Re-scan
+              <Icon name="autorenew" className="text-xs" /> Scan Different Receipt
             </button>
             <button onClick={handleSaveDraft}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-950/40 border border-indigo-900/40 hover:bg-indigo-900/35 text-indigo-400 hover:text-indigo-300 font-extrabold text-[10px] uppercase tracking-wider transition-all cursor-pointer"
+              className="h-8 px-3 rounded-xl bg-transparent hover:bg-white/[0.04] border border-white/[0.06] text-tertiary hover:text-secondary text-[10px] font-medium transition-all flex items-center gap-1.5 cursor-pointer outline-none"
             >
               <Icon name="save" className="text-xs" /> Save Draft
             </button>
           </div>
         </div>
-        <AnimatePresence>
-          {saveFeedback && (
-            <motion.div
-              initial={{ opacity: 0, y: -20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="absolute top-20 left-1/2 -translate-x-1/2 z-50 bg-emerald-950/90 backdrop-blur-md border border-emerald-500/50 rounded-xl px-4 py-2.5 shadow-2xl flex items-center gap-2 text-emerald-400 font-bold text-xs"
-              role="status" aria-live="polite"
-            >
-              <Icon name="check_circle" className="text-sm animate-bounce" />
-              {saveFeedback}
-            </motion.div>
-          )}
-        </AnimatePresence>
-        <div className="overflow-y-auto flex-1 hide-scrollbar bg-surface-base/10 min-h-[300px]">
+
+        {/* Items Table or Empty State */}
+        <div className="overflow-y-auto flex-1 hide-scrollbar">
           {bill.items.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full min-h-[300px] text-center p-8">
-              <Icon name="receipt_long" className="text-5xl text-tertiary mb-4" />
-              <p className="text-sm font-bold text-tertiary mb-1">No items yet</p>
-              <p className="text-[10px] text-tertiary mb-6">Upload a receipt or add items manually below.</p>
+            <div className="flex flex-col items-center justify-center h-full min-h-[400px] text-center p-8">
+              <div className="w-20 h-20 rounded-3xl bg-brand-primary/5 border border-brand-primary/10 flex items-center justify-center mb-5">
+                <Icon name="receipt_long" className="text-4xl text-brand-primary/40" />
+              </div>
+              <h3 className="text-lg font-bold text-primary mb-1">No items found yet</h3>
+              <p className="text-xs text-secondary max-w-[280px] leading-relaxed mb-6">
+                Upload a receipt or manually add items to start building your bill.
+              </p>
+              <div className="flex gap-3">
+                <button onClick={handleAddItemInline}
+                  className="h-10 px-5 bg-gradient-to-r from-brand-primary to-indigo-500 rounded-2xl text-xs font-semibold text-white shadow-xl shadow-brand-primary/20 hover:shadow-[0_0_24px_var(--brand-primary-glow)] transition-all duration-200 flex items-center gap-2 cursor-pointer border-none outline-none"
+                >
+                  <Icon name="add" className="text-sm" /> Add First Item
+                </button>
+                <button onClick={handleRerunOCR}
+                  className="h-10 px-5 bg-transparent hover:bg-white/[0.04] border border-white/[0.06] rounded-2xl text-xs font-medium text-secondary hover:text-primary transition-all duration-200 flex items-center gap-2 cursor-pointer outline-none"
+                >
+                  <Icon name="cloud_upload" className="text-sm" /> Scan Different Receipt
+                </button>
+              </div>
             </div>
           ) : (
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="bg-surface-base/90 border-b border text-left sticky top-0 z-10 backdrop-blur-md">
-                <th scope="col" className="px-4 py-3 text-[9px] font-bold text-tertiary uppercase tracking-widest">Item Description</th>
-                <th scope="col" className="px-4 py-3 text-[9px] font-bold text-tertiary uppercase tracking-widest text-center w-28">Qty</th>
-                <th scope="col" className="px-4 py-3 text-[9px] font-bold text-tertiary uppercase tracking-widest text-right w-40">Unit Price</th>
-                <th scope="col" className="px-4 py-3 text-[9px] font-bold text-tertiary uppercase tracking-widest text-right w-36">Row Total</th>
-                <th scope="col" className="px-4 py-3 text-[9px] font-bold text-tertiary uppercase tracking-widest text-center w-12"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border font-semibold text-xs">
-              <AnimatePresence>
-                {bill.items.map((item) => {
-                  const qty = item.qty || 1;
-                  const unitPrice = item.unitPrice !== undefined ? item.unitPrice : item.price;
-                  const calculatedRowTotal = qty * unitPrice;
-                  return (
-                    <motion.tr
-                      key={item.id}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0, scale: 0.98 }}
-                      onMouseEnter={() => setHoveredRowId(item.id)}
-                      onMouseLeave={() => setHoveredRowId(null)}
-                      className={cn(
-                        "transition-colors group border-b border/50",
-                        hoveredRowId === item.id ? "bg-indigo-950/15" : "hover:bg-surface-base/20"
-                      )}
-                    >
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          {qty === 1 && unitPrice === 0 && (
-                            <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" title="Low OCR confidence warning: complete item values"></span>
+            <>
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr className="border-b border-white/[0.04] text-left">
+                    <th scope="col" className="px-5 py-3 text-[9px] font-semibold text-tertiary uppercase tracking-wider">Item</th>
+                    <th scope="col" className="px-5 py-3 text-[9px] font-semibold text-tertiary uppercase tracking-wider text-center w-24">Qty</th>
+                    <th scope="col" className="px-5 py-3 text-[9px] font-semibold text-tertiary uppercase tracking-wider text-right w-36">Price</th>
+                    <th scope="col" className="px-5 py-3 text-[9px] font-semibold text-tertiary uppercase tracking-wider text-right w-32">Total</th>
+                    <th scope="col" className="px-5 py-3 text-center w-10"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/[0.03]">
+                  <AnimatePresence>
+                    {bill.items.map((item) => {
+                      const qty = item.qty ?? item.quantity ?? 1;
+                      const unitPrice = item.unitPrice !== undefined ? item.unitPrice : item.price;
+                      const rowTotal = qty * unitPrice;
+                      return (
+                        <motion.tr
+                          key={item.id}
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0, scale: 0.98 }}
+                          onMouseEnter={() => setHoveredRowId(item.id)}
+                          onMouseLeave={() => setHoveredRowId(null)}
+                          className={cn(
+                            "transition-colors",
+                            hoveredRowId === item.id ? "bg-brand-primary/[0.03]" : "hover:bg-white/[0.02]"
                           )}
-                          <input
-                            value={item.name}
-                            onChange={(e) => handleItemUpdate(item.id, { name: e.target.value })}
-                            className="w-full bg-transparent border-none focus:ring-0 font-bold text-white p-0 text-xs md:text-sm outline-none placeholder-slate-700 focus:border-b focus:border-indigo-500/50 transition-all"
-                            placeholder="e.g. Wagyu Ribeye Steak"
-                          />
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-center w-28">
-                        <div className="flex items-center justify-between bg-surface-base px-1 py-1 rounded-lg border border max-w-[90px] mx-auto group-hover:border-strong transition-colors">
-                      <button type="button" aria-label="Decrease quantity"
-                        onClick={() => handleItemUpdate(item.id, { qty: Math.max(1, qty - 1) })}
-                            className="w-5 h-5 flex items-center justify-center bg-surface-elevated hover:bg-slate-850 hover:text-white text-tertiary rounded border-none cursor-pointer font-extrabold text-[10px] transition-colors"
-                          >-</button>
-                          <span className="text-xs font-black text-white font-numeric">{qty}</span>
-                      <button type="button" aria-label="Increase quantity"
-                        onClick={() => handleItemUpdate(item.id, { qty: qty + 1 })}
-                            className="w-5 h-5 flex items-center justify-center bg-surface-elevated hover:bg-slate-850 hover:text-white text-tertiary rounded border-none cursor-pointer font-extrabold text-[10px] transition-colors"
-                          >+</button>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-right w-40">
-                        <PriceInput variant="ghost" value={unitPrice}
-                          onChange={(val) => handleItemUpdate(item.id, { unitPrice: val })}
-                          className="text-right font-bold text-primary text-xs md:text-sm focus-within:text-white"
-                        />
-                      </td>
-                      <td className="px-4 py-3 text-right font-bold font-numeric text-indigo-400 text-xs md:text-sm w-36">
-                        Rp {calculatedRowTotal.toLocaleString('id-ID')}
-                      </td>
-                      <td className="px-4 py-3 text-center w-12">
-                        <button onClick={() => removeItem(item.id)}
-                          className="text-tertiary hover:text-red-500 focus-visible:text-red-500 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-all border-none bg-transparent cursor-pointer outline-none"
-                          title="Remove Item Row"
                         >
-                          <Icon name="delete" className="text-base" />
-                        </button>
-                      </td>
-                    </motion.tr>
-                  );
-                })}
-              </AnimatePresence>
-            </tbody>
-          </table>
+                          <td className="px-5 py-3.5">
+                            <input
+                              value={item.name}
+                              onChange={(e) => handleItemUpdate(item.id, { name: e.target.value })}
+                              className="w-full bg-transparent border-none outline-none text-sm font-medium text-primary placeholder:text-tertiary/40 focus:outline-none"
+                              placeholder="Item name"
+                            />
+                          </td>
+                          <td className="px-5 py-3.5 text-center">
+                            <QuantityInput value={qty} min={1} className="max-w-[104px] mx-auto"
+                              onChange={(v) => handleItemUpdate(item.id, { qty: v })}
+                            />
+                          </td>
+                          <td className="px-5 py-3.5 text-right w-36">
+                            <PriceInput variant="ghost" value={unitPrice}
+                              onChange={(val) => handleItemUpdate(item.id, { unitPrice: val })}
+                              className="text-right font-medium text-primary text-sm"
+                            />
+                          </td>
+                          <td className="px-5 py-3.5 text-right font-semibold font-numeric text-brand-primary text-sm w-32">
+                            Rp {rowTotal.toLocaleString('id-ID')}
+                          </td>
+                          <td className="px-5 py-3.5 text-center w-10">
+                            <button onClick={() => removeItem(item.id)}
+                              className={cn(
+                                "transition-all border-none bg-transparent cursor-pointer outline-none",
+                                hoveredRowId === item.id ? "text-red-400 scale-110" : "text-tertiary/30"
+                              )}
+                              title="Remove item"
+                            >
+                              <Icon name="delete" className="text-base" />
+                            </button>
+                          </td>
+                        </motion.tr>
+                      );
+                    })}
+                  </AnimatePresence>
+                </tbody>
+              </table>
+
+              {/* Add item button */}
+              <div className="px-5 py-3 border-t border-white/[0.03]">
+                <button onClick={handleAddItemInline}
+                  className="w-full py-3 rounded-2xl border border-dashed border-white/[0.06] hover:border-brand-primary/30 bg-transparent hover:bg-brand-primary/[0.02] text-tertiary hover:text-brand-primary text-xs font-medium flex items-center justify-center gap-1.5 transition-all cursor-pointer outline-none"
+                >
+                  <Icon name="add" className="text-sm" /> Add Item
+                </button>
+              </div>
+            </>
           )}
-          <div className="p-4 border-t border-dashed border">
-            <button onClick={handleAddItemInline}
-              className="w-full py-3.5 rounded-xl border border-dashed border hover:border-indigo-500/40 bg-surface-base/20 hover:bg-indigo-950/5 text-secondary hover:text-indigo-400 font-extrabold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer border-none"
-            >
-              <Icon name="add" className="text-sm" /> Add Item Manually Inline
-            </button>
-          </div>
         </div>
-        <div className="p-6 bg-surface-base/90 backdrop-blur-md flex flex-col gap-5 border-t border sticky bottom-0 z-10">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-2 border-b border-dashed border">
-            <div>
-              <div className="flex justify-between items-center mb-2">
-                <label htmlFor="service-charge-input" className="text-[9px] font-bold text-tertiary uppercase tracking-widest">Service Charge</label>
-                <div className="flex bg-surface-base p-0.5 rounded-lg border border">
-                  <button onClick={() => handleServiceModeChange('percent')}
-                    className={cn("px-2.5 py-1 text-[9px] font-bold rounded-lg transition-all border-none outline-none cursor-pointer", bill.serviceMode === 'percent' ? "bg-surface-elevated text-indigo-400 font-bold shadow" : "text-tertiary")}
-                  >%</button>
-                  <button onClick={() => handleServiceModeChange('amount')}
-                    className={cn("px-2.5 py-1 text-[9px] font-bold rounded-lg transition-all border-none outline-none cursor-pointer", bill.serviceMode === 'amount' ? "bg-surface-elevated text-indigo-400 font-bold shadow" : "text-tertiary")}
-                  >Rp</button>
-                </div>
-              </div>
-              {bill.serviceMode === 'percent' ? (
-                <div className="space-y-1">
-                  <input id="service-charge-input" type="number" value={bill.serviceCharge === null || bill.serviceCharge === undefined ? '' : bill.serviceCharge}
-                    onChange={(e) => updateBill({ serviceCharge: parseFloat(e.target.value) || 0 })}
-                    className="w-full py-2 bg-surface-base/50 border border focus:border-indigo-500 rounded-lg outline-none px-3 font-bold text-xs text-white" placeholder="5"
-                  />
-                  <p className="text-[9px] text-tertiary font-semibold pl-1 font-numeric">≈ Rp {Math.round(receiptSubtotal * ((bill.serviceCharge || 0) / 100)).toLocaleString('id-ID')}</p>
-                </div>
-              ) : (
-                <div className="space-y-1">
-                  <PriceInput value={bill.serviceCharge || 0} onChange={(val) => updateBill({ serviceCharge: val })} className="h-[36px] text-xs font-bold" />
-                  <p className="text-[9px] text-tertiary font-semibold pl-1 font-numeric">≈ {(receiptSubtotal > 0 ? ((bill.serviceCharge || 0) / receiptSubtotal) * 100 : 0).toFixed(1)}%</p>
-                </div>
-              )}
-            </div>
-            <div>
-              <div className="flex justify-between items-center mb-2">
-                <label htmlFor="tax-input" className="text-[9px] font-bold text-tertiary uppercase tracking-widest">Tax / PB1</label>
-                <div className="flex bg-surface-base p-0.5 rounded-lg border border">
-                  <button onClick={() => handleTaxModeChange('percent')}
-                    className={cn("px-2.5 py-1 text-[9px] font-bold rounded-lg transition-all border-none outline-none cursor-pointer", bill.taxMode === 'percent' ? "bg-surface-elevated text-indigo-400 font-bold shadow" : "text-tertiary")}
-                  >%</button>
-                  <button onClick={() => handleTaxModeChange('amount')}
-                    className={cn("px-2.5 py-1 text-[9px] font-bold rounded-lg transition-all border-none outline-none cursor-pointer", bill.taxMode === 'amount' ? "bg-surface-elevated text-indigo-400 font-bold shadow" : "text-tertiary")}
-                  >Rp</button>
-                </div>
-              </div>
-              {bill.taxMode === 'percent' ? (
-                <div className="space-y-1">
-                  <input id="tax-input" type="number" value={bill.tax === null || bill.tax === undefined ? '' : bill.tax}
-                    onChange={(e) => updateBill({ tax: parseFloat(e.target.value) || 0 })}
-                    className="w-full py-2 bg-surface-base/50 border border focus:border-indigo-500 rounded-lg outline-none px-3 font-bold text-xs text-white" placeholder="11"
-                  />
-                  <p className="text-[9px] text-tertiary font-semibold pl-1 font-numeric">≈ Rp {Math.round(receiptSubtotal * ((bill.tax || 0) / 100)).toLocaleString('id-ID')}</p>
-                </div>
-              ) : (
-                <div className="space-y-1">
-                  <PriceInput value={bill.tax || 0} onChange={(val) => updateBill({ tax: val })} className="h-[36px] text-xs font-bold" />
-                  <p className="text-[9px] text-tertiary font-semibold pl-1 font-numeric">≈ {(receiptSubtotal > 0 ? ((bill.tax || 0) / receiptSubtotal) * 100 : 0).toFixed(1)}%</p>
-                </div>
-              )}
-            </div>
+
+        {/* Financial Summary */}
+        {bill.items.length > 0 && (
+          <div className="px-5 py-4 border-t border-white/[0.04]">
+            <ReceiptSummary
+              subtotal={receiptSubtotal}
+              discount={bill.discountMode === 'percent' ? Math.round(receiptSubtotal * (bill.discount ?? 0) / 100) : (bill.discount ?? 0)}
+              onDiscountChange={(v) => updateBill({ discount: Math.max(0, v), discountMode: 'amount' })}
+              tax={receiptTax}
+              onTaxChange={(v) => updateBill({ tax: v, taxMode: 'amount' })}
+              serviceCharge={receiptService}
+              onServiceChange={(v) => updateBill({ serviceCharge: v, serviceMode: 'amount' })}
+              grandTotal={receiptGrandTotal}
+            />
           </div>
-          <div className="flex flex-col md:flex-row justify-between items-center gap-4 pt-1">
-            <div className="text-center md:text-left self-stretch md:self-auto font-numeric">
-              <span className="text-[8px] font-bold text-tertiary uppercase tracking-[0.2em] block mb-1">Grand Total</span>
-              <span className="text-2xl font-black text-white flex items-center justify-center md:justify-start gap-1">
-                <span className="text-xs text-tertiary font-semibold">Rp</span>
-                {receiptGrandTotal.toLocaleString('id-ID')}
-              </span>
-            </div>
-            <button onClick={() => setStep(3)}
-              className="w-full md:w-auto px-8 py-4 bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-700 hover:to-indigo-700 text-white rounded-xl font-extrabold text-xs shadow-xl shadow-indigo-600/20 hover:shadow-indigo-600/35 transition-all duration-300 flex items-center justify-center gap-2 border-none cursor-pointer outline-none transform active:scale-[0.99] tracking-wider"
-            >
-              Next: Add People <Icon name="arrow_forward" className="text-xs font-bold" />
-            </button>
-          </div>
+        )}
+
+        {/* Footer — Continue */}
+        <div className="px-5 pb-5 pt-2">
+          <button onClick={() => setStep(3)}
+            className="w-full h-12 rounded-2xl bg-gradient-to-r from-brand-primary to-indigo-500 text-xs font-semibold text-white shadow-xl shadow-brand-primary/20 hover:shadow-[0_0_24px_var(--brand-primary-glow)] transition-all duration-200 flex items-center justify-center gap-2 border-none cursor-pointer outline-none"
+          >
+            Continue
+            <Icon name="arrow_forward" className="text-sm" />
+          </button>
         </div>
       </div>
     </motion.div>

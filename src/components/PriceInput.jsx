@@ -26,7 +26,7 @@ const PriceInput = memo(({
         <span className="text-xs font-black text-secondary">Rp</span>
         <input 
           type="text"
-          value={formatIDR(value === 0 ? '' : value)}
+          value={value === 0 ? '' : value}
           onChange={handleInputChange}
           className="w-32 bg-transparent border-none focus:ring-0 text-right font-black text-primary p-0 text-xl outline-none"
           placeholder={placeholder}

@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import useBillStore from './store/useBillStore';
 import useAuthStore from './store/useAuthStore';
-import { ThemeProvider } from './hooks/useTheme.jsx';
 import { api } from './lib/api';
 import { cn } from './utils/cn';
 import './index.css';
@@ -22,26 +21,27 @@ import Step3People from './components/Step3People';
 import Step4Shares from './components/Step4Shares';
 import Step5Settlement from './components/Step5Settlement';
 import Dashboard from './components/Dashboard';
+import ActivityFeed from './components/dashboard/ActivityFeed';
 import SettingsPage from './components/SettingsPage';
 
 export default function App() {
   const navigate = useNavigate();
   const bill = useBillStore((s) => s.bill);
   const updateBill = useBillStore((s) => s.updateBill);
+  const resetBill = useBillStore((s) => s.resetBill);
   const calculateTotals = useBillStore((s) => s.calculateTotals);
   const settings = useBillStore((s) => s.settings);
   const assignments = useBillStore((s) => s.assignments);
   const ui = useBillStore((s) => s.ui);
   const updateUI = useBillStore((s) => s.updateUI);
   const fetchCompletedBills = useBillStore((s) => s.fetchCompletedBills);
+  const completedBills = useBillStore((s) => s.completedBills);
+  const isLoadingBills = useBillStore((s) => s.isLoadingBills);
   const completeBill = useBillStore((s) => s.completeBill);
   const accessToken = useAuthStore((state) => state.accessToken);
-  const isGuest = useAuthStore((state) => state.isGuest);
-  const refreshToken = useAuthStore((state) => state.refreshToken);
   const isAuthenticated = !!accessToken;
   const step = ui?.step ?? 1;
   const activeTab = ui?.activeTab ?? 'bills';
-  const [hydrated, setHydrated] = useState(() => useAuthStore.persist.hasHydrated());
   const [isValidating, setIsValidating] = useState(true);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const silentRefresh = useAuthStore((s) => s.silentRefresh);
@@ -54,31 +54,20 @@ export default function App() {
     return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off); };
   }, []);
 
-  useEffect(() => {
-    if (hydrated) return;
-    const unsub = useAuthStore.persist.onFinishHydration(() => setHydrated(true));
-    const timer = setTimeout(() => setHydrated(true), 3000);
-    return () => {
-      if (typeof unsub === 'function') unsub();
-      clearTimeout(timer);
-    };
-  }, [hydrated]);
-
   const initialRefreshRef = useRef(false);
 
   useEffect(() => {
-    if (!hydrated) return;
     if (initialRefreshRef.current) return;
     initialRefreshRef.current = true;
-    if (!refreshToken || isGuest) {
-      setIsValidating(false);
-      return;
-    }
     silentRefresh().finally(() => setIsValidating(false));
-  }, [hydrated, isGuest, silentRefresh]);
+  }, [silentRefresh]);
 
   const stepRef = useRef(step);
-  const setStep = useCallback((newStep) => updateUI({ step: typeof newStep === 'function' ? newStep(stepRef.current) : newStep }), [updateUI]);
+  const setStep = useCallback((newStep) => {
+    const next = typeof newStep === 'function' ? newStep(stepRef.current) : newStep;
+    if (next === 1 && stepRef.current > 1) resetBill();
+    updateUI({ step: next });
+  }, [updateUI, resetBill]);
 
   useEffect(() => {
     stepRef.current = step;
@@ -89,15 +78,28 @@ export default function App() {
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [selectedBillId, setSelectedBillId] = useState(null);
   const [uploadError, setUploadError] = useState(null);
+  const [ocrProgress, setOcrProgress] = useState(0);
+  const handleSelectBill = useCallback((id) => setSelectedBillId(id), []);
+  const handleNewBill = useCallback(() => { updateUI({ activeTab: 'bills', step: 1 }); }, [updateUI]);
+  const handleNext = useCallback(async () => {
+    if (step === 4) {
+      try { await completeBill('draft'); } catch (err) { console.error('Failed to auto-save draft:', err); }
+    }
+    setStep(s => Math.min(s + 1, 5));
+  }, [step, completeBill, setStep]);
+  const handleBack = useCallback(() => setStep(s => Math.max(s - 1, 1)), [setStep]);
+  const [ocrStageIndex, setOcrStageIndex] = useState(0);
   const uploadedFileRef = useRef(null);
+
+  useEffect(() => { document.documentElement.classList.toggle('dark', settings.darkMode); }, [settings.darkMode]);
 
   useEffect(() => { if (!isValidating) fetchCompletedBills(); }, [isValidating, isAuthenticated, fetchCompletedBills]);
 
   useEffect(() => {
-    if (!isValidating && hydrated && !accessToken && !isGuest) {
+    if (!isValidating && !accessToken) {
       navigate('/login', { replace: true });
     }
-  }, [isValidating, hydrated, accessToken, isGuest, navigate]);
+  }, [isValidating, accessToken, navigate]);
 
   const handleUpload = useCallback(async (file) => {
     if (!file) return;
@@ -108,6 +110,25 @@ export default function App() {
     uploadedFileRef.current = file;
     setUploadError(null);
     setIsScanning(true);
+    setOcrProgress(0);
+    setOcrStageIndex(0);
+
+    const startTime = Date.now();
+    const EST_MS = 4000;
+    const interval = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const pct = Math.min(elapsed / EST_MS, 0.95);
+      setOcrProgress(Math.round(pct * 100));
+      if (pct < 0.15) setOcrStageIndex(0);
+      else if (pct < 0.30) setOcrStageIndex(1);
+      else if (pct < 0.50) setOcrStageIndex(2);
+      else if (pct < 0.60) setOcrStageIndex(3);
+      else if (pct < 0.70) setOcrStageIndex(4);
+      else if (pct < 0.80) setOcrStageIndex(5);
+      else if (pct < 0.90) setOcrStageIndex(6);
+      else if (pct < 0.95) setOcrStageIndex(7);
+    }, 100);
+
     let base64Url = '';
     try {
       base64Url = await new Promise((resolve, reject) => {
@@ -120,30 +141,40 @@ export default function App() {
       console.error('Failed to read image file', e);
     }
     try {
-      await new Promise(r => setTimeout(r, 2000));
       const data = await api.processOCR(file);
+      clearInterval(interval);
       if (data?.items?.length) {
-        const items = data.items.map(item => ({ id: crypto.randomUUID(), name: item.name, price: item.price }));
+        const items = data.items.map(item => ({ id: crypto.randomUUID(), name: item.name, price: item.price, qty: item.quantity || 1 }));
         updateBill({
           title: data.title || '',
+          merchant: data.title || '',
           imageUrl: base64Url,
           items,
           serviceCharge: data.service_charge || 0,
           serviceMode: 'amount',
           tax: data.tax || 0,
           taxMode: 'amount',
+          discount: data.discount || 0,
+          date: data.date || new Date().toISOString().slice(0, 10),
           ocrConfidence: data.confidence || 0,
           ocrSubtotal: data.subtotal || 0,
           ocrGrandTotal: data.total || 0,
         });
-        setStep(2);
       } else {
         setUploadError('No items found in receipt. Try a clearer image or enter items manually.');
       }
+      setOcrProgress(100);
+      setOcrStageIndex(7);
+      setTimeout(() => {
+        setIsScanning(false);
+        setStep(2);
+      }, 600);
     } catch (error) {
+      clearInterval(interval);
+      setOcrProgress(0);
+      setOcrStageIndex(0);
       console.error('OCR Failed', error);
       setUploadError(error.message || 'Could not read receipt. Check that the backend is running and try again.');
-    } finally {
       setIsScanning(false);
     }
   }, [updateBill, setStep]);
@@ -155,9 +186,14 @@ export default function App() {
     }
   }, [handleUpload]);
 
-  const receiptSubtotal = useMemo(
-    () => bill.items.reduce((sum, item) => sum + item.price, 0),
+  const computedSubtotal = useMemo(
+    () => bill.items.reduce((sum, item) => sum + (item.unitPrice ?? item.price) * (item.qty ?? item.quantity ?? 1), 0),
     [bill.items]
+  );
+
+  const receiptSubtotal = useMemo(
+    () => bill.ocrSubtotal || computedSubtotal,
+    [bill.ocrSubtotal, computedSubtotal]
   );
 
   const receiptService = useMemo(() =>
@@ -170,14 +206,19 @@ export default function App() {
     [receiptSubtotal, bill.taxMode, bill.tax]
   );
 
+  const receiptDiscount = useMemo(() =>
+    bill.discountMode === 'percent' ? Math.round(receiptSubtotal * (bill.discount || 0) / 100) : (bill.discount || 0),
+    [receiptSubtotal, bill.discount, bill.discountMode]
+  );
+
   const receiptGrandTotal = useMemo(() =>
-    receiptSubtotal + receiptService + receiptTax,
-    [receiptSubtotal, receiptService, receiptTax]
+    receiptSubtotal + receiptService + receiptTax - receiptDiscount,
+    [receiptSubtotal, receiptService, receiptTax, receiptDiscount]
   );
 
   const personTotals = useMemo(() => calculateTotals(), [bill, settings, assignments]);
 
-  const handleServiceModeChange = (mode) => {
+  const handleServiceModeChange = useCallback((mode) => {
     if (mode === bill.serviceMode) return;
     const currentVal = bill.serviceCharge || 0;
     let newVal;
@@ -187,9 +228,9 @@ export default function App() {
       newVal = receiptSubtotal > 0 ? Number(((currentVal / receiptSubtotal) * 100).toFixed(1)) : 0;
     }
     updateBill({ serviceMode: mode, serviceCharge: newVal });
-  };
+  }, [bill.serviceMode, bill.serviceCharge, receiptSubtotal, updateBill]);
 
-  const handleTaxModeChange = (mode) => {
+  const handleTaxModeChange = useCallback((mode) => {
     if (mode === bill.taxMode) return;
     const currentVal = bill.tax || 0;
     let newVal;
@@ -199,7 +240,7 @@ export default function App() {
       newVal = receiptSubtotal > 0 ? Number(((currentVal / receiptSubtotal) * 100).toFixed(1)) : 0;
     }
     updateBill({ taxMode: mode, tax: newVal });
-  };
+  }, [bill.taxMode, bill.tax, receiptSubtotal, updateBill]);
 
   if (isValidating) {
     return (
@@ -215,7 +256,7 @@ export default function App() {
   const renderStep = () => {
     switch (step) {
       case 1:
-        return <Step1Scan
+        return <Step1Scan key="step1"
           isScanning={isScanning}
           uploadError={uploadError}
           handleUpload={handleUpload}
@@ -223,14 +264,18 @@ export default function App() {
           receiptSubtotal={receiptSubtotal}
           receiptService={receiptService}
           receiptTax={receiptTax}
+          receiptDiscount={receiptDiscount}
           receiptGrandTotal={receiptGrandTotal}
           setStep={setStep}
+          ocrProgress={ocrProgress}
+          ocrStageIndex={ocrStageIndex}
         />;
       case 2:
         return <Step2Ledger
           receiptSubtotal={receiptSubtotal}
           receiptService={receiptService}
           receiptTax={receiptTax}
+          receiptDiscount={receiptDiscount}
           receiptGrandTotal={receiptGrandTotal}
           handleServiceModeChange={handleServiceModeChange}
           handleTaxModeChange={handleTaxModeChange}
@@ -251,6 +296,7 @@ export default function App() {
       case 5:
         return <Step5Settlement
           receiptSubtotal={receiptSubtotal}
+          receiptDiscount={receiptDiscount}
           personTotals={personTotals}
           setActiveTab={setActiveTab}
         />;
@@ -269,21 +315,37 @@ export default function App() {
       return <SettingsPage />;
     }
 
+    if (activeTab === 'history') {
+      return (
+        <div className="p-6 flex-1 overflow-y-auto flex flex-col gap-4">
+          <div>
+            <h2 className="text-2xl font-extrabold text-primary tracking-tight flex items-center gap-2">
+              <span className="w-1 h-5 bg-brand-primary rounded-full inline-block" />
+              History
+            </h2>
+            <p className="text-xs text-secondary mt-0.5 font-medium">Completed and archived bills</p>
+          </div>
+          <ActivityFeed
+            bills={completedBills}
+            isLoading={isLoadingBills}
+            error={null}
+            onSelectBill={handleSelectBill}
+            onNewBill={handleNewBill}
+          />
+        </div>
+      );
+    }
+
     return (
-      <div className="p-8 flex-1 overflow-y-auto flex flex-col gap-6">
+      <div className="p-6 flex-1 overflow-y-auto flex flex-col gap-4">
         <StepHeader
           currentStep={step}
           setStep={setStep}
           bill={bill}
           isScanning={isScanning}
           nextLabel={step === 1 ? "Next: Review Ledger" : step === 2 ? "Next: Add People" : step === 3 ? "Next: Assign Shares" : "Next: Settlement"}
-          onNext={async () => {
-            if (step === 4) {
-              try { await completeBill('draft'); } catch (err) { console.error('Failed to auto-save draft:', err); }
-            }
-            setStep(s => Math.min(s + 1, 5));
-          }}
-          onBack={() => setStep(s => Math.max(s - 1, 1))}
+          onNext={handleNext}
+          onBack={handleBack}
           showActions={step < 5}
           nextDisabled={
             (step === 1 && isScanning) ||
@@ -301,24 +363,12 @@ export default function App() {
     );
   };
 
-  if (!hydrated) {
-    return (
-      <div className="min-h-screen bg-slate-50 dark:bg-surface-base flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-tertiary font-medium">Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!accessToken && !isGuest) {
+  if (!accessToken) {
     return null;
   }
 
   return (
-    <ThemeProvider>
-    <div className="bg-page font-body-base text-primary antialiased overflow-hidden h-screen flex">
+    <div className="bg-page text-primary antialiased overflow-hidden h-screen flex">
       <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-indigo-600 focus:text-white focus:rounded-lg focus:text-sm focus:font-bold">
         Skip to main content
       </a>
@@ -333,7 +383,7 @@ export default function App() {
       <main id="main-content" className={cn(
         "flex-1 flex flex-col h-screen overflow-hidden bg-page pb-16 md:pb-0 transition-all duration-300",
         isOffline ? "mt-5" : "",
-        ui?.sidebarCollapsed ? "md:ml-20 ml-0" : "md:ml-[280px] ml-0"
+        ui?.sidebarCollapsed ? "md:ml-[72px] ml-0" : "md:ml-[240px] ml-0"
       )}>
         <div className="hidden md:block">
           <TopNavBar />
@@ -353,6 +403,5 @@ export default function App() {
         <BillDetailsModal billId={selectedBillId} onClose={() => setSelectedBillId(null)} />
       )}
     </div>
-    </ThemeProvider>
   );
 }

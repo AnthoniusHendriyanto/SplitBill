@@ -1,56 +1,46 @@
-import { motion } from 'framer-motion';
-import Icon from '../Icon';
-import { cn } from '../../utils/cn';
+import ToggleSwitch from '../ToggleSwitch';
+
+const selectClass = "h-12 px-4 rounded-2xl text-sm font-medium text-[--text-primary] outline-none transition-all duration-200 cursor-pointer";
 
 export default function SplitTab({ settings, updateSettings }) {
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+    <div className="space-y-8 animate-fade-in">
       <div>
-        <h3 className="text-sm font-black uppercase text-white tracking-widest flex items-center gap-2 mb-1">
-          <Icon name="call_split" className="text-indigo-400 text-base" />
-          Split Preferences
-        </h3>
-        <p className="text-[10px] text-tertiary font-semibold">Establish calculation rules for tax, auto-save drafts, and default strategies.</p>
+        <h3 className="text-lg font-bold text-[--text-primary] mb-1">Split Rules</h3>
+        <p className="text-sm text-tertiary mb-6">Default calculation rules for bill splitting.</p>
       </div>
-      <div className="space-y-4 p-4 bg-surface-base/30 border border rounded-xl font-semibold text-xs divide-y divide-border">
+
+      <div className="space-y-1 rounded-2xl overflow-hidden" style={{ boxShadow: '0 0 0 1px rgba(255,255,255,0.06)' }}>
         {[
-          { label: 'Default Split Strategy', desc: 'Default strategy loaded at the start of step 4.', value: settings.defaultSplitMode || 'equal', key: 'defaultSplitMode', options: [
-            { v: 'equal', l: 'Equal Split' }, { v: 'item', l: 'Itemized Checklist Grid' }, { v: 'percent', l: 'Percentage Sliders' }, { v: 'custom', l: 'Custom Amounts' },
+          { label: 'Default Split Strategy', desc: 'Default strategy when creating a new bill.', value: settings.defaultSplitMode || 'equal', key: 'defaultSplitMode', options: [
+            { v: 'equal', l: 'Equal Split' }, { v: 'item', l: 'Itemized' }, { v: 'percent', l: 'Percentage' }, { v: 'custom', l: 'Custom Amounts' },
           ]},
-          { label: 'Tax Allocation Rule', desc: 'Determine how Tax / PB1 is distributed to participants.', value: settings.taxAllocation || 'proportionate', key: 'taxAllocation', options: [
-            { v: 'proportionate', l: 'Proportionate to subtotal (Recommended)' }, { v: 'even', l: 'Divided equally among all members' },
+          { label: 'Tax Allocation', desc: 'How tax is distributed to participants.', value: settings.taxAllocation || 'proportionate', key: 'taxAllocation', options: [
+            { v: 'proportionate', l: 'Proportionate to subtotal' }, { v: 'even', l: 'Divided equally' },
           ]},
-          { label: 'Service Charge Handling', desc: 'Determine how service charges are split.', value: settings.serviceChargeHandling || 'proportionate', key: 'serviceChargeHandling', options: [
-            { v: 'proportionate', l: 'Proportionate to subtotal (Recommended)' }, { v: 'even', l: 'Divided equally among all members' },
+          { label: 'Service Charge', desc: 'How service charges are split.', value: settings.serviceChargeHandling || 'proportionate', key: 'serviceChargeHandling', options: [
+            { v: 'proportionate', l: 'Proportionate to subtotal' }, { v: 'even', l: 'Divided equally' },
           ]},
         ].map((s) => (
-          <div key={s.key} className="flex items-center justify-between py-4 first:pb-4 first:pt-0 last:pt-4">
-            <div>
-              <p className="font-bold text-white">{s.label}</p>
-              <p className="text-[10px] text-tertiary">{s.desc}</p>
+          <div key={s.key} className="flex items-center justify-between px-5 py-4" style={{ background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+            <div className="flex-1 mr-4">
+              <p className="text-sm font-medium text-[--text-primary]">{s.label}</p>
+              <p className="text-xs text-tertiary mt-0.5">{s.desc}</p>
             </div>
-            <select value={s.value} onChange={(e) => updateSettings({ [s.key]: e.target.value })}
-              className="bg-surface-base border border rounded-lg px-3 py-1.5 text-xs font-bold outline-none cursor-pointer text-primary"
-            >
+            <select className={selectClass} style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)', maxWidth: '200px' }}
+              value={s.value} onChange={(e) => updateSettings({ [s.key]: e.target.value })}>
               {s.options.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
             </select>
           </div>
         ))}
-        <div className="flex items-center justify-between pt-4">
+        <div className="flex items-center justify-between px-5 py-4" style={{ background: 'rgba(255,255,255,0.02)' }}>
           <div>
-            <p className="font-bold text-white">AI OCR Auto-Scan</p>
-            <p className="text-[10px] text-tertiary">Instantly trigger AI scanner on uploading image receipts.</p>
+            <p className="text-sm font-medium text-[--text-primary]">Auto-Scan</p>
+            <p className="text-xs text-tertiary mt-0.5">Automatically scan receipts on upload.</p>
           </div>
-          <div role="switch" tabIndex={0} aria-checked={settings.autoScan}
-            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); updateSettings({ autoScan: !settings.autoScan }); } }}
-            onClick={() => updateSettings({ autoScan: !settings.autoScan })}
-            className={cn("w-12 h-6 rounded-full relative cursor-pointer transition-colors duration-300", settings.autoScan ? "bg-indigo-600" : "bg-slate-200 dark:bg-slate-700")}
-          >
-            <motion.div layout animate={{ x: settings.autoScan ? 28 : 4 }} transition={{ type: "spring", stiffness: 500, damping: 30 }}
-              className="absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm" />
-          </div>
+          <ToggleSwitch isOn={settings.autoScan} onChange={() => updateSettings({ autoScan: !settings.autoScan })} />
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 }

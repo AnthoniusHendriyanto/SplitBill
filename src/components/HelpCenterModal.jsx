@@ -1,4 +1,4 @@
-import { memo, useState, useEffect } from 'react';
+import { memo, useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const faqs = [
@@ -35,19 +35,29 @@ const faqs = [
 ];
 
 function HelpCenterModal({ open, onClose }) {
-  const [searchQuery, setSearchQuery] = useState('');
   const [activeFaq, setActiveFaq] = useState(null);
-
-  const filteredFaqs = faqs.filter(faq =>
-    faq.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    faq.content.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const modalRef = useRef(null);
 
   useEffect(() => {
     if (!open) return;
-    const handler = (e) => { if (e.key === 'Escape') onClose(); };
+    const previousFocus = document.activeElement;
+    const modal = modalRef.current;
+    const handler = (e) => {
+      if (e.key === 'Escape') { onClose(); return; }
+      if (e.key === 'Tab' && modal) {
+        const focusable = modal.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+    };
     window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
+    return () => {
+      window.removeEventListener('keydown', handler);
+      if (previousFocus && previousFocus.focus) previousFocus.focus();
+    };
   }, [open, onClose]);
 
   return (
@@ -63,6 +73,7 @@ function HelpCenterModal({ open, onClose }) {
             aria-hidden="true"
           />
           <motion.div
+            ref={modalRef}
             role="dialog"
             aria-modal="true"
             aria-label="Help Center"
@@ -84,18 +95,7 @@ function HelpCenterModal({ open, onClose }) {
                 <span className="material-symbols-outlined text-xl">close</span>
               </button>
             </div>
-            <div className="p-4 border-b border-gray-100 dark:border-gray-800">
-              <div className="relative">
-                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-secondary text-lg">search</span>
-                <input
-                  type="text"
-                  placeholder="Search help articles..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 bg-slate-100 dark:bg-surface-raised border-none rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500/20"
-                />
-              </div>
-            </div>
+
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
               <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50 rounded-xl p-4 flex gap-3 text-amber-800 dark:text-amber-300">
                 <span className="material-symbols-outlined text-2xl shrink-0">warning</span>
@@ -105,8 +105,8 @@ function HelpCenterModal({ open, onClose }) {
                 </div>
               </div>
               <div className="space-y-3">
-                {filteredFaqs.length > 0 ? (
-                  filteredFaqs.map((faq) => {
+                {faqs.length > 0 ? (
+                  faqs.map((faq) => {
                     const isOpen = activeFaq === faq.id;
                     return (
                       <div
@@ -142,11 +142,7 @@ function HelpCenterModal({ open, onClose }) {
                       </div>
                     );
                   })
-                ) : (
-                  <div className="text-center py-8 text-tertiary text-xs">
-                    No matching FAQ articles found.
-                  </div>
-                )}
+                  ) : null}
               </div>
             </div>
           </motion.div>

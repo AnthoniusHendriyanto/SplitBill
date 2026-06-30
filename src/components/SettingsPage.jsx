@@ -14,6 +14,45 @@ import BillingTab from './settings/BillingTab';
 import SecurityTab from './settings/SecurityTab';
 import DangerTab from './settings/DangerTab';
 
+const tabs = [
+  { id: 'account', label: 'Account', icon: 'person_outline' },
+  { id: 'preferences', label: 'Preferences', icon: 'tune' },
+  { id: 'split', label: 'Split Rules', icon: 'call_split' },
+  { id: 'notifications', label: 'Notifications', icon: 'notifications_none' },
+  { id: 'billing', label: 'Billing', icon: 'credit_card' },
+  { id: 'security', label: 'Security', icon: 'shield' },
+  { id: 'danger', label: 'Danger Zone', icon: 'warning_amber' },
+];
+
+function SaveBar({ visible, onSave, onDiscard, saving }) {
+  return (
+    <AnimatePresence>
+      {visible && (
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 16 }}
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50"
+        >
+          <div className="flex items-center gap-4 px-5 py-3 rounded-2xl shadow-xl backdrop-blur-xl" style={{ background: 'rgba(17,24,39,0.95)', border: '1px solid rgba(255,255,255,0.06)' }}>
+            <div className="w-2 h-2 rounded-full bg-warning animate-pulse" />
+            <span className="text-xs font-medium text-[--text-primary]">Unsaved changes</span>
+            <div className="h-4 w-px" style={{ background: 'rgba(255,255,255,0.06)' }} />
+            <button onClick={onDiscard} className="px-3 py-1.5 rounded-xl text-xs font-medium text-tertiary hover:text-[--text-primary] transition-all cursor-pointer border-none outline-none" style={{ background: 'rgba(255,255,255,0.04)' }}>
+              Discard
+            </button>
+            <button onClick={onSave} disabled={saving}
+              className="px-4 py-1.5 rounded-xl text-xs font-semibold text-white transition-all cursor-pointer border-none outline-none disabled:opacity-50"
+              style={{ background: saving ? 'rgba(124,92,255,0.5)' : 'var(--brand-primary)' }}>
+              {saving ? 'Saving...' : 'Save changes'}
+            </button>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
 function SettingsPage() {
   const navigate = useNavigate();
   const settings = useBillStore((s) => s.settings);
@@ -24,6 +63,7 @@ function SettingsPage() {
   const [settingsTab, setSettingsTab] = useState('account');
   const [tier, setTier] = useState('free');
   const [ocrUsage, setOcrUsage] = useState(null);
+  const [hasChanges, setHasChanges] = useState(false);
   const [profileForm, setProfileForm] = useState({
     name: userObj?.name || 'Anton Wijaya',
     email: userObj?.email || 'anton.wijaya@splitmate.id',
@@ -49,23 +89,13 @@ function SettingsPage() {
       .then((data) => {
         if (cancelled) return;
         const user = data.data || data;
-        setProfileForm((prev) => ({
-          ...prev,
-          name: user.name || prev.name,
-          email: user.email || prev.email,
-        }));
+        setProfileForm((prev) => ({ ...prev, name: user.name || prev.name, email: user.email || prev.email }));
         setTier(user.tier || 'free');
-      })
-      .catch(() => {});
+      }).catch(() => {});
 
     api.getUsage()
-      .then((data) => {
-        if (!cancelled) setOcrUsage(data);
-      })
-      .catch(() => {
-        if (!cancelled) { setSaveFeedback('Failed to load usage data'); setSaveFeedbackError(true); setTimeout(() => { setSaveFeedback(null); setSaveFeedbackError(false); }, 3000); }
-      });
-
+      .then((data) => { if (!cancelled) setOcrUsage(data); })
+      .catch(() => {});
     return () => { cancelled = true; };
   }, []);
 
@@ -79,27 +109,27 @@ function SettingsPage() {
     setIsSavingSettings(true);
     try {
       await api.updateMe({ name: profileForm.name });
-      showFeedback('Settings updated successfully!');
+      showFeedback('Settings updated');
+      setHasChanges(false);
     } catch (err) {
-      showFeedback(err.message || 'Failed to save settings', true);
+      showFeedback(err.message || 'Failed to save', true);
     } finally {
       setIsSavingSettings(false);
     }
   };
 
+  const handleDiscard = () => {
+    setProfileForm({ name: userObj?.name || 'Anton Wijaya', email: userObj?.email || 'anton.wijaya@splitmate.id', phone: '+62 812-3456-7890', timezone: 'Asia/Jakarta (GMT+7)', language: 'English' });
+    setHasChanges(false);
+  };
+
   const handleUpdatePassword = async () => {
-    if (securityForm.newPassword !== securityForm.confirmPassword) {
-      showFeedback('New passwords do not match', true);
-      return;
-    }
-    if (securityForm.newPassword.length < 8) {
-      showFeedback('Password must be at least 8 characters', true);
-      return;
-    }
+    if (securityForm.newPassword !== securityForm.confirmPassword) { showFeedback('Passwords do not match', true); return; }
+    if (securityForm.newPassword.length < 8) { showFeedback('Password must be at least 8 characters', true); return; }
     setIsSavingSettings(true);
     try {
       await api.updateMe({ password: securityForm.newPassword });
-      showFeedback('Password updated successfully!');
+      showFeedback('Password updated');
       setSecurityForm({ ...securityForm, currentPassword: '', newPassword: '', confirmPassword: '' });
     } catch (err) {
       showFeedback(err.message || 'Failed to update password', true);
@@ -110,132 +140,93 @@ function SettingsPage() {
 
   const handleRevokeSession = (id) => setSessions((prev) => prev.filter((s) => s.id !== id));
 
-  const tabs = [
-    { id: 'account', label: 'Account', icon: 'person_outline' },
-    { id: 'preferences', label: 'App Preferences', icon: 'tune' },
-    { id: 'split', label: 'Split Preferences', icon: 'call_split' },
-    { id: 'notifications', label: 'Notifications', icon: 'notifications_none' },
-    { id: 'billing', label: 'Billing & Pro', icon: 'credit_card' },
-    { id: 'security', label: 'Security', icon: 'shield' },
-    { id: 'danger', label: 'Danger Zone', icon: 'warning_amber' },
-  ];
-
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 15 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -15 }}
-      className="max-w-7xl mx-auto w-full p-8 text-primary"
-    >
+    <div className="flex-1 overflow-y-auto hide-scrollbar" style={{ background: 'var(--page-bg)' }}>
       <AnimatePresence>
         {saveFeedback && (
           <motion.div
-            initial={{ opacity: 0, y: -40, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            initial={{ opacity: 0, y: -12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -12 }}
             role="status" aria-live="polite"
-            className={cn("fixed top-6 right-6 z-50 p-4 rounded-xl shadow-2xl flex items-center gap-3 backdrop-blur-md",
-              saveFeedbackError ? "bg-toast-error border border-red-900/60" : "bg-toast-success border border-emerald-900/60"
-            )}
+            className="fixed top-20 right-6 z-50 px-4 py-3 rounded-2xl shadow-xl backdrop-blur-xl flex items-center gap-3"
+            style={{ background: saveFeedbackError ? 'rgba(239,68,68,0.1)' : 'rgba(34,197,94,0.1)', border: `1px solid ${saveFeedbackError ? 'rgba(239,68,68,0.2)' : 'rgba(34,197,94,0.2)'}` }}
           >
-            <div className={cn("w-8 h-8 rounded-full flex items-center justify-center",
-              saveFeedbackError ? "bg-red-950 text-red-400" : "bg-emerald-950 text-emerald-400"
-            )}>
-              <Icon name={saveFeedbackError ? "close" : "check"} className="text-sm font-black" />
-            </div>
-            <div>
-              <p className={cn("text-xs font-black uppercase tracking-wider", saveFeedbackError ? "text-red-400" : "text-white")}>{saveFeedbackError ? 'Error' : 'Success'}</p>
-              <p className="text-[10px] text-secondary font-semibold">{saveFeedback}</p>
-            </div>
+            <Icon name={saveFeedbackError ? 'close' : 'check'} className={saveFeedbackError ? 'text-error' : 'text-success'} />
+            <p className="text-xs font-medium text-[--text-primary]">{saveFeedback}</p>
           </motion.div>
         )}
       </AnimatePresence>
 
-      <div className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
+      <div className="max-w-[1040px] mx-auto p-6 md:p-8 space-y-8">
+        {/* Page header */}
         <div>
-          <h1 className="text-3xl font-black text-white tracking-tight flex items-center gap-2">
-            <span className="w-1.5 h-6 bg-indigo-500 rounded-full inline-block"></span>
-            System Settings
-          </h1>
-          <p className="text-tertiary mt-1.5 text-xs md:text-sm font-semibold">
-            Configure your SplitMate platform profile, OCR triggers, split defaults, and billing.
-          </p>
+          <h1 className="text-3xl font-bold tracking-tight text-[--text-primary]">Settings</h1>
+          <p className="text-sm text-tertiary mt-1.5">Manage your account, preferences, and billing.</p>
         </div>
-      </div>
 
-      <div className="grid grid-cols-12 gap-8 w-full">
-        <div className="col-span-12 lg:col-span-3 space-y-4">
-          <div className="bg-card border border rounded-2xl p-4 flex flex-col gap-1.5 relative overflow-hidden shadow-premium">
-            <div className="absolute top-0 left-0 w-full h-1 bg-indigo-500/10"></div>
-            {tabs.map((tab) => {
-              const isActive = settingsTab === tab.id;
-              return (
-                <button key={tab.id} onClick={() => setSettingsTab(tab.id)}
-                  className={cn(
-                    "w-full px-4 py-3 rounded-xl text-left text-xs font-extrabold flex items-center gap-3 transition-all cursor-pointer border-none outline-none relative overflow-hidden",
-                    isActive ? "bg-indigo-500/10 text-indigo-400 border border-indigo-900/40 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]" : "text-tertiary hover:text-primary hover:bg-surface-base/40 border border-transparent"
-                  )}
-                >
-                  {isActive && <div className="absolute left-0 top-3 w-1 h-6 bg-indigo-500 rounded-full" />}
-                  <Icon name={tab.icon} className={cn("text-base", isActive ? "text-indigo-400" : "text-tertiary")} />
-                  {tab.label}
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="bg-gradient-to-br from-card to-card-elevated border border rounded-2xl p-5 relative overflow-hidden shadow-premium text-center">
-            <div className="w-16 h-16 rounded-full bg-indigo-950/50 border border-indigo-900/40 flex items-center justify-center text-xl font-black text-indigo-400 mx-auto mb-3 shadow-[0_0_15px_rgba(99,102,241,0.1)]">
-              {profileForm.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
+        <div className="grid grid-cols-12 gap-6">
+          {/* Left nav */}
+          <div className="col-span-12 lg:col-span-3">
+            <div className="rounded-2xl shadow-card overflow-hidden" style={{ background: 'var(--surface-elevated)' }}>
+              <div className="p-3 space-y-1">
+                {tabs.map((tab) => {
+                  const isActive = settingsTab === tab.id;
+                  return (
+                    <button key={tab.id} onClick={() => setSettingsTab(tab.id)}
+                      className={cn(
+                        "w-full px-3 py-2.5 rounded-xl text-left text-xs font-medium flex items-center gap-3 transition-all cursor-pointer border-none outline-none",
+                        isActive ? "text-[--brand-primary]" : "text-tertiary hover:text-[--text-primary]"
+                      )}
+                      style={isActive ? { background: 'rgba(124,92,255,0.12)' } : {}}
+                    >
+                      {isActive && <div className="w-[3px] h-4 bg-[--brand-primary] rounded-r-full shrink-0" />}
+                      {!isActive && <div className="w-[3px] h-4 shrink-0" />}
+                      <Icon name={tab.icon} className={cn("text-base", isActive ? "text-[--brand-primary]" : "text-tertiary")} />
+                      {tab.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-            <h4 className="text-xs font-black text-white truncate">{profileForm.name}</h4>
-            <p className="text-[9px] text-tertiary font-extrabold uppercase tracking-widest mt-1">SplitMate {tier === 'premium' ? 'Pro' : 'Free'}</p>
+
+            {/* Premium card */}
             {tier !== 'premium' && (
-              <div className="mt-4 pt-4 border-t border">
+              <div className="mt-4 rounded-2xl shadow-card overflow-hidden p-5"
+                style={{ background: 'linear-gradient(135deg, rgba(124,92,255,0.08), rgba(124,92,255,0.02))', border: '1px solid rgba(124,92,255,0.1)' }}>
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-3" style={{ background: 'rgba(124,92,255,0.15)' }}>
+                  <Icon name="workspace_premium" className="text-lg" style={{ color: 'var(--brand-primary)' }} />
+                </div>
+                <h4 className="text-sm font-bold text-[--text-primary] mb-1">SplitMate Pro</h4>
+                <p className="text-xs text-tertiary leading-relaxed mb-4">Unlimited OCR scans, PDF exports, and premium features.</p>
                 <button onClick={() => setSettingsTab('billing')}
-                  className="w-full py-2 bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-700 hover:to-indigo-700 text-white font-extrabold text-[10px] uppercase tracking-widest rounded-xl transition-all border-none outline-none cursor-pointer shadow-md hover:shadow-indigo-500/20"
-                >
-                  Upgrade to Pro
+                  className="w-full py-2.5 rounded-xl text-xs font-semibold text-white transition-all border-none outline-none cursor-pointer"
+                  style={{ background: 'var(--brand-primary)' }}>
+                  Upgrade
                 </button>
               </div>
             )}
           </div>
-        </div>
 
-        <div className="col-span-12 lg:col-span-9">
-          <div className="bg-card border border rounded-2xl p-6 relative overflow-hidden shadow-premium min-h-[500px] flex flex-col justify-between">
-            <div className="absolute top-0 left-0 w-full h-1 bg-indigo-500/30"></div>
-
-            <div className="flex-1">
-              {settingsTab === 'account' && <AccountTab profileForm={profileForm} setProfileForm={setProfileForm} />}
-              {settingsTab === 'preferences' && <PreferencesTab settings={settings} updateSettings={updateSettings} />}
-              {settingsTab === 'split' && <SplitTab settings={settings} updateSettings={updateSettings} />}
-              {settingsTab === 'notifications' && <NotificationsTab settings={settings} updateSettings={updateSettings} />}
-              {settingsTab === 'billing' && <BillingTab tier={tier} ocrUsage={ocrUsage} />}
-              {settingsTab === 'security' && <SecurityTab securityForm={securityForm} setSecurityForm={setSecurityForm} handleUpdatePassword={handleUpdatePassword} handleRevokeSession={handleRevokeSession} sessions={sessions} />}
-              {settingsTab === 'danger' && <DangerTab setSessions={setSessions} setSaveFeedback={setSaveFeedback} logout={logout} navigate={navigate} />}
-            </div>
-
-            {settingsTab !== 'billing' && settingsTab !== 'danger' && (
-              <div className="mt-8 pt-6 border-t border flex justify-between items-center gap-4">
-                <span className="text-[9px] text-tertiary font-bold uppercase tracking-widest">* Changes will be written to local state & database</span>
-                <button onClick={handleSaveSettings} disabled={isSavingSettings}
-                  className={cn("px-6 py-3 rounded-xl font-extrabold text-xs transition-all flex items-center justify-center gap-2 border-none outline-none cursor-pointer",
-                    isSavingSettings ? "bg-surface-elevated text-tertiary cursor-not-allowed" : "bg-gradient-to-r from-indigo-500 to-indigo-600 text-white hover:from-indigo-700 hover:to-indigo-700 shadow-lg shadow-indigo-500/25 active:scale-98"
-                  )}
-                >
-                  {isSavingSettings ? (
-                    <><div className="w-3.5 h-3.5 border-2 border-slate-500 border-t-transparent rounded-full animate-spin" /> Saving Changes...</>
-                  ) : (
-                    <>Save Changes <Icon name="check" className="text-xs" /></>
-                  )}
-                </button>
+          {/* Right content */}
+          <div className="col-span-12 lg:col-span-9">
+            <div className="rounded-2xl shadow-card overflow-hidden" style={{ background: 'var(--surface-elevated)' }}>
+              <div className="p-6 md:p-8 space-y-8">
+                {settingsTab === 'account' && <AccountTab profileForm={profileForm} setProfileForm={setProfileForm} onHasChanges={() => setHasChanges(true)} />}
+                {settingsTab === 'preferences' && <PreferencesTab settings={settings} updateSettings={updateSettings} />}
+                {settingsTab === 'split' && <SplitTab settings={settings} updateSettings={updateSettings} />}
+                {settingsTab === 'notifications' && <NotificationsTab settings={settings} updateSettings={updateSettings} />}
+                {settingsTab === 'billing' && <BillingTab tier={tier} ocrUsage={ocrUsage} />}
+                {settingsTab === 'security' && <SecurityTab securityForm={securityForm} setSecurityForm={setSecurityForm} handleUpdatePassword={handleUpdatePassword} handleRevokeSession={handleRevokeSession} sessions={sessions} />}
+                {settingsTab === 'danger' && <DangerTab setSessions={setSessions} setSaveFeedback={setSaveFeedback} logout={logout} navigate={navigate} />}
               </div>
-            )}
+            </div>
           </div>
         </div>
       </div>
-    </motion.div>
+
+      <SaveBar visible={hasChanges && settingsTab !== 'billing' && settingsTab !== 'danger'} onSave={handleSaveSettings} onDiscard={handleDiscard} saving={isSavingSettings} />
+    </div>
   );
 }
 

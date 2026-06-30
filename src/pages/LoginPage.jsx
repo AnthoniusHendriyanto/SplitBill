@@ -11,11 +11,11 @@ function LoginPage() {
   const isLoggingIn = useAuthStore((s) => s.isLoggingIn);
   const loginError = useAuthStore((s) => s.loginError);
   const clearErrors = useAuthStore((s) => s.clearErrors);
-  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const isAuthenticated = useAuthStore((s) => !!s.accessToken);
   const accessToken = useAuthStore((s) => s.accessToken);
-  const setGuest = useAuthStore((s) => s.setGuest);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     clearErrors();
@@ -36,79 +36,107 @@ function LoginPage() {
     }
   };
 
-  const handleGuest = () => {
-    setGuest();
-    useBillStore.getState().updateUI({ activeTab: 'dashboard', step: 1 });
-    navigate('/', { replace: true });
-  };
-
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-surface-base flex items-center justify-center p-4 font-inter antialiased">
+    <div
+      className="min-h-screen flex items-center justify-center p-4 font-inter antialiased"
+      style={{
+        background: `
+          radial-gradient(ellipse 600px 400px at 50% 40%, rgba(124,92,255,0.08) 0%, transparent 70%),
+          radial-gradient(ellipse 300px 300px at 50% 30%, rgba(99,102,241,0.05) 0%, transparent 100%),
+          var(--surface-base)
+        `,
+      }}
+    >
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md"
+        transition={{ duration: 0.5, ease: 'easeOut' }}
+        className="w-full max-w-[500px]"
       >
-        <div className="bg-white dark:bg-surface-elevated border border-slate-200 dark:border-strong rounded-2xl p-8 shadow-xl surface-molded">
-          <div className="text-center mb-8">
-            <div className="w-12 h-12 bg-gradient-to-br from-indigo-600 to-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-500/20 mx-auto mb-4">
-              <Icon name="payments" className="text-2xl" />
+        <div className="bg-surface-elevated/80 backdrop-blur-xl border border-white/[0.04] rounded-3xl p-10 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] shadow-xl surface-molded">
+          <div className="text-center mb-10">
+            <div className="w-16 h-16 bg-gradient-to-br from-brand-primary to-indigo-500 rounded-2xl flex items-center justify-center text-white shadow-glow ring-1 ring-white/10 mx-auto mb-4">
+              <Icon name="payments" className="text-3xl" />
             </div>
-            <h1 className="text-2xl font-black text-primary tracking-tight">Welcome back</h1>
-            <p className="text-sm text-tertiary dark:text-secondary mt-1 font-medium">Sign in to your SplitMate account</p>
+            <h1 className="text-3xl font-extrabold tracking-tight text-primary">
+              Welcome back
+            </h1>
+            <p className="text-sm text-secondary mt-1">
+              Sign in to continue to your workspace
+            </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="relative group">
-              <label htmlFor="login-email" className="absolute -top-2 left-3 px-1 bg-white dark:bg-surface-elevated text-[10px] font-bold text-indigo-500 uppercase tracking-wider z-10">
+            <div>
+              <label htmlFor="login-email" className="block text-xs font-semibold tracking-wide text-secondary mb-2">
                 Email
               </label>
-              <input
-                id="login-email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="w-full px-4 py-4 bg-slate-50 dark:bg-surface-raised/50 border border-slate-200 dark:border-strong rounded-xl focus:ring-2 ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium text-sm outline-none dark:text-white"
-                placeholder="you@example.com"
-                autoComplete="email"
-              />
+              <div className="relative group">
+                <Icon
+                  name="mail"
+                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-tertiary group-focus-within:text-brand-primary transition-colors duration-200 text-lg pointer-events-none"
+                />
+                <input
+                  id="login-email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="w-full h-14 pl-10 pr-4 bg-black/20 border border-white/[0.06] rounded-2xl text-sm font-medium text-primary placeholder:text-tertiary/60 shadow-[inset_0_1px_2px_rgba(0,0,0,0.4)] transition-all duration-200 hover:border-white/[0.12] focus:border-brand-primary/50 focus:shadow-[0_0_0_1px_var(--brand-primary),inset_0_1px_2px_rgba(0,0,0,0.4)] focus:outline-none"
+                  placeholder="you@example.com"
+                  autoComplete="email"
+                />
+              </div>
             </div>
 
-            <div className="relative group">
-              <label htmlFor="login-password" className="absolute -top-2 left-3 px-1 bg-white dark:bg-surface-elevated text-[10px] font-bold text-indigo-500 uppercase tracking-wider z-10">
+            <div>
+              <label htmlFor="login-password" className="block text-xs font-semibold tracking-wide text-secondary mb-2">
                 Password
               </label>
-              <input
-                id="login-password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={8}
-                className="w-full px-4 py-4 bg-slate-50 dark:bg-surface-raised/50 border border-slate-200 dark:border-strong rounded-xl focus:ring-2 ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium text-sm outline-none dark:text-white"
-                placeholder="Min. 8 characters"
-                autoComplete="current-password"
-              />
+              <div className="relative group">
+                <Icon
+                  name="lock"
+                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-tertiary group-focus-within:text-brand-primary transition-colors duration-200 text-lg pointer-events-none"
+                />
+                <input
+                  id="login-password"
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  minLength={8}
+                  className="w-full h-14 pl-10 pr-12 bg-black/20 border border-white/[0.06] rounded-2xl text-sm font-medium text-primary placeholder:text-tertiary/60 shadow-[inset_0_1px_2px_rgba(0,0,0,0.4)] transition-all duration-200 hover:border-white/[0.12] focus:border-brand-primary/50 focus:shadow-[0_0_0_1px_var(--brand-primary),inset_0_1px_2px_rgba(0,0,0,0.4)] focus:outline-none"
+                  placeholder="Min. 8 characters"
+                  autoComplete="current-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-tertiary hover:text-secondary transition-colors duration-200 cursor-pointer"
+                  tabIndex={-1}
+                >
+                  <Icon name={showPassword ? 'visibility_off' : 'visibility'} className="text-lg" />
+                </button>
+              </div>
             </div>
 
             {loginError && (
               <motion.div
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
-                className="flex items-start gap-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl"
+                className="flex items-start gap-3 p-3 bg-red-900/15 backdrop-blur-sm border border-red-500/20 rounded-xl"
               >
                 <Icon name="error" className="text-red-500 text-lg flex-shrink-0 mt-0.5" />
-                <p className="text-xs text-red-700 dark:text-red-400 font-medium">{loginError}</p>
+                <p className="text-xs text-red-400 font-medium">{loginError}</p>
               </motion.div>
             )}
 
             <motion.button
               whileHover={isLoggingIn ? {} : { scale: 1.01 }}
-              whileTap={isLoggingIn ? {} : { scale: 0.99 }}
+              whileTap={isLoggingIn ? {} : { scale: 0.98 }}
               type="submit"
               disabled={isLoggingIn}
-              className="w-full py-4 bg-gradient-to-r from-indigo-500 to-indigo-600 disabled:from-slate-300 disabled:to-slate-300 dark:disabled:from-slate-700 dark:disabled:to-slate-700 text-white rounded-xl font-bold text-sm shadow-lg shadow-indigo-500/20 hover:from-indigo-700 hover:to-indigo-700 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-indigo-500"
+              className="w-full h-14 bg-gradient-to-r from-brand-primary to-indigo-500 rounded-2xl text-base font-semibold tracking-wide text-white shadow-xl shadow-brand-primary/20 hover:shadow-[0_0_24px_var(--brand-primary-glow)] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-brand-primary"
             >
               {isLoggingIn ? (
                 <>
@@ -127,24 +155,21 @@ function LoginPage() {
             </motion.button>
           </form>
 
-          <div className="mt-6 text-center">
-            <p className="text-xs text-tertiary dark:text-secondary font-medium">
+          <div className="flex items-center gap-3 my-8">
+            <div className="flex-1 h-px bg-white/[0.06]" />
+            <span className="text-xs text-tertiary font-medium">or</span>
+            <div className="flex-1 h-px bg-white/[0.06]" />
+          </div>
+
+          <div className="text-center mb-6">
+            <p className="text-sm text-secondary font-medium">
               Don&apos;t have an account?{' '}
-              <Link to="/register" className="text-indigo-600 dark:text-indigo-400 hover:underline font-bold">
+              <Link to="/register" className="text-brand-primary hover:text-brand-primary-hover font-semibold transition-colors">
                 Create one
               </Link>
             </p>
           </div>
 
-          <div className="mt-8 pt-6 border-t border dark:border-strong">
-            <button
-              onClick={handleGuest}
-              className="w-full flex items-center justify-center gap-2 text-xs text-secondary hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors font-medium cursor-pointer"
-            >
-              <Icon name="person_off" className="text-sm" />
-              Continue as guest
-            </button>
-          </div>
         </div>
       </motion.div>
     </div>

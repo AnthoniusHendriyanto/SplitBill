@@ -4,11 +4,12 @@ import { cn } from '../utils/cn';
 interface IconProps {
   name: string;
   className?: string;
+  style?: React.CSSProperties;
 }
 
-function Icon({ name, className }: IconProps) {
+function Icon({ name, className, ...rest }: IconProps) {
   return (
-    <span className={cn("material-symbols-outlined", className)} aria-hidden="true">{name}</span>
+    <span className={cn("material-symbols-outlined", className)} aria-hidden="true" {...rest}>{name}</span>
   );
 }
 

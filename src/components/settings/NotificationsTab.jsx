@@ -1,43 +1,31 @@
-import { motion } from 'framer-motion';
-import Icon from '../Icon';
-import { cn } from '../../utils/cn';
+import ToggleSwitch from '../ToggleSwitch';
 
 export default function NotificationsTab({ settings, updateSettings }) {
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+    <div className="space-y-8 animate-fade-in">
       <div>
-        <h3 className="text-sm font-black uppercase text-white tracking-widest flex items-center gap-2 mb-1">
-          <Icon name="notifications_none" className="text-indigo-400 text-base" />
-          Notifications Rules
-        </h3>
-        <p className="text-[10px] text-tertiary font-semibold">Control direct channel outputs for reminders and settle requests.</p>
+        <h3 className="text-lg font-bold text-[--text-primary] mb-1">Notifications</h3>
+        <p className="text-sm text-tertiary mb-6">Control how and when you receive updates.</p>
       </div>
-      <div className="space-y-4 p-4 bg-surface-base/30 border border rounded-xl font-semibold text-xs divide-y divide-border">
+
+      <div className="space-y-1 rounded-2xl overflow-hidden" style={{ boxShadow: '0 0 0 1px rgba(255,255,255,0.06)' }}>
         {[
-          { label: 'WhatsApp Settle Reminders', desc: 'Allow generating single-click direct WhatsApp text instructions.', key: 'whatsappReminders', defaultVal: true },
-          { label: 'Active Settlement Reminders', desc: 'Receive in-app alerts when a participant settles their outstanding share.', key: 'settlementReminders', defaultVal: true },
-          { label: 'Payment Due Alerts', desc: 'Receive notifications when outbound splits approach set deadlines.', key: 'paymentDueAlerts', defaultVal: true },
-          { label: 'Weekly Digest Reports', desc: 'Get rich summaries of split flows, balances, and savings via email.', key: 'emailNotifications', defaultVal: true },
+          { label: 'Settlement Reminders', desc: 'Get notified when someone settles a bill.', key: 'settlementReminders', defaultVal: true },
+          { label: 'Payment Due Alerts', desc: 'Receive alerts when payments are due.', key: 'paymentDueAlerts', defaultVal: true },
+          { label: 'Weekly Digest', desc: 'Weekly summary of your spending and balances.', key: 'emailNotifications', defaultVal: true },
         ].map((n) => {
           const isOn = settings[n.key] === undefined ? n.defaultVal : settings[n.key];
           return (
-            <div key={n.key} className="flex items-center justify-between py-4 first:pb-4 first:pt-0 last:pt-4">
+            <div key={n.key} className="flex items-center justify-between px-5 py-4" style={{ background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
               <div>
-                <p className="font-bold text-white">{n.label}</p>
-                <p className="text-[10px] text-tertiary">{n.desc}</p>
+                <p className="text-sm font-medium text-[--text-primary]">{n.label}</p>
+                <p className="text-xs text-tertiary mt-0.5">{n.desc}</p>
               </div>
-              <div role="switch" tabIndex={0} aria-checked={isOn}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); updateSettings({ [n.key]: !isOn }); } }}
-                onClick={() => updateSettings({ [n.key]: !isOn })}
-                className={cn("w-12 h-6 rounded-full relative cursor-pointer transition-colors duration-300", isOn ? "bg-indigo-600" : "bg-slate-200 dark:bg-slate-700")}
-              >
-                <motion.div layout animate={{ x: isOn ? 28 : 4 }} transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                  className="absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm" />
-              </div>
+              <ToggleSwitch isOn={isOn} onChange={() => updateSettings({ [n.key]: !isOn })} />
             </div>
           );
         })}
       </div>
-    </motion.div>
+    </div>
   );
 }
