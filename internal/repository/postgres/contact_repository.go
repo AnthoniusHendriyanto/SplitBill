@@ -16,7 +16,7 @@ func NewContactRepository(pool *pgxpool.Pool) domain.ContactRepository {
 }
 
 func (r *contactRepository) GetByUserID(ctx context.Context, userID string) ([]domain.Contact, error) {
-	rows, err := r.Pool.Query(ctx, `SELECT id, user_id, name, created_at FROM contacts WHERE user_id = $1 ORDER BY name`, userID)
+	rows, err := r.Pool.Query(ctx, `SELECT id, user_id, name, COALESCE(connected_user_id, ''), created_at FROM contacts WHERE user_id = $1 ORDER BY name`, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -25,7 +25,7 @@ func (r *contactRepository) GetByUserID(ctx context.Context, userID string) ([]d
 	var contacts []domain.Contact
 	for rows.Next() {
 		var c domain.Contact
-		if err := rows.Scan(&c.ID, &c.UserID, &c.Name, &c.CreatedAt); err != nil {
+		if err := rows.Scan(&c.ID, &c.UserID, &c.Name, &c.ConnectedUserID, &c.CreatedAt); err != nil {
 			return nil, err
 		}
 		contacts = append(contacts, c)
@@ -35,8 +35,8 @@ func (r *contactRepository) GetByUserID(ctx context.Context, userID string) ([]d
 
 func (r *contactRepository) Create(ctx context.Context, contact *domain.Contact) error {
 	return r.Pool.QueryRow(ctx,
-		`INSERT INTO contacts (id, user_id, name) VALUES ($1, $2, $3) RETURNING id, created_at`,
-		contact.ID, contact.UserID, contact.Name,
+		`INSERT INTO contacts (id, user_id, name, connected_user_id) VALUES ($1, $2, $3, $4) RETURNING id, created_at`,
+		contact.ID, contact.UserID, contact.Name, contact.ConnectedUserID,
 	).Scan(&contact.ID, &contact.CreatedAt)
 }
 

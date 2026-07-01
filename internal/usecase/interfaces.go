@@ -37,3 +37,10 @@ type ContactUsecase interface {
 	Create(ctx context.Context, userID, name string) (*domain.Contact, error)
 	Delete(ctx context.Context, id, userID string) error
 }
+
+type InvitationUsecase interface {
+	Send(ctx context.Context, fromUserID, toEmail string) (*domain.Invitation, error)
+	List(ctx context.Context, userID string) ([]domain.InvitationResponse, error)
+	Accept(ctx context.Context, userID, invID string) error
+	Reject(ctx context.Context, userID, invID string) error
+}

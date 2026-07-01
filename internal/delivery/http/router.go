@@ -30,6 +30,7 @@ func NewRouter(
 	premiumHandler *PremiumHandler,
 	usageHandler *UsageHandler,
 	contactHandler *ContactHandler,
+	invitationHandler *InvitationHandler,
 	authMiddleware *middleware.AuthMiddleware,
 	ocrRateLimiter *middleware.RateLimiter,
 	authRateLimiter *middleware.RateLimiter,
@@ -79,6 +80,11 @@ func NewRouter(
 	protected.Handle("/contacts", http.HandlerFunc(contactHandler.List)).Methods("GET")
 	protected.Handle("/contacts", http.HandlerFunc(contactHandler.Create)).Methods("POST")
 	protected.Handle("/contacts/{id}", http.HandlerFunc(contactHandler.Delete)).Methods("DELETE")
+
+	protected.Handle("/invitations", http.HandlerFunc(invitationHandler.Send)).Methods("POST")
+	protected.Handle("/invitations", http.HandlerFunc(invitationHandler.List)).Methods("GET")
+	protected.Handle("/invitations/{id}/accept", http.HandlerFunc(invitationHandler.Accept)).Methods("POST")
+	protected.Handle("/invitations/{id}/reject", http.HandlerFunc(invitationHandler.Reject)).Methods("POST")
 
 	// N3: Stub routes for documented-but-not-implemented endpoints
 	protected.HandleFunc("/bills/{id}", func(w http.ResponseWriter, r *http.Request) {

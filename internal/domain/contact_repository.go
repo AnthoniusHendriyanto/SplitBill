@@ -3,10 +3,11 @@ package domain
 import "context"
 
 type Contact struct {
-	ID        string `json:"id"`
-	UserID    string `json:"user_id"`
-	Name      string `json:"name"`
-	CreatedAt string `json:"created_at"`
+	ID              string `json:"id"`
+	UserID          string `json:"user_id"`
+	Name            string `json:"name"`
+	ConnectedUserID string `json:"connected_user_id,omitempty"`
+	CreatedAt       string `json:"created_at"`
 }
 
 type ContactRepository interface {

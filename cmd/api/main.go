@@ -40,8 +40,9 @@ func main() {
 	paymentRepo := postgres.NewPaymentRepository(pool)
 	usageRepo := postgres.NewUsageRepository(pool)
 	contactRepo := postgres.NewContactRepository(pool)
+	invitationRepo := postgres.NewInvitationRepository(pool)
 
-	runServer(cfg, userRepo, billRepo, itemRepo, personRepo, assignmentRepo, paymentRepo, usageRepo, contactRepo, postgres.NewOCRService(cfg.GroqAPIKey, cfg.PythonPath), timeoutContext)
+	runServer(cfg, userRepo, billRepo, itemRepo, personRepo, assignmentRepo, paymentRepo, usageRepo, contactRepo, invitationRepo, postgres.NewOCRService(cfg.GroqAPIKey, cfg.PythonPath), timeoutContext)
 }
 
 func runServer(
@@ -54,6 +55,7 @@ func runServer(
 	paymentRepo domain.PaymentRepository,
 	usageRepo domain.UsageRepository,
 	contactRepo domain.ContactRepository,
+	invitationRepo domain.InvitationRepository,
 	ocrSvc domain.OCRService,
 	timeout time.Duration,
 ) {
@@ -67,10 +69,12 @@ func runServer(
 	usageHandler := delivery.NewUsageHandler(billUsecase)
 	contactUsecase := usecase.NewContactUsecase(contactRepo)
 	contactHandler := delivery.NewContactHandler(contactUsecase)
+	invitationUsecase := usecase.NewInvitationUsecase(invitationRepo, userRepo, contactRepo)
+	invitationHandler := delivery.NewInvitationHandler(invitationUsecase)
 	authMiddleware := middleware.NewAuthMiddleware(authUsecase)
 	ocrRateLimiter := middleware.NewRateLimiter(10, time.Minute)
 	authRateLimiter := middleware.NewRateLimiter(5, time.Minute)
-	router := delivery.NewRouter(authHandler, billHandler, premiumHandler, usageHandler, contactHandler, authMiddleware, ocrRateLimiter, authRateLimiter, cfg.FrontendURL)
+	router := delivery.NewRouter(authHandler, billHandler, premiumHandler, usageHandler, contactHandler, invitationHandler, authMiddleware, ocrRateLimiter, authRateLimiter, cfg.FrontendURL)
 
 	server := &http.Server{
 		Addr:         ":" + cfg.Port,

@@ -51,6 +51,7 @@ type Person struct {
 	BillID      string      `json:"bill_id"`
 	UserID      *string     `json:"user_id,omitempty"`
 	Name        string      `json:"name"`
+	Email       string      `json:"email,omitempty"`
 	IsPayer     bool        `json:"is_payer"`
 	Percentage  float64     `json:"percentage"`
 	PaymentInfo interface{} `json:"payment_info,omitempty"`
@@ -112,6 +113,7 @@ type ItemRequest struct {
 type PersonRequest struct {
 	ID          string      `json:"id,omitempty"`
 	Name        string      `json:"name" validate:"required"`
+	Email       string      `json:"email,omitempty"`
 	IsPayer     bool        `json:"is_payer"`
 	Percentage  float64     `json:"percentage"`
 	PaymentInfo interface{} `json:"payment_info,omitempty"`

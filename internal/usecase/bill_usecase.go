@@ -71,7 +71,7 @@ func (bu *billUsecase) Create(ctx context.Context, userID string, req *domain.Cr
 		}
 	}
 
-	if req.SplitType == string(domain.SplitTypePercentage) {
+	if req.SplitType == string(domain.SplitTypePercentage) && req.Status != "draft" {
 		totalPct := 0.0
 		for _, p := range req.Persons {
 			totalPct += p.Percentage
@@ -160,6 +160,7 @@ func (bu *billUsecase) Create(ctx context.Context, userID string, req *domain.Cr
 			ID:          personReq.ID,
 			BillID:      bill.ID,
 			Name:        personReq.Name,
+			Email:       personReq.Email,
 			IsPayer:     personReq.IsPayer,
 			Percentage:  personReq.Percentage,
 			PaymentInfo: pi,
@@ -167,10 +168,15 @@ func (bu *billUsecase) Create(ctx context.Context, userID string, req *domain.Cr
 		}
 	}
 
-	for i, p := range persons {
-		if p.IsPayer {
-			uid := user.ID
-			persons[i].UserID = &uid
+	for i := range persons {
+		if persons[i].Email != "" {
+			if otherUser, err := bu.userRepo.GetByEmail(ctx, persons[i].Email); err == nil {
+				persons[i].UserID = &otherUser.ID
+			}
+		} else {
+			if otherUser, err := bu.userRepo.GetByName(ctx, persons[i].Name); err == nil {
+				persons[i].UserID = &otherUser.ID
+			}
 		}
 	}
 
@@ -192,26 +198,28 @@ func (bu *billUsecase) Create(ctx context.Context, userID string, req *domain.Cr
 	bill.Items = items
 	bill.Persons = persons
 
-	payments := bu.calculatePayments(ctx, bill, items, persons, assignments)
-	for _, p := range persons {
-		if p.IsPayer {
-			continue
-		}
-		hasPayment := false
-		for _, pm := range payments {
-			if pm.FromPersonID == p.ID && pm.Amount > 0 {
-				hasPayment = true
-				break
+	if req.Status != "draft" {
+		payments := bu.calculatePayments(ctx, bill, items, persons, assignments)
+		for _, p := range persons {
+			if p.IsPayer {
+				continue
+			}
+			hasPayment := false
+			for _, pm := range payments {
+				if pm.FromPersonID == p.ID && pm.Amount > 0 {
+					hasPayment = true
+					break
+				}
+			}
+			if !hasPayment {
+				return nil, fmt.Errorf("%s has no payment to settle — assign items or change split type", p.Name)
 			}
 		}
-		if !hasPayment {
-			return nil, fmt.Errorf("%s has no payment to settle — assign items or change split type", p.Name)
+		if err := bu.billRepo.CreatePayments(ctx, bill.ID, payments); err != nil {
+			return nil, err
 		}
+		bill.Payments = payments
 	}
-	if err := bu.billRepo.CreatePayments(ctx, bill.ID, payments); err != nil {
-		return nil, err
-	}
-	bill.Payments = payments
 
 	bu.usageRepo.IncrementUsage(ctx, userID, "create_bill", month)
 
@@ -276,11 +284,16 @@ func (bu *billUsecase) calculateCustomSplit(ctx context.Context, bill *domain.Bi
 
 	personAmounts := make(map[string]float64)
 	for _, item := range items {
+		qty := item.Quantity
+		if qty < 1 {
+			qty = 1
+		}
+		totalPrice := item.Price * float64(qty)
 		assigned := itemPersonMap[item.ID]
 		if len(assigned) == 0 {
 			continue
 		}
-		splitAmount := item.Price / float64(len(assigned))
+		splitAmount := totalPrice / float64(len(assigned))
 		for _, personID := range assigned {
 			personAmounts[personID] += splitAmount
 		}
@@ -370,11 +383,16 @@ func (bu *billUsecase) calculateSharedItemsSplit(ctx context.Context, bill *doma
 	individualItemTotals := make(map[string]float64)
 
 	for _, item := range items {
+		qty := item.Quantity
+		if qty < 1 {
+			qty = 1
+		}
+		totalPrice := item.Price * float64(qty)
 		persons := itemPersonMap[item.ID]
 		if len(persons) == 0 {
-			sharedItemTotal += item.Price
+			sharedItemTotal += totalPrice
 		} else {
-			splitAmount := item.Price / float64(len(persons))
+			splitAmount := totalPrice / float64(len(persons))
 			for _, personID := range persons {
 				individualItemTotals[personID] += splitAmount
 			}

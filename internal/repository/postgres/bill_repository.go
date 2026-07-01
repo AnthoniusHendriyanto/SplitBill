@@ -145,9 +145,7 @@ func (r *billRepository) CreateFull(ctx context.Context, bill *domain.Bill, item
 	}
 	defer tx.Rollback(ctx)
 
-	if bill.ID == "" {
-		bill.ID = uuid.New().String()
-	}
+	bill.ID = uuid.New().String()
 	billQuery := `
 		INSERT INTO bills (id, user_id, title, merchant, total_amount, service_charge, service_mode, tax, tax_mode, discount, grand_total, status, split_type, bill_date, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
@@ -159,11 +157,12 @@ func (r *billRepository) CreateFull(ctx context.Context, bill *domain.Bill, item
 		return fmt.Errorf("insert bill: %w", err)
 	}
 
+	itemIDMap := make(map[string]string, len(items))
 	for i := range items {
-		if items[i].ID == "" {
-			items[i].ID = uuid.New().String()
-		}
+		oldID := items[i].ID
+		items[i].ID = uuid.New().String()
 		items[i].BillID = bill.ID
+		itemIDMap[oldID] = items[i].ID
 		qty := items[i].Quantity
 		if qty < 1 {
 			qty = 1
@@ -176,22 +175,27 @@ func (r *billRepository) CreateFull(ctx context.Context, bill *domain.Bill, item
 		}
 	}
 
+	personIDMap := make(map[string]string, len(persons))
 	for i := range persons {
-		if persons[i].ID == "" {
-			persons[i].ID = uuid.New().String()
-		}
+		oldID := persons[i].ID
+		persons[i].ID = uuid.New().String()
 		persons[i].BillID = bill.ID
+		personIDMap[oldID] = persons[i].ID
 		if _, err := tx.Exec(ctx, `
-			INSERT INTO persons (id, bill_id, name, is_payer, percentage, payment_info, created_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7)
-		`, persons[i].ID, persons[i].BillID, persons[i].Name, persons[i].IsPayer, persons[i].Percentage, persons[i].PaymentInfo, persons[i].CreatedAt); err != nil {
+			INSERT INTO persons (id, bill_id, name, email, is_payer, percentage, payment_info, created_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		`, persons[i].ID, persons[i].BillID, persons[i].Name, persons[i].Email, persons[i].IsPayer, persons[i].Percentage, persons[i].PaymentInfo, persons[i].CreatedAt); err != nil {
 			return fmt.Errorf("insert person: %w", err)
 		}
 	}
 
 	for i := range assignments {
-		if assignments[i].ID == "" {
-			assignments[i].ID = uuid.New().String()
+		assignments[i].ID = uuid.New().String()
+		if newItemID, ok := itemIDMap[assignments[i].ItemID]; ok {
+			assignments[i].ItemID = newItemID
+		}
+		if newPersonID, ok := personIDMap[assignments[i].PersonID]; ok {
+			assignments[i].PersonID = newPersonID
 		}
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO item_assignments (id, item_id, person_id, created_at)

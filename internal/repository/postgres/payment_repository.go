@@ -101,7 +101,7 @@ func (r *paymentRepository) GetUserPaymentSummaryByBillIDs(ctx context.Context, 
 			COALESCE(SUM(CASE WHEN pm.from_person_id = p.id AND NOT pm.is_paid THEN pm.amount ELSE 0 END), 0) AS payable
 		FROM persons p
 		LEFT JOIN payments pm ON pm.bill_id = p.bill_id
-		WHERE p.bill_id = ANY($1) AND (p.user_id = $2 OR p.name = (SELECT name FROM users WHERE id = $2) OR (p.user_id IS NULL AND p.is_payer AND p.bill_id IN (SELECT id FROM bills WHERE user_id = $2)))
+		WHERE p.bill_id = ANY($1) AND (p.user_id = $2 OR p.name = (SELECT name FROM users WHERE id = $2))
 		GROUP BY p.bill_id
 	`
 	args := []interface{}{billIDs, userID}
