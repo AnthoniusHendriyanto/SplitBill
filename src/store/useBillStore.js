@@ -31,12 +31,13 @@ const useBillStore = create(
         bill: { ...state.bill, ...data } 
       })),
 
-      addPerson: (name) => set((state) => ({
+      addPerson: (name, email = '') => set((state) => ({
         bill: {
           ...state.bill,
           persons: [...state.bill.persons, { 
             id: createId(), 
             name: name || '', 
+            email: email || '',
             paymentInfo: { bank: '', accountNumber: '', qrisData: '' } 
           }]
         }
@@ -139,6 +140,7 @@ const useBillStore = create(
               status: bill.status || 'pending',
               discount: bill.discount || 0,
               payerName: bill.payer_name || '',
+              billDate: bill.bill_date || bill.date || '',
               totals: [],
               items: [],
               persons: [],
@@ -167,8 +169,10 @@ const useBillStore = create(
           persons: state.bill.persons.map(p => ({
             id: p.id,
             name: p.name,
+            email: p.email || '',
             payment_info: p.paymentInfo || {},
             is_payer: p.id === state.bill.payerId,
+            percentage: state.bill.splitType === 'percentage' ? (p.percentage || 0) : 0,
           })),
           split_type: state.bill.splitType || 'custom',
           assignments: Object.entries(state.assignments).flatMap(([personId, items]) =>
@@ -190,6 +194,9 @@ const useBillStore = create(
           throw new Error('Must be logged in to save bills');
         }
 
+        if (state.bill.id) {
+          try { await api.deleteBill(state.bill.id); } catch (_) {}
+        }
         try {
           await api.createBill(billData);
         } catch (err) {

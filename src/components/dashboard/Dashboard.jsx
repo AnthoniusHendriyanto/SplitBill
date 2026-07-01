@@ -19,9 +19,33 @@ function getGreeting() {
   return greetings[2];
 }
 
-function generateSparkline(seed) {
-  const base = seed || 0;
-  return [base, base, base, base, base, base, base, base];
+function monthKey(y, m) {
+  return `${y}-${String(m + 1).padStart(2, '0')}`;
+}
+
+function parseMonthKey(key) {
+  const [y, m] = key.split('-').map(Number);
+  return { y, m: m - 1 };
+}
+
+function prevMonth(y, m) {
+  return m === 0 ? { y: y - 1, m: 11 } : { y, m: m - 1 };
+}
+
+function nextMonth(y, m) {
+  return m === 11 ? { y: y + 1, m: 0 } : { y, m: m + 1 };
+}
+
+function getBillMonthKey(bill) {
+  if (bill.billDate) {
+    const d = new Date(bill.billDate);
+    if (!isNaN(d.getTime())) return monthKey(d.getFullYear(), d.getMonth());
+  }
+  if (bill.completedAt) {
+    const d = new Date(bill.completedAt);
+    if (!isNaN(d.getTime())) return monthKey(d.getFullYear(), d.getMonth());
+  }
+  return null;
 }
 
 export default memo(function Dashboard({ setActiveTab, setStep, setSelectedBillId }) {
@@ -32,34 +56,64 @@ export default memo(function Dashboard({ setActiveTab, setStep, setSelectedBillI
   const [toastMsg] = useState(null);
   const userName = currentUser?.name || 'there';
 
-  const metrics = useMemo(() => {
-    const currentMonth = new Date().getMonth();
-    let pendingCount = 0;
-    let monthlySpending = 0;
+  const now = new Date();
+  const defaultMonth = monthKey(now.getFullYear(), now.getMonth());
+  const [selectedMonth, setSelectedMonth] = useState(defaultMonth);
 
+  const { y: selY, m: selM } = parseMonthKey(selectedMonth);
+  const { y: prevY, m: prevM } = prevMonth(selY, selM);
+  const prevKey = monthKey(prevY, prevM);
+
+  const monthMetrics = useMemo(() => {
+    const monthBills = completedBills.filter(b => getBillMonthKey(b) === selectedMonth);
+    const prevBills = completedBills.filter(b => getBillMonthKey(b) === prevKey);
+
+    const monthSum = monthBills.reduce((s, b) => s + (b.user_share || 0), 0);
+    const prevSum = prevBills.reduce((s, b) => s + (b.user_share || 0), 0);
+    let trend = 0;
+    if (prevSum > 0) trend = Math.round(((monthSum - prevSum) / prevSum) * 100);
+    else if (monthSum > 0) trend = 100;
+
+    const monthReceivable = monthBills.reduce((s, b) => s + (b.receivable || 0), 0);
+    const prevReceivable = prevBills.reduce((s, b) => s + (b.receivable || 0), 0);
+    let receivableTrend = 0;
+    if (prevReceivable > 0) receivableTrend = Math.round(((monthReceivable - prevReceivable) / prevReceivable) * 100);
+    else if (monthReceivable > 0) receivableTrend = 100;
+
+    return { spending: monthSum, spendingTrend: trend, receivableTrend };
+  }, [completedBills, selectedMonth, prevKey]);
+
+  const monthName = new Date(selY, selM).toLocaleString('en-US', { month: 'long', year: 'numeric' });
+
+  const handlePrevMonth = useCallback(() => {
+    const { y, m } = prevMonth(selY, selM);
+    setSelectedMonth(monthKey(y, m));
+  }, [selY, selM]);
+
+  const handleNextMonth = useCallback(() => {
+    const { y, m } = nextMonth(selY, selM);
+    setSelectedMonth(monthKey(y, m));
+  }, [selY, selM]);
+
+  const metrics = useMemo(() => {
+    let pendingCount = 0;
     let totalReceivable = 0;
     let totalPayable = 0;
 
     completedBills.forEach(b => {
       totalReceivable += b.receivable || 0;
       totalPayable += b.payable || 0;
-
       if (b.status === 'pending') pendingCount++;
-      if (b.completedAt && new Date(b.completedAt).getMonth() === currentMonth) {
-        monthlySpending += b.user_share || 0;
-      }
     });
 
     return {
       receivable: totalReceivable,
       payable: totalPayable,
       pending: pendingCount,
-      spending: monthlySpending,
-      sparklineReceivable: generateSparkline(totalReceivable || 50),
-      sparklinePending: generateSparkline(pendingCount * 3 || 5),
-      sparklineSpending: generateSparkline(monthlySpending || 100),
     };
   }, [completedBills]);
+
+  const receivableTrend = monthMetrics.receivableTrend;
 
   const handleAction = useCallback((tab, step) => {
     if (tab) setActiveTab(tab);
@@ -74,13 +128,6 @@ export default memo(function Dashboard({ setActiveTab, setStep, setSelectedBillI
   const handleViewBill = useCallback((billId) => {
     setSelectedBillId(billId);
   }, [setSelectedBillId]);
-
-  const receivableTrend = useMemo(() => {
-    const total = metrics.receivable;
-    if (total > 100000) return 12;
-    if (total > 50000) return 5;
-    return 0;
-  }, [metrics.receivable]);
 
   return (
     <motion.div
@@ -111,10 +158,32 @@ export default memo(function Dashboard({ setActiveTab, setStep, setSelectedBillI
 
           {/* Metric Cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-            <MetricCard type="receivable" value={`Rp ${metrics.receivable.toLocaleString('id-ID')}`} trend={receivableTrend} sparklineData={metrics.sparklineReceivable} />
-            <MetricCard type="payable" value={`Rp ${metrics.payable.toLocaleString('id-ID')}`} trend={metrics.payable > 0 ? -8 : 0} sparklineData={generateSparkline(metrics.payable / 3 || 20)} />
-            <MetricCard type="pending" value={`${metrics.pending} active`} trend={metrics.pending > 0 ? metrics.pending * 10 : 0} sparklineData={metrics.sparklinePending} />
-            <MetricCard type="spending" value={`Rp ${metrics.spending.toLocaleString('id-ID')}`} trend={metrics.spending > 500000 ? 15 : 8} sparklineData={metrics.sparklineSpending} />
+            <MetricCard type="receivable" value={`Rp ${metrics.receivable.toLocaleString('id-ID')}`} trend={receivableTrend} />
+            <MetricCard type="payable" value={`Rp ${metrics.payable.toLocaleString('id-ID')}`} trend={metrics.payable > 0 ? -8 : 0} />
+            <MetricCard type="pending" value={`${metrics.pending} active`} trend={metrics.pending > 0 ? metrics.pending * 10 : 0} />
+            <MetricCard type="spending"
+              value={`Rp ${monthMetrics.spending.toLocaleString('id-ID')}`}
+              trend={monthMetrics.spendingTrend}
+              headerRight={
+                <div className="flex items-center gap-1 -mr-1">
+                  <button onClick={handlePrevMonth}
+                    className="w-6 h-6 rounded-lg flex items-center justify-center text-tertiary hover:text-[--text-primary] hover:bg-white/5 transition-all cursor-pointer border-none outline-none"
+                    aria-label="Previous month"
+                  >
+                    <Icon name="chevron_left" className="text-sm" />
+                  </button>
+                  <span className="text-[10px] font-semibold text-tertiary whitespace-nowrap min-w-[90px] text-center select-none">
+                    {monthName}
+                  </span>
+                  <button onClick={handleNextMonth}
+                    className="w-6 h-6 rounded-lg flex items-center justify-center text-tertiary hover:text-[--text-primary] hover:bg-white/5 transition-all cursor-pointer border-none outline-none"
+                    aria-label="Next month"
+                  >
+                    <Icon name="chevron_right" className="text-sm" />
+                  </button>
+                </div>
+              }
+            />
           </div>
         </motion.div>
 

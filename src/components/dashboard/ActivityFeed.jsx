@@ -92,15 +92,10 @@ function EmptyState() {
 export default memo(function ActivityFeed({ bills, isLoading, error, onSelectBill, onNewBill }) {
   return (
     <div className="rounded-3xl bg-white/60 dark:bg-[#12152a]/60 backdrop-blur-xl border border-white/30 dark:border-white/5 shadow-glass p-6">
-      <div className="flex items-center justify-between mb-5">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 mb-5">
           <div className="w-1.5 h-6 rounded-full bg-[--brand-primary]" />
           <h2 className="text-base font-bold text-[--text-primary]">Activity Feed</h2>
         </div>
-        <button onClick={onNewBill} className="text-xs font-semibold text-[--brand-primary] hover:text-[--brand-primary-hover] transition-colors cursor-pointer border-none outline-none bg-transparent">
-          View all
-        </button>
-      </div>
 
       {isLoading ? (
         <LoadingSkeleton />

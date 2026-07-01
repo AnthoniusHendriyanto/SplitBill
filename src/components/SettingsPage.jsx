@@ -13,9 +13,11 @@ import NotificationsTab from './settings/NotificationsTab';
 import BillingTab from './settings/BillingTab';
 import SecurityTab from './settings/SecurityTab';
 import DangerTab from './settings/DangerTab';
+import ConnectionsTab from './settings/ConnectionsTab';
 
 const tabs = [
   { id: 'account', label: 'Account', icon: 'person_outline' },
+  { id: 'connections', label: 'Connections', icon: 'people' },
   { id: 'preferences', label: 'Preferences', icon: 'tune' },
   { id: 'split', label: 'Split Rules', icon: 'call_split' },
   { id: 'notifications', label: 'Notifications', icon: 'notifications_none' },
@@ -213,6 +215,7 @@ function SettingsPage() {
             <div className="rounded-2xl shadow-card overflow-hidden" style={{ background: 'var(--surface-elevated)' }}>
               <div className="p-6 md:p-8 space-y-8">
                 {settingsTab === 'account' && <AccountTab profileForm={profileForm} setProfileForm={setProfileForm} onHasChanges={() => setHasChanges(true)} />}
+                {settingsTab === 'connections' && <ConnectionsTab />}
                 {settingsTab === 'preferences' && <PreferencesTab settings={settings} updateSettings={updateSettings} />}
                 {settingsTab === 'split' && <SplitTab settings={settings} updateSettings={updateSettings} />}
                 {settingsTab === 'notifications' && <NotificationsTab settings={settings} updateSettings={updateSettings} />}

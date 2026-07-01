@@ -16,7 +16,7 @@
 | `src/components/Step3People.jsx` | Add people, select payer |
 | `src/components/Step4Shares.jsx` | Split method + assignment grid + premium gating |
 | `src/components/Step5Settlement.jsx` | Summary + DebtMap + save |
-| `src/components/Dashboard.jsx` | Bill list (API + local), skeleton loading, KPI cards |
+| `src/components/Dashboard.jsx` | KPI cards (receivable/payable/pending/spending), month selector for Spending, real month-over-month trend from `bill_date`, activity feed, charts, sidebar widgets |
 | `src/components/SettingsPage.jsx` | 7-tab settings (profile, tier, currency, subscription) |
 | `src/components/HelpCenterModal.jsx` | Usage guide modal |
 | `src/components/BillDetailsModal.jsx` | Completed bill breakdown |
@@ -250,3 +250,14 @@ Two root causes:
 **Fix**:
 - `FriendsBalanceSummary`: sums `receivable`/`payable` from bill summaries directly
 - `UpcomingSettlements`: filters pending bills where `receivable > 0` or `payable > 0`, shows bill-level amounts
+
+## Monthly Spending Month Selector — Added
+
+**What**: Dashboard Monthly Spending card now has prev/next month navigation. Trend calculated month-over-month from actual `bill_date` field.
+
+**Files**:
+- `Dashboard.jsx` — `selectedMonth` state, `getBillMonthKey` util, `monthMetrics` useMemo (filters bills by selected month's bill_date, compares previous month for trend %)
+- `MetricCard.jsx` — accepts `subtitle` prop (renders in place of label, used for the month picker UI)
+- `useBillStore.js` — `billDate` field added to `completedBills` mapping from API response
+
+**Trend calculation**: `(currentMonthSum - prevMonthSum) / prevMonthSum * 100`, rounded. 100% if no previous data but current > 0. 0 if both zero.

@@ -205,6 +205,21 @@ export const api = {
   deleteContact: (id) =>
     request(`/api/v1/contacts/${id}`, { method: 'DELETE' }),
 
+  // Invitations
+  sendInvitation: (email) =>
+    request('/api/v1/invitations', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
+
+  getInvitations: () => request('/api/v1/invitations'),
+
+  acceptInvitation: (id) =>
+    request(`/api/v1/invitations/${id}/accept`, { method: 'POST' }),
+
+  rejectInvitation: (id) =>
+    request(`/api/v1/invitations/${id}/reject`, { method: 'POST' }),
+
   // Usage
   getUsage: () => request('/api/v1/usage'),
 };

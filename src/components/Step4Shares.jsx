@@ -15,8 +15,8 @@ function Step4Shares({ receiptGrandTotal, setStep }) {
   const isPremium = user?.tier === 'premium';
   const [splitTab, setSplitTab] = useState('equal');
   const [itemError, setItemError] = useState('');
-
   const persons = useMemo(() => bill.persons || [], [bill.persons]);
+  const totalPercent = persons.reduce((s, p) => s + (p.percentage || 0), 0);
   const items = useMemo(() => bill.items || [], [bill.items]);
   const lineTotal = (item) => (item.unitPrice ?? item.price) * (item.qty ?? item.quantity ?? 1);
   const totalBillSubtotal = items.reduce((sum, item) => sum + lineTotal(item), 0);
@@ -190,7 +190,9 @@ function Step4Shares({ receiptGrandTotal, setStep }) {
                 <>
                   <div className="flex justify-between items-center mb-3">
                     <span className="text-[10px] font-medium text-tertiary tracking-wide">Adjust percentages</span>
-                    <span className="text-[10px] font-medium text-brand-primary bg-brand-primary/5 border border-brand-primary/10 px-2.5 py-0.5 rounded-lg">Total: 100%</span>
+                    <span className={cn("text-[10px] font-medium px-2.5 py-0.5 rounded-lg border",
+                      totalPercent === 100 ? "text-emerald-400 bg-emerald-500/5 border-emerald-500/10" : "text-red-400 bg-red-500/5 border-red-500/10"
+                    )}>Total: {totalPercent}%</span>
                   </div>
                   <div className="space-y-4 max-h-[280px] overflow-y-auto pr-1 hide-scrollbar">
                     {persons.map((p) => {
@@ -207,13 +209,21 @@ function Step4Shares({ receiptGrandTotal, setStep }) {
                               onChange={(e) => { const v = parseInt(e.target.value) || 0; updatePerson(p.id, { percentage: v }); }}
                               className="flex-1 accent-brand-primary h-1.5 bg-white/[0.04] rounded-full appearance-none cursor-pointer"
                             />
-                            <div className="w-16 relative">
-                              <input type="number" min="0" max="100"
-                                value={currentPercent === 0 ? '' : currentPercent}
-                                onChange={(e) => { const v = parseInt(e.target.value) || 0; updatePerson(p.id, { percentage: v }); }}
-                                className="w-full text-right bg-black/20 border border-white/[0.06] rounded-xl py-1.5 px-2.5 text-xs font-medium text-primary outline-none focus:border-brand-primary/50" placeholder="0"
-                              />
-                              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[9px] font-medium text-tertiary">%</span>
+                            <div className="flex items-center gap-1">
+                              <button onClick={() => updatePerson(p.id, { percentage: Math.max(0, currentPercent - 1) })}
+                                className="w-6 h-6 rounded-lg bg-white/[0.04] border border-white/[0.06] text-tertiary hover:text-primary hover:bg-white/[0.08] text-sm flex items-center justify-center cursor-pointer transition-all"
+                              >−</button>
+                              <div className="w-14 relative">
+                                <input type="number" min="0" max="100"
+                                  value={currentPercent === 0 ? '' : currentPercent}
+                                  onChange={(e) => { const v = parseInt(e.target.value) || 0; updatePerson(p.id, { percentage: Math.min(100, Math.max(0, v)) }); }}
+                                  className="w-full text-center bg-black/20 border border-white/[0.06] rounded-xl py-1.5 px-1 text-xs font-medium text-primary outline-none focus:border-brand-primary/50 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" placeholder="0"
+                                />
+                              </div>
+                              <button onClick={() => updatePerson(p.id, { percentage: Math.min(100, currentPercent + 1) })}
+                                className="w-6 h-6 rounded-lg bg-white/[0.04] border border-white/[0.06] text-tertiary hover:text-primary hover:bg-white/[0.08] text-sm flex items-center justify-center cursor-pointer transition-all"
+                              >+</button>
+                              <span className="text-[9px] font-medium text-tertiary w-3">%</span>
                             </div>
                           </div>
                         </div>
@@ -274,6 +284,10 @@ function Step4Shares({ receiptGrandTotal, setStep }) {
           <div className="flex items-center gap-3">
             {itemError && <span className="text-[10px] font-medium text-red-400">{itemError}</span>}
             <button onClick={() => {
+              if (splitTab === 'percent' && totalPercent !== 100) {
+                setItemError(`Percentages must total 100% (currently ${totalPercent}%)`);
+                return;
+              }
               if (splitTab === 'item') {
                 const unassigned = items.filter(item => !persons.some(p => assignments[p.id]?.[item.id]));
                 if (unassigned.length > 0) {

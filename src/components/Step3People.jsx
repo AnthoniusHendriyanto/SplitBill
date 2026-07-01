@@ -15,6 +15,7 @@ function Step3People({ receiptGrandTotal, setStep }) {
   const [participantInput, setParticipantInput] = useState('');
   const [contacts, setContacts] = useState([]);
   const [loadingContacts, setLoadingContacts] = useState(false);
+  const [payerError, setPayerError] = useState('');
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -38,10 +39,10 @@ function Step3People({ receiptGrandTotal, setStep }) {
   };
 
   useEffect(() => {
+    const store = useBillStore.getState();
     const currentUser = useAuthStore.getState().user;
-    if (!currentUser || bill.persons.length > 0) return;
+    if (!currentUser || store.bill.persons.length > 0) return;
     const timer = setTimeout(() => {
-      const store = useBillStore.getState();
       const alreadyAdded = store.bill.persons.some(
         p => p.userId === currentUser.id || p.name.toLowerCase() === (currentUser.name || '').toLowerCase()
       );
@@ -59,6 +60,12 @@ function Step3People({ receiptGrandTotal, setStep }) {
     }, 0);
     return () => clearTimeout(timer);
   }, [bill.persons.length]);
+
+  useEffect(() => {
+    if (bill.persons.length === 1 && bill.payerId !== bill.persons[0].id) {
+      updateBill({ payerId: bill.persons[0].id });
+    }
+  }, [bill.persons.length, bill.payerId]);
 
   return (
     <motion.div
@@ -170,7 +177,7 @@ function Step3People({ receiptGrandTotal, setStep }) {
               </div>
             ) : contacts.length > 0 && (
               <div className="mb-4">
-                <p className="text-[9px] font-medium text-tertiary uppercase tracking-wider mb-2">Saved Contacts</p>
+                <p className="text-[9px] font-medium text-tertiary uppercase tracking-wider mb-2">Contacts</p>
                 <div className="flex flex-wrap gap-2">
                   {contacts.map(c => {
                     const inBill = bill.persons.some(p => p.name.toLowerCase() === c.name.toLowerCase());
@@ -182,7 +189,12 @@ function Step3People({ receiptGrandTotal, setStep }) {
                         <div className="w-5 h-5 rounded-full bg-brand-primary/10 border border-brand-primary/20 flex items-center justify-center text-[9px] font-bold text-brand-primary uppercase">
                           {c.name.charAt(0)}
                         </div>
-                        <span className="text-[11px] font-medium text-secondary max-w-[100px] truncate">{c.name}</span>
+                        <span className="text-[11px] font-medium text-secondary max-w-[80px] truncate">{c.name}</span>
+                        {c.connected_user_id && (
+                          <span className="text-[8px] px-1 py-0.5 rounded-full text-emerald-400 bg-emerald-500/10 font-medium leading-none shrink-0">
+                            connected
+                          </span>
+                        )}
                         {inBill ? (
                           <span className="w-4 h-4 flex items-center justify-center text-[10px] text-emerald-400">
                             <Icon name="check" />
@@ -271,7 +283,14 @@ function Step3People({ receiptGrandTotal, setStep }) {
             </button>
             <button
               disabled={bill.persons.length === 0}
-              onClick={() => setStep(4)}
+              onClick={() => {
+                if (!bill.payerId) {
+                  setPayerError('Select who paid the bill to continue.');
+                  return;
+                }
+                setPayerError('');
+                setStep(4);
+              }}
               className={cn(
                 "h-10 px-5 rounded-2xl text-xs font-semibold transition-all flex items-center gap-1.5 border-none outline-none cursor-pointer",
                 bill.persons.length === 0
@@ -282,6 +301,9 @@ function Step3People({ receiptGrandTotal, setStep }) {
               Continue
               <Icon name="arrow_forward" className="text-xs" />
             </button>
+            {payerError && (
+              <p className="text-[10px] text-red-400 mt-2 text-right">{payerError}</p>
+            )}
           </div>
         </div>
       </div>

@@ -37,6 +37,8 @@ function BillDetailsModal({ billId, onClose }) {
           setBill({
             id: billData.id,
             title: billData.title,
+            merchant: billData.merchant || '',
+            billDate: billData.bill_date || '',
             completedAt: billData.created_at,
             grandTotal: billData.grand_total,
             items,
@@ -129,9 +131,11 @@ function BillDetailsModal({ billId, onClose }) {
         <div className="p-6 border-b border-white/[0.04] flex justify-between items-center">
           <div>
             <h3 className="text-xl font-bold text-primary">{bill.title}</h3>
-            <p className="text-xs text-secondary font-medium mt-1">
-              Completed on {new Date(bill.completedAt).toLocaleDateString(undefined, { dateStyle: 'medium' })}
-            </p>
+            {bill.merchant && <p className="text-xs text-tertiary font-medium mt-0.5">{bill.merchant}</p>}
+            <div className="flex gap-3 mt-1 text-xs text-secondary font-medium">
+              {bill.billDate && <span>Bill Date: {new Date(bill.billDate + 'T00:00:00').toLocaleDateString(undefined, { dateStyle: 'medium' })}</span>}
+              <span>Created: {new Date(bill.completedAt).toLocaleDateString(undefined, { dateStyle: 'medium' })}</span>
+            </div>
           </div>
           <button
             onClick={onClose}

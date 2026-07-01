@@ -2,8 +2,8 @@ import { motion } from 'framer-motion';
 import Icon from '../Icon';
 
 const actions = [
-  { id: 'newBill', icon: 'add', label: 'New Bill', desc: 'Create a new split', action: 'bills', step: 1 },
-  { id: 'scan', icon: 'document_scanner', label: 'Scan Receipt', desc: 'OCR auto-detect', action: 'bills', step: 1 },
+  { id: 'scan', icon: 'document_scanner', label: 'Scan Receipt', desc: 'AI auto-detect from photo', action: 'bills', step: 1 },
+  { id: 'manual', icon: 'edit_note', label: 'Manual Entry', desc: 'Type items yourself', action: 'bills', step: 2 },
 ];
 
 export default function QuickActions({ onAction }) {

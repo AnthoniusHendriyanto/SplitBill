@@ -44,6 +44,7 @@ export default function App() {
   const activeTab = ui?.activeTab ?? 'bills';
   const [isValidating, setIsValidating] = useState(true);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  const [historySearch, setHistorySearch] = useState('');
   const silentRefresh = useAuthStore((s) => s.silentRefresh);
 
   useEffect(() => {
@@ -316,6 +317,14 @@ export default function App() {
     }
 
     if (activeTab === 'history') {
+      const q = historySearch.toLowerCase();
+      const filtered = q
+        ? completedBills.filter(b =>
+            (b.merchant || '').toLowerCase().includes(q) ||
+            (b.title || '').toLowerCase().includes(q) ||
+            (b.billDate || '').includes(historySearch)
+          )
+        : completedBills;
       return (
         <div className="p-6 flex-1 overflow-y-auto flex flex-col gap-4">
           <div>
@@ -325,8 +334,15 @@ export default function App() {
             </h2>
             <p className="text-xs text-secondary mt-0.5 font-medium">Completed and archived bills</p>
           </div>
+          <div className="relative">
+            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-sm text-tertiary pointer-events-none">search</span>
+            <input type="text" placeholder="Search by merchant, title, or date (YYYY-MM-DD)..."
+              value={historySearch} onChange={e => setHistorySearch(e.target.value)}
+              className="w-full bg-black/20 border border-white/[0.06] rounded-xl pl-9 pr-3 py-2.5 text-sm text-primary placeholder:text-tertiary/50 focus:outline-none focus:border-brand-primary/50 transition-colors"
+            />
+          </div>
           <ActivityFeed
-            bills={completedBills}
+            bills={filtered}
             isLoading={isLoadingBills}
             error={null}
             onSelectBill={handleSelectBill}
