@@ -14,10 +14,11 @@ High-performance bill splitting API with AI-powered receipt scanning. Built with
 
 ## Key Features
 
-- **AI-Powered OCR**: PaddleOCR extracts raw text → OpenRouter Free (auto-failover across DeepSeek, Qwen, GLM, Kimi) → Gemini Flash Free fallback. No regex fallback, no paid AI.
+- **AI-Powered OCR**: PaddleOCR extracts raw text → Groq (5-model rotation: Llama 4 Scout vision, Llama 3.3-70B, Qwen3-32B, GPT-OSS-20B, Llama 3.1-8B). Vision-first pipeline (image→JSON) with text fallback. No regex fallback, no paid AI.
 - **Clean Architecture**: Delivery → UseCase → Domain → Repository separation for testability.
 - **4 Split Types**: Equal, Custom (per-item), Percentage, Shared Items.
 - **Payment-as-Bank Model**: The person who paid is the "bank"; all debts flow to them.
+- **Discount Handling**: "You saved Rp X" badge shows total discounts. Monthly spending shows pre-discount amount (what would have been spent without discounts).
 - **Shareable Links**: No-auth bill sharing with optional expiry and view limits.
 - **Premium Gating**: Freemium model ($2.99/month) with OCR usage tracking.
 - **Resilient**: Configurable connection pool, graceful shutdown, rate limiting, CORS whitelist.

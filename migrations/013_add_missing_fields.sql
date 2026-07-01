@@ -3,7 +3,7 @@
 -- bills: status tracking (draft, pending, completed)
 ALTER TABLE bills ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'pending';
 
--- bills: discount from OCR (display-only, never deducted from grand_total)
+-- bills: discount from OCR (display-only, never deducted from grand_total, used for "You saved Rp X" badge)
 ALTER TABLE bills ADD COLUMN IF NOT EXISTS discount DECIMAL(15,2) NOT NULL DEFAULT 0;
 
 -- bills: service/tax mode (percent or fixed)
