@@ -1,17 +1,23 @@
 import { motion } from 'framer-motion';
 
-const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
-
 export default function MonthlyTrendChart({ bills }) {
   const now = new Date();
-  const data = months.map((_, i) => {
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  
+  // Create array of last 6 months (current month + 5 previous)
+  const data = Array(6).fill().map((_, i) => {
     const m = (now.getMonth() - 5 + i + 12) % 12;
     const y = now.getFullYear() - (now.getMonth() - 5 + i < 0 ? 1 : 0);
+    const monthLabel = monthNames[m];
+    
     return {
-      month: months[i],
+      month: monthLabel,
       value: bills
-        .filter(b => b.completedAt && new Date(b.completedAt).getMonth() === m && new Date(b.completedAt).getFullYear() === y)
-        .reduce((s, b) => s + (b.user_share || b.grandTotal || 0), 0),
+        .filter(b => {
+          const billDate = b.billDate ? new Date(b.billDate) : (b.completedAt ? new Date(b.completedAt) : null);
+          return billDate && billDate.getMonth() === m && billDate.getFullYear() === y;
+        })
+        .reduce((s, b) => s + (b.user_share || 0) + (b.discount || 0), 0),
     };
   });
 

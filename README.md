@@ -16,10 +16,11 @@ Premium bill-splitting PWA built with React 19, Vite 8, Zustand 5, and Tailwind 
 ## Key Features
 
 - **Scan-First Wizard**: 5-step sequential flow (Scan → Ledger → People → Shares → Settlement) with validation locks.
-- **AI Receipt Scanning**: Upload photo → backend PaddleOCR + OpenRouter + Gemini parsing.
+- **AI Receipt Scanning**: Upload photo → backend PaddleOCR + Groq vision parsing. Extracts items, tax, service, discount.
 - **4 Split Types**: Equal, Custom (per-item), Percentage, Shared Items — with premium gating.
 - **Payment Intelligence**: Real-time `useMemo`-driven totals (subtotal, tax, service charge, grand total, per-person).
-- **Authentication**: JWT-based login/register with auto-refresh and guest mode.
+- **Discount Handling**: "You saved Rp X" badge shows total discounts. Monthly spending shows pre-discount amount.
+- **Authentication**: JWT-based login/register with auto-refresh.
 - **Premium Tier**: Freemium ($2.99/month) with feature gating and upgrade modals.
 - **Multi-Currency**: 9 currencies (IDR, USD, EUR, etc.) with formatting.
 - **Accessibility**: `focus-visible` rings, `aria-current`/`aria-label` on nav, `prefers-reduced-motion` support, typography hierarchy.

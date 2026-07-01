@@ -68,8 +68,8 @@ export default memo(function Dashboard({ setActiveTab, setStep, setSelectedBillI
     const monthBills = completedBills.filter(b => getBillMonthKey(b) === selectedMonth);
     const prevBills = completedBills.filter(b => getBillMonthKey(b) === prevKey);
 
-    const monthSum = monthBills.reduce((s, b) => s + (b.user_share || 0), 0);
-    const prevSum = prevBills.reduce((s, b) => s + (b.user_share || 0), 0);
+    const monthSum = monthBills.reduce((s, b) => s + (b.user_share || 0) + (b.discount || 0), 0);
+    const prevSum = prevBills.reduce((s, b) => s + (b.user_share || 0) + (b.discount || 0), 0);
     let trend = 0;
     if (prevSum > 0) trend = Math.round(((monthSum - prevSum) / prevSum) * 100);
     else if (monthSum > 0) trend = 100;
