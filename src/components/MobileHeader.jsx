@@ -1,34 +1,30 @@
 import { memo, useState } from 'react';
 import Icon from './Icon';
 import MobileDrawer from './MobileDrawer';
+import ThemeToggle from './ThemeToggle';
 
 function MobileHeader({ onHelpOpen }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   return (
     <>
-      <header className="h-14 bg-white/80 dark:bg-surface-base/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 flex items-center justify-between px-4 z-40 font-inter text-sm">
+      <header className="h-16 bg-[--surface-base] border-b border-[--border] flex items-center justify-between px-4 font-sans text-sm">
         <button
           onClick={() => setDrawerOpen(true)}
-          className="p-2 -ml-2 rounded-lg hover:bg-slate-100 dark:hover:bg-surface-raised transition-colors cursor-pointer outline-none"
+          className="p-2 -ml-2 rounded-xl hover:bg-white/10 transition-colors cursor-pointer outline-none border-none bg-transparent"
           aria-label="Open menu"
         >
-          <Icon name="menu" className="text-2xl text-tertiary dark:text-primary" />
+          <Icon name="menu" className="text-xl text-primary" />
         </button>
 
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 bg-indigo-600 rounded-md flex items-center justify-center text-white shadow-md">
-            <Icon name="payments" className="text-sm" />
+          <div className="w-8 h-8 rounded-xl bg-[--brand-primary] flex items-center justify-center text-[--text-inverse] shadow-sm">
+            <Icon name="payments" className="text-base font-bold" />
           </div>
-          <span className="text-base font-bold tracking-tight text-indigo-600 dark:text-indigo-400">SplitMate</span>
+          <span className="text-xl font-extrabold tracking-tighter text-primary">splitmate.</span>
         </div>
 
-        <button
-          className="p-2 -mr-2 rounded-lg hover:bg-slate-100 dark:hover:bg-surface-raised transition-colors cursor-pointer outline-none"
-          aria-label="Notifications"
-        >
-          <Icon name="notifications" className="text-2xl text-tertiary dark:text-secondary" />
-        </button>
+        <ThemeToggle />
       </header>
 
       <MobileDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} onHelpOpen={onHelpOpen} />
@@ -37,4 +33,3 @@ function MobileHeader({ onHelpOpen }) {
 }
 
 export default memo(MobileHeader);
-

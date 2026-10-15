@@ -1,10 +1,11 @@
-import { memo, useEffect, useState, useRef } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import useBillStore from '../store/useBillStore';
 import useAuthStore from '../store/useAuthStore';
 import ConfirmDialog from './ConfirmDialog';
 import { cn } from '../utils/cn';
 import { api } from '../lib/api';
+import ModalFrame from './ModalFrame';
 
 function BillDetailsModal({ billId, onClose }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -14,9 +15,9 @@ function BillDetailsModal({ billId, onClose }) {
   const fetchCompletedBills = useBillStore((s) => s.fetchCompletedBills);
   const updateUI = useBillStore((s) => s.updateUI);
   const isAuthenticated = useAuthStore((s) => !!s.accessToken);
-  const modalRef = useRef(null);
   const [bill, setBill] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => isAuthenticated && !!billId);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     if (isAuthenticated && billId) {
@@ -88,84 +89,61 @@ function BillDetailsModal({ billId, onClose }) {
             })(),
           });
         })
-        .catch(err => console.error('Failed to fetch bill:', err))
+        .catch(err => setError(err.message || 'Could not load this bill. Please try again.'))
         .finally(() => setLoading(false));
-    } else {
-      setLoading(false);
     }
   }, [billId, isAuthenticated]);
 
-  useEffect(() => {
-    const previousFocus = document.activeElement;
-    const modal = modalRef.current;
-    const handler = (e) => {
-      if (e.key === 'Escape') { onClose(); return; }
-      if (e.key === 'Tab' && modal) {
-        const focusable = modal.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
-        if (focusable.length === 0) return;
-        const first = focusable[0];
-        const last = focusable[focusable.length - 1];
-        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
-      }
-    };
-    window.addEventListener('keydown', handler);
-    return () => {
-      window.removeEventListener('keydown', handler);
-      if (previousFocus && previousFocus.focus) previousFocus.focus();
-    };
-  }, [onClose]);
-
-  if (loading) return null;
-  if (!bill) return null;
+  if (loading || !bill) return <ModalFrame onClose={onClose} label="Bill details"><div className="panel p-8 w-full max-w-xl"><h2 className="text-xl font-bold mb-5">Bill details</h2>{loading ? <div aria-busy="true" aria-label="Loading bill" className="space-y-4"><div className="h-24 bg-surface-raised rounded-xl animate-pulse" /><div className="h-32 bg-surface-raised rounded-xl animate-pulse" /></div> : <p role="alert" className="text-error">{error || 'This bill is unavailable.'}</p>}<button className="btn-secondary mt-6" onClick={onClose}>Close</button></div></ModalFrame>;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={onClose} role="dialog" aria-modal="true" aria-label={bill.title}>
+    <ModalFrame onClose={onClose} label={bill.title || 'Bill details'}>
       <motion.div
-        ref={modalRef}
-        initial={{ scale: 0.95, opacity: 0 }}
+        initial={{ scale: 0.97, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         onClick={(e) => e.stopPropagation()}
-        className="bg-surface-elevated/90 backdrop-blur-xl border border-white/[0.04] rounded-3xl w-full max-w-2xl shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_8px_32px_rgba(0,0,0,0.35)] overflow-hidden flex flex-col max-h-[90vh] font-inter text-primary"
+        className="receipt-panel w-full max-w-2xl shadow-xl overflow-hidden flex flex-col max-h-[90dvh] text-primary"
       >
         <div className="p-6 border-b border-white/[0.04] flex justify-between items-center">
           <div>
-            <h3 className="text-xl font-bold text-primary">{bill.title}</h3>
+            <h2 className="text-2xl font-extrabold tracking-tight text-primary break-words">{bill.title}</h2>
             {bill.merchant && <p className="text-xs text-tertiary font-medium mt-0.5">{bill.merchant}</p>}
-            <div className="flex gap-3 mt-1 text-xs text-secondary font-medium">
+            <div className="flex flex-wrap gap-2 mt-2 text-xs text-secondary font-medium">
               {bill.billDate && <span>Bill Date: {new Date(bill.billDate + 'T00:00:00').toLocaleDateString(undefined, { dateStyle: 'medium' })}</span>}
               <span>Created: {new Date(bill.completedAt).toLocaleDateString(undefined, { dateStyle: 'medium' })}</span>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-white/[0.06] transition-colors text-tertiary cursor-pointer"
+            aria-label="Close bill details"
+            className="icon-button"
           >
             <span className="material-symbols-outlined text-xl">close</span>
           </button>
         </div>
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          <div className="bg-brand-primary/5 border border-brand-primary/10 rounded-xl p-6">
-            <div className="flex justify-between items-start">
+          {error && <p role="alert" className="text-error text-sm">{error}</p>}
+          <div className="bg-surface-base border border-border rounded-xl p-5 sm:p-6">
+            <div className="flex flex-wrap gap-4 justify-between items-start">
               <div>
                 <p className="text-[10px] font-bold text-secondary uppercase tracking-widest">Grand Total</p>
-                <p className="text-3xl font-black text-brand-primary mt-1">Rp {bill.grandTotal.toLocaleString('id-ID')}</p>
+                <p className="text-3xl sm:text-4xl font-extrabold tracking-tighter text-primary mt-2 font-numeric">Rp {(bill.grandTotal || 0).toLocaleString('id-ID')}</p>
               </div>
               <div className="text-right">
                 <p className="text-[10px] font-bold text-secondary uppercase tracking-widest">Status</p>
                 <span className={cn(
                   "inline-block text-[10px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider mt-2",
                   bill.status === 'completed'
-                    ? "bg-green-900/30 text-green-400"
+                    ? "bg-[--brand-primary-subtle] text-[--brand-primary]"
                     : bill.status === 'draft'
-                      ? "bg-indigo-900/30 text-indigo-400"
-                      : "bg-amber-900/30 text-amber-400"
+                      ? "bg-surface-raised text-secondary"
+                      : "bg-[--semantic-warning-bg] text-warning"
                 )}>
                   {bill.status}
                 </span>
               </div>
             </div>
-            <div className="flex gap-6 mt-4 pt-4 border-t border-white/[0.04] text-xs">
+            <div className="flex flex-wrap gap-6 mt-5 pt-5 receipt-divider text-sm">
               <div>
                 <p className="text-[9px] font-bold text-secondary uppercase tracking-widest">Subtotal</p>
                 <p className="font-semibold text-primary mt-0.5">Rp {(bill.totals?.length ? bill.totals.reduce((s, t) => s + t.subtotal, 0) : 0).toLocaleString('id-ID')}</p>
@@ -184,7 +162,7 @@ function BillDetailsModal({ billId, onClose }) {
             )}
           </div>
           <div>
-            <h4 className="text-xs font-bold text-secondary uppercase tracking-widest mb-4">People & Payment Status</h4>
+            <h3 className="text-lg font-bold tracking-tight text-primary mb-4">Who’s settled up?</h3>
             <div className="space-y-3">
               {bill.persons?.length > 0 ? (
                 bill.persons.map((person) => {
@@ -194,16 +172,16 @@ function BillDetailsModal({ billId, onClose }) {
                   return (
                     <div
                       key={person.id}
-                      className="flex items-center justify-between p-4 bg-black/20 rounded-xl border border-white/[0.06]"
+                      className="flex flex-wrap items-center justify-between gap-4 py-5 border-b border-border last:border-0"
                     >
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-brand-primary flex items-center justify-center text-white text-xs font-bold">
+                        <div className="w-10 h-10 shrink-0 rounded-full bg-brand-primary flex items-center justify-center text-[#151714] text-sm font-bold">
                           {person.name?.charAt(0)?.toUpperCase() || 'P'}
                         </div>
                         <div>
                           <p className="font-bold text-sm text-primary">
                             {person.name}
-                            {isPayer && <span className="text-[10px] font-bold text-emerald-400 ml-2 uppercase tracking-wider">Payer</span>}
+                            {isPayer && <span className="text-[10px] font-bold text-[--brand-primary] ml-2 uppercase tracking-wider">Payer</span>}
                           </p>
                           <p className="text-xs text-tertiary mt-0.5">
                             Rp {total.toLocaleString('id-ID')}
@@ -221,7 +199,7 @@ function BillDetailsModal({ billId, onClose }) {
                       </div>
                       {bill.status === 'pending' && !isPayer && (
                         bill.personPaid?.[person.id]
-                          ? <span className="text-xs font-bold text-green-400 flex items-center gap-1"><span className="material-symbols-outlined text-sm">check_circle</span> Paid</span>
+                          ? <span className="text-xs font-bold text-[--brand-primary] flex items-center gap-1"><span className="material-symbols-outlined text-sm">check_circle</span> Paid</span>
                           : <button
                               disabled={markingPaid[person.id]}
                               onClick={async () => {
@@ -235,12 +213,12 @@ function BillDetailsModal({ billId, onClose }) {
                                   } : prev);
                                   fetchCompletedBills();
                                 } catch (e) {
-                                  console.error('Failed to mark person paid:', e);
+                                  setError(e.message || 'Could not mark this payment as paid. Try again.');
                                 } finally {
                                   setMarkingPaid(prev => ({ ...prev, [person.id]: false }));
                                 }
                               }}
-                              className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-green-600 text-white font-bold text-xs hover:shadow-[0_0_24px_rgba(16,185,129,0.4)] transition-all cursor-pointer flex items-center gap-1.5 shadow-xl shadow-emerald-500/20 disabled:opacity-50"
+                              className="px-4 py-2 rounded-xl bg-[--brand-primary] hover:bg-[--brand-primary-hover] text-[--text-inverse] font-bold text-xs transition-all cursor-pointer flex items-center gap-1.5 shadow-sm disabled:opacity-50 active:scale-[0.98]"
                             >
                               <span className="material-symbols-outlined text-sm">check_circle</span>
                               {markingPaid[person.id] ? 'Marking...' : 'Mark Paid'}
@@ -255,12 +233,12 @@ function BillDetailsModal({ billId, onClose }) {
             </div>
           </div>
         </div>
-        <div className="p-6 border-t border-white/[0.04] bg-black/20 flex justify-between gap-4">
+        <div className="p-4 sm:p-6 receipt-divider bg-surface-base flex flex-wrap justify-between gap-3">
           <button
             onClick={() => setShowDeleteConfirm(true)}
             className="px-6 py-2.5 rounded-xl border border-red-500/20 text-red-400 font-bold text-sm hover:bg-red-500/10 transition-all cursor-pointer"
           >
-            Delete History
+            Delete Bill
           </button>
           <ConfirmDialog
             open={showDeleteConfirm}
@@ -278,7 +256,7 @@ function BillDetailsModal({ billId, onClose }) {
                 updateUI({ step: 4, activeTab: 'bills' });
                 onClose();
               }}
-              className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-brand-primary to-indigo-500 text-white font-bold text-sm hover:shadow-[0_0_24px_var(--brand-primary-glow)] transition-all cursor-pointer flex items-center gap-1.5 shadow-xl shadow-brand-primary/20"
+              className="px-6 py-2.5 rounded-xl bg-[--brand-primary] hover:bg-[--brand-primary-hover] text-[--text-inverse] font-bold text-sm transition-all cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-[0.98]"
             >
               <span className="material-symbols-outlined text-sm">edit</span>
               Edit Draft & Resume
@@ -293,7 +271,7 @@ function BillDetailsModal({ billId, onClose }) {
           )}
         </div>
       </motion.div>
-    </div>
+    </ModalFrame>
   );
 }
 

@@ -27,7 +27,7 @@ const QuantityInput = memo(({ value, onChange, min = 1, className }) => {
         disabled={atMin}
         onClick={() => onChange(Math.max(min, value - 1))}
         className={cn(
-          "w-8 h-8 flex items-center justify-center border-none outline-none transition-colors",
+          "w-9 h-11 shrink-0 flex items-center justify-center border-none outline-none transition-colors",
           atMin
             ? "text-tertiary/30 cursor-not-allowed"
             : "text-tertiary hover:text-primary hover:bg-white/[0.04] cursor-pointer"
@@ -37,19 +37,20 @@ const QuantityInput = memo(({ value, onChange, min = 1, className }) => {
       </button>
       <input
         type="number"
+        aria-label="Quantity"
         value={value}
         onChange={(e) => {
           const v = parseInt(e.target.value, 10);
           if (!isNaN(v)) onChange(Math.max(min, v));
         }}
-        className="w-10 bg-transparent border-none outline-none text-xs font-semibold text-primary font-numeric text-center p-0 appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
+        className="w-8 min-w-0 bg-transparent border-none outline-none text-sm font-semibold text-primary font-numeric text-center p-0 appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
         min={min}
       />
       <button
         type="button"
         aria-label="Increase quantity"
         onClick={() => onChange(value + 1)}
-        className="w-8 h-8 flex items-center justify-center text-tertiary hover:text-primary hover:bg-white/[0.04] border-none outline-none cursor-pointer transition-colors"
+        className="w-9 h-11 shrink-0 flex items-center justify-center text-tertiary hover:text-primary hover:bg-surface-raised border-none outline-none cursor-pointer transition-colors"
       >
         <PlusIcon />
       </button>

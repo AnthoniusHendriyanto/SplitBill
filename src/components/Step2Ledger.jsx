@@ -1,4 +1,4 @@
-import { memo, useState, useCallback, useEffect } from 'react';
+import { memo, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import useBillStore from '../store/useBillStore';
 import PriceInput from './PriceInput';
@@ -9,8 +9,7 @@ import Icon from './Icon';
 import { cn } from '../utils/cn';
 
 function Step2Ledger({
-  receiptSubtotal, receiptService, receiptTax, receiptDiscount, receiptGrandTotal,
-  handleServiceModeChange, handleTaxModeChange, setStep
+  receiptSubtotal, receiptService, receiptTax, receiptGrandTotal, setStep
 }) {
   const bill = useBillStore((s) => s.bill);
   const updateBill = useBillStore((s) => s.updateBill);
@@ -18,7 +17,7 @@ function Step2Ledger({
   const addItem = useBillStore((s) => s.addItem);
   const updateItem = useBillStore((s) => s.updateItem);
   const removeItem = useBillStore((s) => s.removeItem);
-  const [receiptCollapsed, setReceiptCollapsed] = useState(false);
+  const [receiptCollapsed, setReceiptCollapsed] = useState(() => !bill.imageUrl || window.matchMedia('(max-width: 1279px)').matches);
   const [saveFeedback, setSaveFeedback] = useState(null);
   const [hoveredRowId, setHoveredRowId] = useState(null);
 
@@ -52,7 +51,7 @@ function Step2Ledger({
   }, [resetBill, setStep]);
 
   const handleSaveDraft = useCallback(() => {
-    setSaveFeedback('Draft saved!');
+    setSaveFeedback('Your edits are saved on this device. Finalize the split to save it to your account.');
     setTimeout(() => setSaveFeedback(null), 3000);
   }, []);
 
@@ -65,29 +64,30 @@ function Step2Ledger({
     >
       {/* Receipt Preview — 25% */}
       <div className={cn(
-        "w-full xl:w-1/4 flex-shrink-0 transition-all duration-300",
+        "w-full xl:w-[280px] flex-shrink-0 transition-all duration-300",
         receiptCollapsed && "xl:w-16"
       )}>
         <div className={cn(
-          "bg-surface-elevated/80 backdrop-blur-xl border border-white/[0.04] rounded-3xl shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_8px_32px_rgba(0,0,0,0.3)] relative sticky top-0",
+          "bg-[--surface-elevated] border border-[--border] rounded-2xl shadow-card relative sticky top-0",
           !receiptCollapsed && "overflow-hidden"
         )}>
           {/* Collapse / Expand toggle */}
           {receiptCollapsed ? (
             <button
               onClick={() => setReceiptCollapsed(false)}
-              className="w-full h-full min-h-[200px] flex items-center justify-center rounded-3xl bg-transparent hover:bg-white/[0.02] transition-colors text-tertiary hover:text-primary cursor-pointer outline-none"
+              className="w-full h-full min-h-16 xl:min-h-[200px] flex items-center justify-center rounded-2xl bg-transparent hover:bg-surface-raised transition-colors text-secondary cursor-pointer"
               title="Show receipt preview"
             >
-              <div className="flex flex-col items-center gap-2">
+              <div className="flex xl:flex-col items-center gap-2">
                 <Icon name="keyboard_arrow_right" className="text-lg" />
-                <span className="text-[7px] font-semibold uppercase tracking-widest [writing-mode:vertical-rl]">Receipt</span>
+                <span className="text-xs font-semibold xl:[writing-mode:vertical-rl]">Receipt & details</span>
               </div>
             </button>
           ) : (
             <button
               onClick={() => setReceiptCollapsed(true)}
-              className="absolute top-3 right-3 z-20 w-6 h-6 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] flex items-center justify-center text-tertiary hover:text-secondary transition-all border-none outline-none cursor-pointer"
+              aria-label="Collapse receipt preview"
+              className="absolute top-1 right-1 z-20 icon-button"
             >
               <Icon name="keyboard_arrow_left" className="text-sm" />
             </button>
@@ -101,7 +101,7 @@ function Step2Ledger({
                   <Icon name="document_scanner" className="text-brand-primary text-sm" />
                   Receipt Preview
                   {bill.ocrConfidence > 0 && (
-                    <span className="text-[9px] font-bold text-emerald-400/80 bg-emerald-500/10 px-2 py-0.5 rounded-md ml-auto">
+                    <span className="text-[9px] font-bold text-[--brand-primary]/80 bg-[--brand-primary-subtle] px-2 py-0.5 rounded-md ml-auto">
                       AI {Math.round(bill.ocrConfidence)}%
                     </span>
                   )}
@@ -158,8 +158,9 @@ function Step2Ledger({
                   Bill Details
                 </h4>
                 <div>
-                  <label className="text-[9px] font-medium text-tertiary tracking-wide block mb-1">Merchant</label>
+                  <label htmlFor="ledger-merchant" className="text-sm font-medium text-secondary block mb-2">Merchant</label>
                   <input
+                    id="ledger-merchant"
                     value={bill.title}
                     onChange={(e) => updateBill({ title: e.target.value })}
                     className="w-full h-9 px-3 bg-black/20 border border-white/[0.06] rounded-xl text-xs font-medium text-primary placeholder:text-tertiary/60 transition-all hover:border-white/[0.12] focus:border-brand-primary/50 focus:shadow-[0_0_0_1px_var(--brand-primary)] focus:outline-none"
@@ -167,10 +168,10 @@ function Step2Ledger({
                   />
                 </div>
                 <div>
-                  <label className="text-[9px] font-medium text-tertiary tracking-wide block mb-1">Date</label>
-                  <input type="date" value={bill.date || new Date().toISOString().slice(0, 10)}
+                  <label htmlFor="ledger-date" className="text-sm font-medium text-secondary block mb-2">Date</label>
+                  <input id="ledger-date" type="date" value={bill.date || new Date().toISOString().slice(0, 10)}
                     onChange={(e) => updateBill({ date: e.target.value })}
-                    className="w-full h-9 px-3 bg-black/20 border border-white/[0.06] rounded-xl text-xs font-medium text-primary placeholder:text-tertiary/60 transition-all hover:border-white/[0.12] focus:border-brand-primary/50 focus:shadow-[0_0_0_1px_var(--brand-primary)] focus:outline-none [color-scheme:dark]"
+                    className="w-full h-11 px-3 bg-surface-base border border-border-strong rounded-xl text-sm text-primary"
                   />
                 </div>
               </div>
@@ -180,14 +181,14 @@ function Step2Ledger({
       </div>
 
       {/* Bill Items — 75% */}
-      <div className="flex-1 bg-surface-elevated/80 backdrop-blur-xl border border-white/[0.04] rounded-3xl flex flex-col overflow-hidden shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_8px_32px_rgba(0,0,0,0.3)] relative">
+      <div className="min-w-0 flex-1 receipt-panel flex flex-col overflow-hidden relative">
         <AnimatePresence>
           {saveFeedback && (
             <motion.div
               initial={{ opacity: 0, y: -16 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -16 }}
-              className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-emerald-950/80 backdrop-blur-md border border-emerald-500/30 rounded-xl px-4 py-2.5 shadow-xl flex items-center gap-2 text-emerald-400 font-semibold text-xs"
+              className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-[--brand-primary-subtle] border border-[--brand-primary]/20 rounded-xl px-4 py-2.5 shadow-lg flex items-center gap-2 text-[--brand-primary] font-semibold text-xs"
               role="status" aria-live="polite"
             >
               <Icon name="check_circle" className="text-sm" />
@@ -199,8 +200,7 @@ function Step2Ledger({
         {/* Header */}
         <div className="p-5 border-b border-white/[0.04] flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
           <div>
-            <h2 className="text-base font-bold text-primary flex items-center gap-2">
-              <span className="w-1 h-4 bg-brand-primary rounded-full inline-block" />
+            <h2 className="text-xl font-bold tracking-tight text-primary">
               Receipt Items
             </h2>
             <p className="text-[11px] text-secondary mt-0.5">Review, edit or add missing items.</p>
@@ -214,7 +214,7 @@ function Step2Ledger({
             <button onClick={handleSaveDraft}
               className="h-8 px-3 rounded-xl bg-transparent hover:bg-white/[0.04] border border-white/[0.06] text-tertiary hover:text-secondary text-[10px] font-medium transition-all flex items-center gap-1.5 cursor-pointer outline-none"
             >
-              <Icon name="save" className="text-xs" /> Save Draft
+              <Icon name="save" className="text-xs" /> Save status
             </button>
           </div>
         </div>
@@ -232,7 +232,7 @@ function Step2Ledger({
               </p>
               <div className="flex gap-3">
                 <button onClick={handleAddItemInline}
-                  className="h-10 px-5 bg-gradient-to-r from-brand-primary to-indigo-500 rounded-2xl text-xs font-semibold text-white shadow-xl shadow-brand-primary/20 hover:shadow-[0_0_24px_var(--brand-primary-glow)] transition-all duration-200 flex items-center gap-2 cursor-pointer border-none outline-none"
+                  className="h-10 px-5 bg-[--brand-primary] hover:bg-[--brand-primary-hover] active:scale-[0.98] rounded-xl text-xs font-bold text-[--text-inverse] shadow-sm transition-all duration-150 flex items-center gap-2 cursor-pointer border-none outline-none"
                 >
                   <Icon name="add" className="text-sm" /> Add First Item
                 </button>
@@ -245,7 +245,7 @@ function Step2Ledger({
             </div>
           ) : (
             <>
-              <table className="w-full border-collapse">
+              <table className="ledger-table w-full border-collapse" aria-label="Receipt items">
                 <thead>
                   <tr className="border-b border-white/[0.04] text-left">
                     <th scope="col" className="px-5 py-3 text-[9px] font-semibold text-tertiary uppercase tracking-wider">Item</th>
@@ -276,6 +276,7 @@ function Step2Ledger({
                         >
                           <td className="px-5 py-3.5">
                             <input
+                              aria-label="Item name"
                               value={item.name}
                               onChange={(e) => handleItemUpdate(item.id, { name: e.target.value })}
                               className="w-full bg-transparent border-none outline-none text-sm font-medium text-primary placeholder:text-tertiary/40 focus:outline-none"
@@ -288,7 +289,7 @@ function Step2Ledger({
                             />
                           </td>
                           <td className="px-5 py-3.5 text-right w-36">
-                            <PriceInput variant="ghost" value={unitPrice}
+                            <PriceInput variant="ghost" value={unitPrice} label={`Unit price for ${item.name || 'item'}`}
                               onChange={(val) => handleItemUpdate(item.id, { unitPrice: val })}
                               className="text-right font-medium text-primary text-sm"
                             />
@@ -299,8 +300,8 @@ function Step2Ledger({
                           <td className="px-5 py-3.5 text-center w-10">
                             <button onClick={() => removeItem(item.id)}
                               className={cn(
-                                "transition-all border-none bg-transparent cursor-pointer outline-none",
-                                hoveredRowId === item.id ? "text-red-400 scale-110" : "text-tertiary/30"
+                                "icon-button hover:text-error",
+                                hoveredRowId === item.id ? "text-error" : "text-tertiary"
                               )}
                               title="Remove item"
                             >
@@ -344,8 +345,8 @@ function Step2Ledger({
 
         {/* Footer — Continue */}
         <div className="px-5 pb-5 pt-2">
-          <button onClick={() => setStep(3)}
-            className="w-full h-12 rounded-2xl bg-gradient-to-r from-brand-primary to-indigo-500 text-xs font-semibold text-white shadow-xl shadow-brand-primary/20 hover:shadow-[0_0_24px_var(--brand-primary-glow)] transition-all duration-200 flex items-center justify-center gap-2 border-none cursor-pointer outline-none"
+          <button onClick={() => setStep(3)} disabled={bill.items.length === 0}
+            className="btn-primary w-full"
           >
             Continue
             <Icon name="arrow_forward" className="text-sm" />

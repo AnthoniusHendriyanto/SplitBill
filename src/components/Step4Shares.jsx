@@ -13,7 +13,7 @@ function Step4Shares({ receiptGrandTotal, setStep }) {
   const updatePerson = useBillStore((s) => s.updatePerson);
   const user = useAuthStore((s) => s.user);
   const isPremium = user?.tier === 'premium';
-  const [splitTab, setSplitTab] = useState('equal');
+  const [splitTab, setSplitTab] = useState(() => ({ shared_items: 'item', percentage: 'percent', custom: 'custom' }[bill.splitType] || 'equal'));
   const [itemError, setItemError] = useState('');
   const persons = useMemo(() => bill.persons || [], [bill.persons]);
   const totalPercent = persons.reduce((s, p) => s + (p.percentage || 0), 0);
@@ -32,7 +32,7 @@ function Step4Shares({ receiptGrandTotal, setStep }) {
         <p className="text-sm font-bold text-tertiary mb-1">No participants added</p>
         <p className="text-[10px] text-tertiary mb-6">Go back to Step 3 and add people first.</p>
         <button onClick={() => setStep(3)}
-          className="px-5 py-3 bg-gradient-to-r from-brand-primary to-indigo-500 text-white rounded-2xl font-semibold text-xs shadow-xl shadow-brand-primary/20 hover:shadow-[0_0_24px_var(--brand-primary-glow)] transition-all flex items-center gap-1.5 border-none outline-none cursor-pointer"
+          className="px-5 py-3 bg-[--brand-primary] hover:bg-[--brand-primary-hover] active:scale-[0.98] text-[--text-inverse] rounded-xl font-bold text-xs shadow-sm transition-all flex items-center gap-1.5 border-none outline-none cursor-pointer"
         >
           <Icon name="arrow_back" className="text-xs" /> Back: Add People
         </button>
@@ -43,7 +43,7 @@ function Step4Shares({ receiptGrandTotal, setStep }) {
   return (
     <div className="flex flex-col gap-5 flex-1 min-h-0 w-full text-primary">
       {/* Summary Bar */}
-      <div className="bg-surface-elevated/80 backdrop-blur-xl border border-white/[0.04] rounded-3xl p-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_8px_32px_rgba(0,0,0,0.3)]">
+      <div className="receipt-panel p-5 sm:p-6 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-5">
         <div className="flex items-center gap-6 font-numeric">
           <div>
             <span className="text-[9px] font-medium text-tertiary uppercase tracking-wider block mb-0.5">Grand Total</span>
@@ -58,12 +58,13 @@ function Step4Shares({ receiptGrandTotal, setStep }) {
             </span>
           </div>
         </div>
-        <div className="flex items-center gap-2 bg-black/20 rounded-2xl p-0.5">
+        <div className="grid grid-cols-2 sm:grid-cols-4 w-full xl:w-auto gap-2" role="group" aria-label="Split method">
           {['equal', 'item', 'percent', 'custom'].map((tab) => (
             <button
               key={tab}
                 onClick={() => {
                   if (!isPremium && (tab === 'percent' || tab === 'custom')) {
+                    setItemError('Percent and Custom splits require Premium. Equal and By Item are available on your plan.');
                     return;
                   }
                   setSplitTab(tab);
@@ -72,10 +73,12 @@ function Step4Shares({ receiptGrandTotal, setStep }) {
                   updateBill({ splitType: splitMap[tab] || 'equal' });
                 }}
               className={cn(
-                "px-3 py-1.5 text-[10px] font-medium rounded-xl transition-all border-none outline-none cursor-pointer",
-                splitTab === tab ? "bg-brand-primary/10 text-brand-primary shadow-sm" : "text-tertiary hover:text-secondary"
+                "px-4 py-3 text-sm font-semibold rounded-xl transition-colors border cursor-pointer flex items-center justify-center gap-2",
+                splitTab === tab ? "bg-brand-primary text-[#151714] border-transparent" : "text-secondary border-border hover:bg-surface-raised"
               )}
+              aria-pressed={splitTab === tab}
             >
+              {!isPremium && (tab === 'percent' || tab === 'custom') && <Icon name="lock" className="text-sm" />}
               {tab === 'equal' ? 'Equal' : tab === 'item' ? 'By Item' : tab === 'percent' ? 'Percent' : 'Custom'}
             </button>
           ))}
@@ -83,26 +86,22 @@ function Step4Shares({ receiptGrandTotal, setStep }) {
       </div>
 
       {/* Split Content */}
-      <div className="bg-surface-elevated/80 backdrop-blur-xl border border-white/[0.04] rounded-3xl p-6 flex flex-col flex-1 min-h-[400px] justify-between shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_8px_32px_rgba(0,0,0,0.3)]">
+      <div className="bg-[--surface-elevated] border border-[--border] rounded-2xl p-6 flex flex-col flex-1 min-h-[400px] justify-between shadow-card">
         <div>
           {splitTab === 'equal' && (
             <div className="flex flex-col items-center justify-center text-center py-10 max-w-md mx-auto">
-              <div className="w-16 h-16 rounded-2xl bg-brand-primary/5 border border-brand-primary/10 text-brand-primary flex items-center justify-center mb-5 shadow-[0_0_15px_rgba(124,92,255,0.1)]">
+              <div className="w-16 h-16 rounded-2xl bg-[--brand-primary-subtle] border border-[--brand-primary]/20 text-[--brand-primary] flex items-center justify-center mb-5 shadow-sm">
                 <Icon name="call_split" className="text-2xl" />
               </div>
-              <h3 className="text-lg font-bold text-primary mb-2">Split Equally</h3>
+              <h3 className="text-2xl font-extrabold tracking-tight text-primary mb-2">Same table. Same share.</h3>
               <p className="text-xs text-secondary leading-relaxed mb-6">
-                Divide the grand total of <span className="text-primary font-semibold">Rp {receiptGrandTotal.toLocaleString('id-ID')}</span> equally among <span className="text-primary font-semibold">{persons.length}</span> participants.
+                Divide the grand total of <span className="text-primary font-semibold tabular-nums">Rp {receiptGrandTotal.toLocaleString('id-ID')}</span> equally among <span className="text-primary font-semibold">{persons.length}</span> participants.
               </p>
-              <div className="bg-black/20 border border-white/[0.04] rounded-2xl p-5 w-full mb-6 font-numeric">
-                <span className="text-[9px] font-medium text-tertiary uppercase tracking-wider block mb-1">Per Person</span>
-                <span className="text-xl font-bold text-brand-primary">Rp {Math.round(receiptGrandTotal / (persons.length || 1)).toLocaleString('id-ID')}</span>
+              <div className="receipt-panel p-6 w-full mb-4 font-numeric">
+                <span className="text-[11px] font-medium text-tertiary uppercase tracking-wider block mb-1">Per Person</span>
+                <span className="text-4xl font-extrabold tracking-tighter text-primary tabular-nums">Rp {Math.round(receiptGrandTotal / (persons.length || 1)).toLocaleString('id-ID')}</span>
               </div>
-              <button onClick={() => { assignAllToAll(); setStep(5); }}
-                className="h-11 px-6 bg-gradient-to-r from-brand-primary to-indigo-500 text-white rounded-2xl text-xs font-semibold shadow-xl shadow-brand-primary/20 hover:shadow-[0_0_24px_var(--brand-primary-glow)] transition-all border-none outline-none cursor-pointer"
-              >
-                Apply Equal Split
-              </button>
+              <div className="flex flex-wrap justify-center gap-2">{persons.map(p => <span key={p.id} className="px-3 py-2 rounded-full bg-brand-subtle text-sm text-primary">{p.name}</span>)}</div>
             </div>
           )}
 
@@ -140,7 +139,7 @@ function Step4Shares({ receiptGrandTotal, setStep }) {
                           <td className="px-5 py-3.5 font-medium text-primary truncate max-w-[180px]">{item.name || 'Item'}</td>
                           <td className="px-5 py-3.5 text-right text-secondary text-[11px]">Rp {itemTotal.toLocaleString('id-ID')}</td>
                           <td className="px-5 py-3.5 text-center">
-                            <input type="checkbox" checked={isShared}
+                            <input type="checkbox" checked={isShared} aria-label={`Assign ${item.name || 'item'} to everyone`}
                               onChange={() => {
                                 const targetVal = !isShared;
                                 persons.forEach(p => {
@@ -153,7 +152,7 @@ function Step4Shares({ receiptGrandTotal, setStep }) {
                           </td>
                           {persons.map(p => (
                             <td key={p.id} className="px-3 py-3.5 text-center">
-                              <input type="checkbox" checked={assignments[p.id]?.[item.id] || false}
+                              <input type="checkbox" checked={assignments[p.id]?.[item.id] || false} aria-label={`Assign ${item.name || 'item'} to ${p.name}`}
                                 onChange={() => toggleAssignment(p.id, item.id)}
                                 className="w-3.5 h-3.5 rounded border-white/[0.1] bg-transparent text-brand-primary focus:ring-0 cursor-pointer"
                               />
@@ -181,7 +180,7 @@ function Step4Shares({ receiptGrandTotal, setStep }) {
                     Percentage-based splitting is available for premium users. Upgrade to unlock more split methods.
                   </p>
                   <a href="/settings?tab=billing"
-                    className="h-11 px-6 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-2xl text-xs font-semibold shadow-xl shadow-amber-500/20 hover:shadow-[0_0_24px_rgba(245,158,11,0.3)] transition-all border-none outline-none cursor-pointer inline-flex items-center gap-1.5"
+                    className="h-11 px-6 bg-[--semantic-warning] hover:opacity-90 active:scale-[0.98] text-[--text-inverse] rounded-xl text-xs font-bold shadow-sm transition-all border-none outline-none cursor-pointer inline-flex items-center gap-1.5"
                   >
                     <Icon name="stars" className="text-xs" /> Upgrade to Premium
                   </a>
@@ -191,7 +190,9 @@ function Step4Shares({ receiptGrandTotal, setStep }) {
                   <div className="flex justify-between items-center mb-3">
                     <span className="text-[10px] font-medium text-tertiary tracking-wide">Adjust percentages</span>
                     <span className={cn("text-[10px] font-medium px-2.5 py-0.5 rounded-lg border",
-                      totalPercent === 100 ? "text-emerald-400 bg-emerald-500/5 border-emerald-500/10" : "text-red-400 bg-red-500/5 border-red-500/10"
+                      totalPercent === 100
+                        ? "text-[--brand-primary] bg-[--brand-primary-subtle] border-[--brand-primary]/20"
+                        : "text-error bg-toast-error border-error"
                     )}>Total: {totalPercent}%</span>
                   </div>
                   <div className="space-y-4 max-h-[280px] overflow-y-auto pr-1 hide-scrollbar">
@@ -205,7 +206,7 @@ function Step4Shares({ receiptGrandTotal, setStep }) {
                             <span className="text-xs font-semibold text-brand-primary">Rp {allocatedAmount.toLocaleString('id-ID')}</span>
                           </div>
                           <div className="flex items-center gap-4">
-                            <input type="range" min="0" max="100" value={currentPercent}
+                            <input type="range" aria-label={`${p.name} percentage`} min="0" max="100" value={currentPercent}
                               onChange={(e) => { const v = parseInt(e.target.value) || 0; updatePerson(p.id, { percentage: v }); }}
                               className="flex-1 accent-brand-primary h-1.5 bg-white/[0.04] rounded-full appearance-none cursor-pointer"
                             />
@@ -214,7 +215,7 @@ function Step4Shares({ receiptGrandTotal, setStep }) {
                                 className="w-6 h-6 rounded-lg bg-white/[0.04] border border-white/[0.06] text-tertiary hover:text-primary hover:bg-white/[0.08] text-sm flex items-center justify-center cursor-pointer transition-all"
                               >−</button>
                               <div className="w-14 relative">
-                                <input type="number" min="0" max="100"
+                                <input type="number" aria-label={`${p.name} percentage value`} min="0" max="100"
                                   value={currentPercent === 0 ? '' : currentPercent}
                                   onChange={(e) => { const v = parseInt(e.target.value) || 0; updatePerson(p.id, { percentage: Math.min(100, Math.max(0, v)) }); }}
                                   className="w-full text-center bg-black/20 border border-white/[0.06] rounded-xl py-1.5 px-1 text-xs font-medium text-primary outline-none focus:border-brand-primary/50 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" placeholder="0"
@@ -247,7 +248,7 @@ function Step4Shares({ receiptGrandTotal, setStep }) {
                     Custom amount splitting is available for premium users. Upgrade to unlock more split methods.
                   </p>
                   <a href="/settings?tab=billing"
-                    className="h-11 px-6 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-2xl text-xs font-semibold shadow-xl shadow-amber-500/20 hover:shadow-[0_0_24px_rgba(245,158,11,0.3)] transition-all border-none outline-none cursor-pointer inline-flex items-center gap-1.5"
+                    className="h-11 px-6 bg-[--semantic-warning] hover:opacity-90 active:scale-[0.98] text-[--text-inverse] rounded-xl text-xs font-bold shadow-sm transition-all border-none outline-none cursor-pointer inline-flex items-center gap-1.5"
                   >
                     <Icon name="stars" className="text-xs" /> Upgrade to Premium
                   </a>
@@ -275,15 +276,16 @@ function Step4Shares({ receiptGrandTotal, setStep }) {
           )}
         </div>
 
-        <div className="mt-6 pt-5 border-t border-white/[0.04] flex justify-between items-center gap-3">
+        <div className="mt-6 pt-5 receipt-divider flex flex-wrap justify-between items-center gap-3">
           <button onClick={() => setStep(3)}
             className="h-10 px-4 rounded-2xl bg-transparent border border-white/[0.06] text-secondary hover:text-primary hover:border-white/[0.1] text-[10px] font-medium transition-all flex items-center gap-1.5 cursor-pointer outline-none"
           >
             <Icon name="arrow_back" className="text-xs" /> Back
           </button>
-          <div className="flex items-center gap-3">
-            {itemError && <span className="text-[10px] font-medium text-red-400">{itemError}</span>}
+          <div className="flex flex-wrap items-center gap-3">
+            {itemError && <span role="alert" className="text-sm font-medium text-error max-w-sm">{itemError}</span>}
             <button onClick={() => {
+              if (splitTab === 'equal') { updateBill({ splitType: 'equal' }); assignAllToAll(); }
               if (splitTab === 'percent' && totalPercent !== 100) {
                 setItemError(`Percentages must total 100% (currently ${totalPercent}%)`);
                 return;
@@ -298,7 +300,7 @@ function Step4Shares({ receiptGrandTotal, setStep }) {
               setItemError('');
               setStep(5);
             }}
-              className="h-10 px-5 bg-gradient-to-r from-brand-primary to-indigo-500 text-white rounded-2xl text-xs font-semibold shadow-xl shadow-brand-primary/20 hover:shadow-[0_0_24px_var(--brand-primary-glow)] transition-all flex items-center gap-1.5 border-none outline-none cursor-pointer"
+              className="h-10 px-5 bg-[--brand-primary] hover:bg-[--brand-primary-hover] active:scale-[0.98] text-[--text-inverse] rounded-xl text-xs font-bold shadow-sm transition-all flex items-center gap-1.5 border-none outline-none cursor-pointer"
             >
               Continue
               <Icon name="arrow_forward" className="text-xs" />

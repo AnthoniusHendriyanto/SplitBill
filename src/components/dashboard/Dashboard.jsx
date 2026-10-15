@@ -1,227 +1,50 @@
-import { memo, useState, useMemo, useCallback } from 'react';
-import { motion } from 'framer-motion';
+import { memo, useMemo } from 'react';
 import useBillStore from '../../store/useBillStore';
 import useAuthStore from '../../store/useAuthStore';
 import Icon from '../Icon';
-import MetricCard from './MetricCard';
 import ActivityFeed from './ActivityFeed';
-import QuickActions from './QuickActions';
-import { UpcomingSettlements, FriendsBalanceSummary, ExpenseBreakdownChart } from './SidebarWidgets';
-import MonthlyTrendChart from './MonthlyTrendChart';
 
-
-const greetings = ['Good morning', 'Good afternoon', 'Good evening'];
-
-function getGreeting() {
-  const h = new Date().getHours();
-  if (h < 12) return greetings[0];
-  if (h < 17) return greetings[1];
-  return greetings[2];
-}
-
-function monthKey(y, m) {
-  return `${y}-${String(m + 1).padStart(2, '0')}`;
-}
-
-function parseMonthKey(key) {
-  const [y, m] = key.split('-').map(Number);
-  return { y, m: m - 1 };
-}
-
-function prevMonth(y, m) {
-  return m === 0 ? { y: y - 1, m: 11 } : { y, m: m - 1 };
-}
-
-function nextMonth(y, m) {
-  return m === 11 ? { y: y + 1, m: 0 } : { y, m: m + 1 };
-}
-
-function getBillMonthKey(bill) {
-  if (bill.billDate) {
-    const d = new Date(bill.billDate);
-    if (!isNaN(d.getTime())) return monthKey(d.getFullYear(), d.getMonth());
-  }
-  if (bill.completedAt) {
-    const d = new Date(bill.completedAt);
-    if (!isNaN(d.getTime())) return monthKey(d.getFullYear(), d.getMonth());
-  }
-  return null;
-}
+const money = amount => `Rp ${Math.abs(amount).toLocaleString('id-ID')}`;
 
 export default memo(function Dashboard({ setActiveTab, setStep, setSelectedBillId }) {
-  const completedBills = useBillStore((s) => s.completedBills);
-  const isLoadingBills = useBillStore((s) => s.isLoadingBills);
-  const billsError = useBillStore((s) => s.billsError);
-  const currentUser = useAuthStore((s) => s.user);
-  const [toastMsg] = useState(null);
-  const userName = currentUser?.name || 'there';
-
-  const now = new Date();
-  const defaultMonth = monthKey(now.getFullYear(), now.getMonth());
-  const [selectedMonth, setSelectedMonth] = useState(defaultMonth);
-
-  const { y: selY, m: selM } = parseMonthKey(selectedMonth);
-  const { y: prevY, m: prevM } = prevMonth(selY, selM);
-  const prevKey = monthKey(prevY, prevM);
-
-  const monthMetrics = useMemo(() => {
-    const monthBills = completedBills.filter(b => getBillMonthKey(b) === selectedMonth);
-    const prevBills = completedBills.filter(b => getBillMonthKey(b) === prevKey);
-
-    const monthSum = monthBills.reduce((s, b) => s + (b.user_share || 0) + (b.discount || 0), 0);
-    const prevSum = prevBills.reduce((s, b) => s + (b.user_share || 0) + (b.discount || 0), 0);
-    let trend = 0;
-    if (prevSum > 0) trend = Math.round(((monthSum - prevSum) / prevSum) * 100);
-    else if (monthSum > 0) trend = 100;
-
-    const monthReceivable = monthBills.reduce((s, b) => s + (b.receivable || 0), 0);
-    const prevReceivable = prevBills.reduce((s, b) => s + (b.receivable || 0), 0);
-    let receivableTrend = 0;
-    if (prevReceivable > 0) receivableTrend = Math.round(((monthReceivable - prevReceivable) / prevReceivable) * 100);
-    else if (monthReceivable > 0) receivableTrend = 100;
-
-    return { spending: monthSum, spendingTrend: trend, receivableTrend };
-  }, [completedBills, selectedMonth, prevKey]);
-
-  const monthName = new Date(selY, selM).toLocaleString('en-US', { month: 'long', year: 'numeric' });
-
-  const handlePrevMonth = useCallback(() => {
-    const { y, m } = prevMonth(selY, selM);
-    setSelectedMonth(monthKey(y, m));
-  }, [selY, selM]);
-
-  const handleNextMonth = useCallback(() => {
-    const { y, m } = nextMonth(selY, selM);
-    setSelectedMonth(monthKey(y, m));
-  }, [selY, selM]);
-
-  const metrics = useMemo(() => {
-    let pendingCount = 0;
-    let totalReceivable = 0;
-    let totalPayable = 0;
-
-    completedBills.forEach(b => {
-      totalReceivable += b.receivable || 0;
-      totalPayable += b.payable || 0;
-      if (b.status === 'pending') pendingCount++;
-    });
-
-    return {
-      receivable: totalReceivable,
-      payable: totalPayable,
-      pending: pendingCount,
-    };
-  }, [completedBills]);
-
-  const receivableTrend = monthMetrics.receivableTrend;
-
-  const handleAction = useCallback((tab, step) => {
-    if (tab) setActiveTab(tab);
-    if (step) setStep(step);
-  }, [setActiveTab, setStep]);
-
-  const handleNewBill = useCallback(() => {
-    setActiveTab('bills');
-    setStep(1);
-  }, [setActiveTab, setStep]);
-
-  const handleViewBill = useCallback((billId) => {
-    setSelectedBillId(billId);
-  }, [setSelectedBillId]);
-
+  const bills = useBillStore(s => s.completedBills);
+  const isLoading = useBillStore(s => s.isLoadingBills);
+  const error = useBillStore(s => s.billsError);
+  const user = useAuthStore(s => s.user);
+  const metrics = useMemo(() => bills.reduce((sum, bill) => ({
+    receivable: sum.receivable + (bill.receivable || 0),
+    payable: sum.payable + (bill.payable || 0),
+  }), { receivable: 0, payable: 0 }), [bills]);
+  const recent = useMemo(() => [...bills].sort((a, b) => new Date(b.completedAt || 0) - new Date(a.completedAt || 0)).slice(0, 5), [bills]);
+  const newBill = () => { setActiveTab('bills'); setStep(1); };
+  const net = metrics.receivable - metrics.payable;
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      className="flex-1 overflow-y-auto bg-page hide-scrollbar"
-    >
-      <div className="max-w-[1440px] mx-auto p-4 md:p-6 lg:p-8 space-y-6">
-        {/* Hero Section */}
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="space-y-6"
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl md:text-3xl font-bold text-[--text-primary] tracking-tight">
-                {getGreeting()}, {userName} <span className="inline-block" role="img" aria-label="wave">👋</span>
-              </h1>
-              <p className="text-sm text-tertiary mt-1">Track expenses and settle balances effortlessly.</p>
+    <div className="flex-1 overflow-y-auto">
+      <div className="page-content space-y-8">
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-5">
+          <div><p className="text-sm text-secondary mb-2">Your people. Your plans.</p><h1 className="page-title">Hey, {user?.name?.split(' ')[0] || 'there'}.</h1><p className="text-secondary text-sm mt-3">Here’s where everyone stands.</p></div>
+          <button onClick={newBill} className="btn-primary self-start"><Icon name="add" className="text-xl" />New Split</button>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-[1.45fr_1fr] gap-5">
+          <section className="rounded-2xl bg-brand-primary text-[#151714] p-6 sm:p-8 relative overflow-hidden" aria-label="Balance summary">
+            <div className="flex items-center justify-between gap-4"><p className="font-semibold text-sm">Your net balance</p><Icon name="call_split" className="text-3xl" /></div>
+            {isLoading ? <div role="status" className="h-14 w-2/3 my-7 rounded-lg bg-[#151714]/10 animate-pulse" aria-label="Loading balance" /> : <p className="text-[clamp(2rem,4vw,3.8rem)] leading-tight tracking-tighter font-extrabold font-numeric my-7 break-words">{error ? 'Unavailable' : `${net < 0 ? '− ' : ''}${money(net)}`}</p>}
+            <div className="border-t-2 border-dashed border-[#151714]/25 pt-5 grid grid-cols-2 gap-5">
+              <div><p className="text-sm flex items-center gap-1"><Icon name="south_west" className="text-base" />Owed to you</p><p className="text-lg font-bold mt-1 font-numeric break-words">{error || isLoading ? '—' : money(metrics.receivable)}</p></div>
+              <div><p className="text-sm flex items-center gap-1"><Icon name="north_east" className="text-base" />You owe</p><p className="text-lg font-bold mt-1 font-numeric break-words">{error || isLoading ? '—' : money(metrics.payable)}</p></div>
             </div>
-            <button onClick={handleNewBill}
-              className="hidden md:flex items-center gap-2 px-5 py-2.5 bg-[--brand-primary] hover:bg-[--brand-primary-hover] text-white text-sm font-semibold rounded-2xl transition-all shadow-lg shadow-[--brand-primary-glow] hover:shadow-xl cursor-pointer border-none outline-none"
-            >
-              <Icon name="add" className="text-lg" /> New Split
-            </button>
-          </div>
-
-          {/* Metric Cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-            <MetricCard type="receivable" value={`Rp ${metrics.receivable.toLocaleString('id-ID')}`} trend={receivableTrend} />
-            <MetricCard type="payable" value={`Rp ${metrics.payable.toLocaleString('id-ID')}`} trend={metrics.payable > 0 ? -8 : 0} />
-            <MetricCard type="pending" value={`${metrics.pending} active`} trend={metrics.pending > 0 ? metrics.pending * 10 : 0} />
-            <MetricCard type="spending"
-              value={`Rp ${monthMetrics.spending.toLocaleString('id-ID')}`}
-              trend={monthMetrics.spendingTrend}
-              headerRight={
-                <div className="flex items-center gap-1 -mr-1">
-                  <button onClick={handlePrevMonth}
-                    className="w-6 h-6 rounded-lg flex items-center justify-center text-tertiary hover:text-[--text-primary] hover:bg-white/5 transition-all cursor-pointer border-none outline-none"
-                    aria-label="Previous month"
-                  >
-                    <Icon name="chevron_left" className="text-sm" />
-                  </button>
-                  <span className="text-[10px] font-semibold text-tertiary whitespace-nowrap min-w-[90px] text-center select-none">
-                    {monthName}
-                  </span>
-                  <button onClick={handleNextMonth}
-                    className="w-6 h-6 rounded-lg flex items-center justify-center text-tertiary hover:text-[--text-primary] hover:bg-white/5 transition-all cursor-pointer border-none outline-none"
-                    aria-label="Next month"
-                  >
-                    <Icon name="chevron_right" className="text-sm" />
-                  </button>
-                </div>
-              }
-            />
-          </div>
-        </motion.div>
-
-        {/* Main Content Grid */}
-        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
-          {/* Left Column - Activity + Quick Actions + Charts */}
-          <div className="xl:col-span-8 space-y-6">
-            <ActivityFeed
-              bills={completedBills}
-              isLoading={isLoadingBills}
-              error={billsError}
-              onSelectBill={handleViewBill}
-              onNewBill={handleNewBill}
-            />
-
-            {/* Charts Row */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <ExpenseBreakdownChart bills={completedBills} />
-              <MonthlyTrendChart bills={completedBills} />
-            </div>
-
-          </div>
-
-          {/* Right Column - Sidebar Widgets */}
-          <div className="xl:col-span-4 space-y-6">
-            <QuickActions onAction={handleAction} />
-            <UpcomingSettlements bills={completedBills} />
-            <FriendsBalanceSummary bills={completedBills} />
-          </div>
+          </section>
+          <aside className="receipt-panel p-6 sm:p-8 flex flex-col justify-between">
+            <span className="w-12 h-12 rounded-full border border-border-strong flex items-center justify-center"><Icon name="receipt_long" className="text-2xl" /></span>
+            <div className="my-5"><h2 className="text-2xl font-extrabold tracking-tight">The hangout’s over.<br />The math is handled.</h2><p className="text-secondary text-sm leading-relaxed mt-3">Scan the receipt, add your people, and give everyone their share.</p></div>
+            <div className="receipt-divider pt-4 flex justify-between text-xs text-secondary"><span>Made for shared moments</span><Icon name="done_all" className="text-lg" /></div>
+          </aside>
+        </div>
+        <div>
+          <div className="flex justify-between items-center gap-4 mb-4"><h2 className="text-xl font-bold tracking-tight">Recent splits</h2><button className="text-sm font-semibold text-brand-primary min-h-11 flex items-center gap-2" onClick={() => setActiveTab('history')}>View history <Icon name="arrow_forward" className="text-base" /></button></div>
+          <ActivityFeed bills={recent} isLoading={isLoading} error={error} onSelectBill={setSelectedBillId} onNewBill={newBill} />
         </div>
       </div>
-
-      {/* Toast */}
-      {toastMsg && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 bg-[--text-primary] text-[--text-inverse] rounded-2xl shadow-xl text-sm font-semibold animate-fade-in" role="alert">
-          {toastMsg}
-        </div>
-      )}
-    </motion.div>
+    </div>
   );
 });

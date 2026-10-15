@@ -30,13 +30,14 @@ export default function App() {
   const updateBill = useBillStore((s) => s.updateBill);
   const resetBill = useBillStore((s) => s.resetBill);
   const calculateTotals = useBillStore((s) => s.calculateTotals);
-  const settings = useBillStore((s) => s.settings);
-  const assignments = useBillStore((s) => s.assignments);
+  useBillStore((s) => s.settings);
+  useBillStore((s) => s.assignments);
   const ui = useBillStore((s) => s.ui);
   const updateUI = useBillStore((s) => s.updateUI);
   const fetchCompletedBills = useBillStore((s) => s.fetchCompletedBills);
   const completedBills = useBillStore((s) => s.completedBills);
   const isLoadingBills = useBillStore((s) => s.isLoadingBills);
+  const billsError = useBillStore((s) => s.billsError);
   const completeBill = useBillStore((s) => s.completeBill);
   const accessToken = useAuthStore((state) => state.accessToken);
   const isAuthenticated = !!accessToken;
@@ -91,8 +92,6 @@ export default function App() {
   const handleBack = useCallback(() => setStep(s => Math.max(s - 1, 1)), [setStep]);
   const [ocrStageIndex, setOcrStageIndex] = useState(0);
   const uploadedFileRef = useRef(null);
-
-  useEffect(() => { document.documentElement.classList.toggle('dark', settings.darkMode); }, [settings.darkMode]);
 
   useEffect(() => { if (!isValidating) fetchCompletedBills(); }, [isValidating, isAuthenticated, fetchCompletedBills]);
 
@@ -217,7 +216,8 @@ export default function App() {
     [receiptSubtotal, receiptService, receiptTax, receiptDiscount]
   );
 
-  const personTotals = useMemo(() => calculateTotals(), [bill, settings, assignments]);
+  // ponytail: small receipt lists do not need a memo cache; store subscriptions keep totals current.
+  const personTotals = calculateTotals();
 
   const handleServiceModeChange = useCallback((mode) => {
     if (mode === bill.serviceMode) return;
@@ -247,7 +247,7 @@ export default function App() {
     return (
       <div className="min-h-screen bg-surface-base flex items-center justify-center">
         <div className="text-center">
-          <div className="w-10 h-10 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <div className="w-10 h-10 border-2 border-[--brand-primary] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
           <p className="text-tertiary text-sm font-semibold">Restoring session...</p>
         </div>
       </div>
@@ -326,17 +326,16 @@ export default function App() {
           )
         : completedBills;
       return (
-        <div className="p-6 flex-1 overflow-y-auto flex flex-col gap-4">
+        <div className="page-content flex-1 overflow-y-auto flex flex-col gap-6">
           <div>
-            <h2 className="text-2xl font-extrabold text-primary tracking-tight flex items-center gap-2">
-              <span className="w-1 h-5 bg-brand-primary rounded-full inline-block" />
+            <h1 className="page-title">
               History
-            </h2>
-            <p className="text-xs text-secondary mt-0.5 font-medium">Completed and archived bills</p>
+            </h1>
+            <p className="text-sm text-secondary mt-3">Every hangout, accounted for.</p>
           </div>
           <div className="relative">
             <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-sm text-tertiary pointer-events-none">search</span>
-            <input type="text" placeholder="Search by merchant, title, or date (YYYY-MM-DD)..."
+            <input type="search" aria-label="Search bills" placeholder="Search merchant, title or date…"
               value={historySearch} onChange={e => setHistorySearch(e.target.value)}
               className="w-full bg-black/20 border border-white/[0.06] rounded-xl pl-9 pr-3 py-2.5 text-sm text-primary placeholder:text-tertiary/50 focus:outline-none focus:border-brand-primary/50 transition-colors"
             />
@@ -344,7 +343,8 @@ export default function App() {
           <ActivityFeed
             bills={filtered}
             isLoading={isLoadingBills}
-            error={null}
+            error={billsError}
+            searching={!!historySearch.trim()}
             onSelectBill={handleSelectBill}
             onNewBill={handleNewBill}
           />
@@ -353,7 +353,7 @@ export default function App() {
     }
 
     return (
-      <div className="p-6 flex-1 overflow-y-auto flex flex-col gap-4">
+      <div className="page-content flex-1 overflow-y-auto flex flex-col gap-7 wizard-content">
         <StepHeader
           currentStep={step}
           setStep={setStep}
@@ -362,7 +362,7 @@ export default function App() {
           nextLabel={step === 1 ? "Next: Review Ledger" : step === 2 ? "Next: Add People" : step === 3 ? "Next: Assign Shares" : "Next: Settlement"}
           onNext={handleNext}
           onBack={handleBack}
-          showActions={step < 5}
+          showActions={false}
           nextDisabled={
             (step === 1 && isScanning) ||
             (step === 2 && bill.items.length === 0) ||
@@ -384,8 +384,8 @@ export default function App() {
   }
 
   return (
-    <div className="bg-page text-primary antialiased overflow-hidden h-screen flex">
-      <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-indigo-600 focus:text-white focus:rounded-lg focus:text-sm focus:font-bold">
+    <div className="bg-page text-primary antialiased overflow-hidden h-[100dvh] flex">
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-[--brand-primary] focus:text-[--text-inverse] focus:rounded-lg focus:text-sm focus:font-bold">
         Skip to main content
       </a>
       {isOffline && (
@@ -397,7 +397,7 @@ export default function App() {
         <SideNavBar onHelpOpen={() => setIsHelpOpen(true)} />
       </div>
       <main id="main-content" className={cn(
-        "flex-1 flex flex-col h-screen overflow-hidden bg-page pb-16 md:pb-0 transition-all duration-300",
+        "min-w-0 flex-1 flex flex-col h-[100dvh] overflow-hidden bg-page pb-[calc(76px+env(safe-area-inset-bottom))] md:pb-0 transition-all duration-300",
         isOffline ? "mt-5" : "",
         ui?.sidebarCollapsed ? "md:ml-[72px] ml-0" : "md:ml-[240px] ml-0"
       )}>
@@ -407,7 +407,7 @@ export default function App() {
         <div className="md:hidden block">
           <MobileHeader onHelpOpen={() => setIsHelpOpen(true)} />
         </div>
-        <div className="mt-14 md:mt-16 flex-1 overflow-hidden flex flex-col">
+        <div className="min-h-0 flex-1 overflow-hidden flex flex-col">
           {renderContent()}
         </div>
         <div className="md:hidden block">

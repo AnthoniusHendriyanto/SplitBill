@@ -1,127 +1,21 @@
-import { memo, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
-import useBillStore from '../store/useBillStore';
+import { memo } from 'react';
 import useAuthStore from '../store/useAuthStore';
 import Icon from './Icon';
-import ToggleSwitch from './ToggleSwitch';
+import ModalFrame from './ModalFrame';
+import ThemeToggle from './ThemeToggle';
 
-function MobileDrawer({ open, onClose, onHelpOpen }) {
-  const settings = useBillStore((s) => s.settings);
-  const updateSettings = useBillStore((s) => s.updateSettings);
-  const user = useAuthStore((s) => s.user);
-  const isAuthenticated = useAuthStore((s) => !!s.accessToken);
-  const logout = useAuthStore((s) => s.logout);
-
-  useEffect(() => {
-    if (open) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-    return () => { document.body.style.overflow = ''; };
-  }, [open]);
-
+export default memo(function MobileDrawer({ open, onClose, onHelpOpen }) {
+  const user = useAuthStore(s => s.user);
+  const logout = useAuthStore(s => s.logout);
   return (
-    <AnimatePresence>
-      {open && (
-        <>
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            onClick={onClose}
-            className="fixed inset-0 bg-black/40 z-40"
-          />
-
-          <motion.aside
-            initial={{ x: '-100%' }}
-            animate={{ x: 0 }}
-            exit={{ x: '-100%' }}
-            transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-            className="fixed left-0 top-0 bottom-0 w-[280px] bg-white dark:bg-surface-elevated border-r border-gray-200 dark:border-gray-800 flex flex-col py-6 z-50 shadow-2xl"
-          >
-            <div className="px-6 mb-8">
-              <div className="flex items-center justify-between">
-                <Link to="/" onClick={onClose} className="flex items-center gap-3 no-underline">
-                  <div className="w-9 h-9 bg-indigo-600 rounded-lg flex items-center justify-center text-white shadow-lg shadow-indigo-500/20">
-                    <Icon name="payments" />
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-lg font-bold tracking-tight text-indigo-600 dark:text-indigo-400">SplitMate</span>
-                    <span className="text-[9px] text-tertiary uppercase tracking-widest">Financial Ledger</span>
-                  </div>
-                </Link>
-                <button
-                  onClick={onClose}
-                  className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-surface-raised transition-colors cursor-pointer outline-none"
-                  aria-label="Close menu"
-                >
-                  <Icon name="close" className="text-xl text-tertiary" />
-                </button>
-              </div>
-            </div>
-
-            {/* User info */}
-            {isAuthenticated && user && (
-              <div className="px-3 mb-4">
-                <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-slate-100 dark:bg-surface-raised">
-                  <div className="w-9 h-9 rounded-full bg-indigo-600 flex items-center justify-center text-white text-sm font-bold">
-                    {user.name?.charAt(0)?.toUpperCase() || 'U'}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-primary truncate">{user.name || 'User'}</p>
-                    <p className="text-[10px] text-tertiary uppercase tracking-wider">{user.tier || 'free'}</p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <nav className="flex-1 px-3 space-y-1">
-              <p className="px-4 py-2 text-[10px] font-bold text-secondary uppercase tracking-widest">Quick Actions</p>
-              <button
-                onClick={() => { onClose(); onHelpOpen(); }}
-                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-tertiary dark:text-secondary hover:bg-slate-50 dark:hover:bg-surface-raised transition-all cursor-pointer outline-none text-sm font-medium"
-              >
-                <Icon name="help" className="text-lg" />
-                Help Center
-              </button>
-              {isAuthenticated ? (
-                <button
-                  onClick={() => { logout(); onClose(); }}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-tertiary hover:text-red-600 dark:hover:text-red-500 hover:bg-slate-50 dark:hover:bg-surface-raised transition-all cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-red-500 text-sm font-medium"
-                >
-                  <Icon name="logout" className="text-lg" />
-                  Logout
-                </button>
-              ) : (
-                <Link
-                  to="/login"
-                  onClick={onClose}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-all cursor-pointer outline-none no-underline text-sm font-medium"
-                >
-                  <Icon name="login" className="text-lg" />
-                  Sign In
-                </Link>
-              )}
-            </nav>
-
-            <div className="mt-auto border-t border-gray-200 dark:border-gray-800 pt-4 px-3 space-y-4">
-              <p className="px-4 text-[10px] font-bold text-secondary uppercase tracking-widest">Appearance</p>
-              <div className="flex items-center justify-between px-4">
-                <div className="flex items-center gap-3">
-                  <Icon name={settings.darkMode ? "dark_mode" : "light_mode"} className="text-lg text-tertiary" />
-                  <span className="text-sm font-medium text-tertiary dark:text-primary">Dark Mode</span>
-                </div>
-                <ToggleSwitch isOn={settings.darkMode} onChange={() => updateSettings({ darkMode: !settings.darkMode })} />
-              </div>
-            </div>
-          </motion.aside>
-        </>
-      )}
-    </AnimatePresence>
+    <ModalFrame open={open} onClose={onClose} label="Menu" drawer>
+      <aside className="w-[300px] max-w-[90vw] h-full bg-surface-elevated border-r border-border p-6 flex flex-col gap-7">
+        <div className="flex items-center justify-between"><span className="text-2xl font-extrabold tracking-tighter">splitmate.</span><button onClick={onClose} aria-label="Close menu" className="icon-button"><Icon name="close" className="text-xl" /></button></div>
+        <div className="flex items-center gap-3 py-6 border-y border-border"><span className="w-12 h-12 rounded-full bg-brand-primary text-[#151714] flex items-center justify-center font-bold">{user?.name?.charAt(0).toUpperCase() || 'S'}</span><div className="min-w-0"><p className="font-bold truncate">{user?.name || 'Your account'}</p><p className="text-sm text-secondary capitalize">{user?.tier || 'Free'} plan</p></div></div>
+        <button onClick={() => { onClose(); onHelpOpen(); }} className="flex items-center gap-3 min-h-12 text-sm font-semibold"><Icon name="help" className="text-xl" />Help Center</button>
+        <button onClick={() => { logout(); onClose(); }} className="flex items-center gap-3 min-h-12 text-sm font-semibold"><Icon name="logout" className="text-xl" />Sign Out</button>
+        <div className="mt-auto pt-6 border-t-2 border-dashed border-border"><p className="text-2xl font-extrabold tracking-tight mb-5">Good times.<br />Fair shares.</p><div className="flex items-center justify-between text-sm text-secondary">Appearance<ThemeToggle /></div></div>
+      </aside>
+    </ModalFrame>
   );
-}
-
-export default memo(MobileDrawer);
+});

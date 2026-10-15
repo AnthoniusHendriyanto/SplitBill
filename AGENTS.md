@@ -32,6 +32,13 @@
 | `src/pages/BillDetailPage.jsx` | Backend-bill detail view |
 | `tailwind.config.js` | 9 custom color shades defined |
 
+---
+
+## UI Redesign & Anti-Slop (Ink + Citron)
+- **Palette**: Ink `#151714` / off-white `#f5f6f0` surfaces, citron `#d5ed58` accent, driven by semantic CSS variables in `src/styles/design-tokens.css` with a light + `.dark` (class-based, system-preference aware) theme.
+- **Glass & Glow Removal**: Stripped generic purple ambient glows and heavy backdrop blur glassmorphism across wizard steps, modals, dashboard widgets, and auth pages. Modals use native top-layer `<dialog>` (`ModalFrame`).
+- **Typography & Geometry**: Plus Jakarta Sans (locally hosted woff2), 16px surfaces / 12px controls, crisp `rounded-2xl` containers, `tabular-nums` for numeric financial values, single global `:focus-visible` ring, `prefers-reduced-motion` respected.
+
 ## Backend — Key Files
 
 | File | Purpose |

@@ -25,26 +25,20 @@ function OcrProgress({ progress, stageIndex, isScanning }) {
     <div className="flex flex-col items-center w-full">
       <div className="relative w-28 h-28 mb-6">
         <svg className="w-full h-full -rotate-90" viewBox="0 0 96 96">
-          <defs>
-            <linearGradient id="pg" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="#7c5cff" />
-              <stop offset="100%" stopColor="#6366f1" />
-            </linearGradient>
-          </defs>
-          <circle cx="48" cy="48" r={R} fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="5" />
-          <motion.circle cx="48" cy="48" r={R} fill="none" stroke="url(#pg)" strokeWidth="5" strokeLinecap="round"
+          <circle cx="48" cy="48" r={R} fill="none" stroke="var(--border)" strokeWidth="5" />
+          <motion.circle cx="48" cy="48" r={R} fill="none" stroke="var(--brand-ink)" strokeWidth="5" strokeLinecap="round"
             strokeDasharray={C} animate={{ strokeDashoffset: offset }}
             transition={{ duration: 0.3, ease: 'easeOut' }}
           />
           {done && (
-            <circle cx="48" cy="48" r={R} fill="none" stroke="rgba(124,92,255,0.25)" strokeWidth="12" strokeLinecap="round"
+            <circle cx="48" cy="48" r={R} fill="none" stroke="rgba(0,230,153,0.2)" strokeWidth="12" strokeLinecap="round"
               strokeDasharray={C} className="animate-pulse" />
           )}
         </svg>
         <div className="absolute inset-0 flex items-center justify-center">
           {done ? (
             <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 300, damping: 20 }}>
-              <Icon name="check_circle" className="text-3xl text-emerald-400 drop-shadow-[0_0_10px_rgba(52,211,153,0.5)]" />
+              <Icon name="check_circle" className="text-3xl text-brand-primary" />
             </motion.div>
           ) : (
             <motion.span key={Math.round(progress)} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
@@ -53,6 +47,7 @@ function OcrProgress({ progress, stageIndex, isScanning }) {
         </div>
       </div>
 
+      <p className="text-sm text-secondary mb-5" role="status">{done ? 'Receipt ready to review' : 'Reading your receipt · estimated progress'}</p>
       <div className="w-full space-y-2">
         {STAGES.map((s, i) => {
           const isDone = i < stageIndex || done;
@@ -65,10 +60,10 @@ function OcrProgress({ progress, stageIndex, isScanning }) {
                 <Icon name="sync" className="text-[10px] text-brand-primary animate-spin shrink-0" />
               ) : (
                 <Icon name={isDone ? 'check_circle' : 'radio_button_unchecked'}
-                  className={cn('text-[10px] shrink-0', isDone ? 'text-emerald-400' : 'text-tertiary/30')} />
+                  className={cn('text-sm shrink-0', isDone ? 'text-brand-primary' : 'text-tertiary')} />
               )}
               <span className={cn('text-[10px] font-medium transition-colors',
-                isDone ? 'text-tertiary' : isActive ? 'text-primary' : 'text-tertiary/30')}>{s.label}</span>
+                isDone ? 'text-secondary' : isActive ? 'text-primary' : 'text-tertiary')}>{s.label}</span>
             </motion.div>
           );
         })}

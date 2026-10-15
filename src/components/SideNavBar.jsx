@@ -7,48 +7,45 @@ import Icon from './Icon';
 import { cn } from '../utils/cn';
 
 const NAV_ITEMS = [
-  { id: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
-  { id: 'bills', label: 'Bills', icon: 'receipt_long' },
+  { id: 'dashboard', label: 'Dashboard', icon: 'grid_view' },
+  { id: 'bills', label: 'Split Wizard', icon: 'call_split' },
   { id: 'history', label: 'History', icon: 'history' },
-  { id: 'settings', label: 'Settings', icon: 'settings' },
+  { id: 'settings', label: 'Settings', icon: 'tune' },
 ];
 
 const SideNavBar = memo(({ onHelpOpen }) => {
   const ui = useBillStore((s) => s.ui);
   const updateUI = useBillStore((s) => s.updateUI);
-  const user = useAuthStore((state) => state.user);
-  const accessToken = useAuthStore((state) => state.accessToken);
   const logout = useAuthStore((s) => s.logout);
+  const accessToken = useAuthStore((state) => state.accessToken);
   const isAuthenticated = !!accessToken;
   const activeTab = ui?.activeTab ?? 'bills';
-  const step = ui?.step ?? 1;
   const sidebarCollapsed = ui?.sidebarCollapsed ?? false;
 
   const setActiveTab = (tab) => updateUI({ activeTab: tab });
 
   return (
     <aside aria-label="Sidebar" className={cn(
-      "fixed left-0 top-0 h-full flex flex-col font-inter antialiased z-50 transition-all duration-300",
-      "bg-[--surface-elevated] shadow-card",
-      sidebarCollapsed ? "w-[72px]" : "w-[200px]"
+      "fixed left-0 top-0 h-full flex flex-col font-sans antialiased z-50 transition-all duration-300",
+      "bg-[--surface-elevated] border-r border-[--border]",
+      sidebarCollapsed ? "w-[72px]" : "w-[240px]"
     )}>
       {/* Brand */}
-      <div className={cn("h-14 flex items-center px-4 border-b border-[--border]", sidebarCollapsed && "justify-center px-0")}>
-        <Link to="/" className="flex items-center gap-3 no-underline">
-          <div className="w-8 h-8 rounded-[10px] bg-[--brand-primary] flex items-center justify-center text-white shadow-lg shrink-0">
-            <Icon name="payments" className="text-base" />
+      <div className={cn("h-[72px] flex items-center px-5", sidebarCollapsed && "justify-center px-0")}>
+        <Link to="/" className="flex items-center gap-3.5 no-underline group">
+          <div className="w-10 h-10 rounded-2xl bg-[--brand-primary] flex items-center justify-center text-[--text-inverse] shadow-sm group-hover:scale-105 transition-transform shrink-0">
+            <Icon name="payments" className="text-xl font-bold" />
           </div>
           {!sidebarCollapsed && (
             <div className="flex flex-col">
-              <span className="text-sm font-bold tracking-tight text-[--text-primary] leading-tight">SplitMate</span>
-              <span className="text-[8px] font-medium text-tertiary leading-tight">Split Bills</span>
+              <span className="text-xl font-extrabold tracking-tighter text-[--text-primary] leading-tight">splitmate<span className="text-brand-primary">.</span></span>
             </div>
           )}
         </Link>
       </div>
 
       {/* Main Nav */}
-      <nav aria-label="Main navigation" className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto hide-scrollbar">
+      <nav aria-label="Main navigation" className="flex-1 py-8 px-3 space-y-2 overflow-y-auto hide-scrollbar">
         {NAV_ITEMS.map((item) => {
           const isActive = activeTab === item.id;
           return (
@@ -58,25 +55,24 @@ const SideNavBar = memo(({ onHelpOpen }) => {
               title={sidebarCollapsed ? item.label : undefined}
               aria-current={isActive ? 'page' : undefined}
               className={cn(
-                "w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all relative group cursor-pointer border-none outline-none text-xs",
+                "w-full flex items-center gap-3.5 px-3.5 py-3.5 rounded-xl transition-all relative group cursor-pointer border-none outline-none text-sm font-semibold",
                 isActive
-                  ? "font-semibold"
-                  : "text-tertiary/70 hover:text-[--text-secondary]"
+                  ? "text-[--text-inverse] bg-brand-primary"
+                  : "text-secondary hover:text-primary hover:bg-surface-raised"
               )}
-              style={isActive ? { background: 'rgba(124,92,255,0.1)' } : {}}
             >
               {isActive && (
                 <motion.div
-                  layoutId="nav-pill"
-                  className="absolute left-0 w-[2px] h-4 bg-[--brand-primary] rounded-r-full"
+                  layoutId="sidebar-active-indicator"
+                  className="absolute right-3 w-1.5 h-1.5 bg-[--text-inverse] rounded-full"
                 />
               )}
               <Icon
                 name={item.icon}
-                className={cn("text-base transition-all shrink-0", isActive ? "text-[--brand-primary]" : "text-tertiary/60")}
+                className={cn("text-xl transition-colors shrink-0", isActive ? "text-[--text-inverse]" : "text-secondary")}
               />
               {!sidebarCollapsed && (
-                <span className={cn("tracking-tight", isActive ? "text-[--brand-primary]" : "")}>
+                <span className={cn(isActive ? "text-[--text-inverse] font-bold" : "")}>
                   {item.label}
                 </span>
               )}
@@ -86,15 +82,16 @@ const SideNavBar = memo(({ onHelpOpen }) => {
       </nav>
 
       {/* Bottom */}
-      <div className="border-t border-[--border] py-2 px-2 space-y-0.5">
+      {!sidebarCollapsed && <div className="mx-5 mb-6 border-t-2 border-dashed border-border pt-5"><p className="text-xl font-extrabold tracking-tight leading-tight">Good times.<br />Fair shares.</p><p className="text-xs text-secondary mt-2">You bring the people.</p></div>}
+      <div className="border-t border-[--border] py-3 px-3 space-y-1">
         <button
           onClick={onHelpOpen}
           aria-label="Help Center"
           title={sidebarCollapsed ? 'Help Center' : undefined}
-          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-tertiary/70 hover:text-[--text-secondary] transition-all cursor-pointer border-none outline-none text-xs"
+          className="w-full flex items-center gap-3.5 px-3.5 py-2.5 rounded-xl text-[--text-tertiary] hover:text-[--text-secondary] hover:bg-white/[0.03] transition-all cursor-pointer border-none outline-none text-xs font-medium"
         >
-          <Icon name="help" className="text-base text-tertiary/60" />
-          {!sidebarCollapsed && <span>Help</span>}
+          <Icon name="help_outline" className="text-lg text-[--text-tertiary]" />
+          {!sidebarCollapsed && <span>Help & Support</span>}
         </button>
 
         {isAuthenticated && (
@@ -102,40 +99,19 @@ const SideNavBar = memo(({ onHelpOpen }) => {
             onClick={() => { logout(); }}
             aria-label="Logout"
             title={sidebarCollapsed ? 'Logout' : undefined}
-            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-tertiary/70 hover:text-red-400 transition-all cursor-pointer border-none outline-none text-xs"
+            className="w-full flex items-center gap-3.5 px-3.5 py-2.5 rounded-xl text-[--text-tertiary] hover:text-[--semantic-error] hover:bg-[--semantic-error-bg] transition-all cursor-pointer border-none outline-none text-xs font-medium"
           >
-            <Icon name="logout" className="text-base text-tertiary/60" />
-            {!sidebarCollapsed && <span>Logout</span>}
+            <Icon name="logout" className="text-lg text-[--text-tertiary]" />
+            {!sidebarCollapsed && <span>Sign Out</span>}
           </button>
-        )}
-
-        {isAuthenticated && user ? (
-          <div className="flex items-center gap-3 px-3 py-2 rounded-lg">
-            <div className="w-7 h-7 rounded-lg bg-[--brand-primary-subtle] flex items-center justify-center text-[--brand-primary] text-[10px] font-bold shrink-0">
-              {user.name?.charAt(0)?.toUpperCase() || 'U'}
-            </div>
-            {!sidebarCollapsed && (
-              <div className="flex-1 text-left min-w-0">
-                <p className="text-xs font-semibold text-[--text-primary] truncate">{user.name || 'User'}</p>
-                <p className="text-[8px] font-medium text-tertiary">{user.tier === 'premium' ? 'Premium' : 'Free'}</p>
-              </div>
-            )}
-          </div>
-        ) : (
-          <Link to="/login" title={sidebarCollapsed ? 'Sign In' : undefined}
-            className="flex items-center gap-3 px-3 py-2 rounded-lg text-[--brand-primary] hover:bg-[--brand-primary-subtle] transition-all no-underline text-xs"
-          >
-            <Icon name="login" className="text-base" />
-            {!sidebarCollapsed && <span className="font-semibold">Sign In</span>}
-          </Link>
         )}
 
         <button
           onClick={() => updateUI({ sidebarCollapsed: !sidebarCollapsed })}
-          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-tertiary/70 hover:text-[--text-secondary] transition-all cursor-pointer border-none outline-none text-[10px]"
+          aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          className="w-full flex items-center justify-center p-2 rounded-xl text-[--text-tertiary] hover:text-[--text-secondary] hover:bg-white/[0.03] transition-all cursor-pointer border-none outline-none mt-2"
         >
-          <Icon name={sidebarCollapsed ? 'keyboard_double_arrow_right' : 'keyboard_double_arrow_left'} className="text-sm" />
-          {!sidebarCollapsed && <span className="font-semibold uppercase tracking-wider">Collapse</span>}
+          <Icon name={sidebarCollapsed ? 'chevron_right' : 'chevron_left'} className="text-xl" />
         </button>
       </div>
     </aside>

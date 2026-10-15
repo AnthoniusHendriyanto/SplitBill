@@ -10,9 +10,9 @@ export default function AuthOverlay({ children }) {
         {children}
       </div>
       <div className="absolute inset-0 flex items-center justify-center z-10" role="dialog" aria-modal="true" aria-label="Sign in required">
-        <div className="bg-white/90 dark:bg-surface-elevated/90 backdrop-blur-md border border-slate-200 dark:border-strong rounded-2xl p-8 max-w-sm w-full mx-4 shadow-2xl text-center">
-          <div className="w-14 h-14 bg-indigo-100 dark:bg-indigo-900/50 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Icon name="lock" className="text-2xl text-indigo-600 dark:text-indigo-400" />
+        <div className="bg-[--surface-elevated] border border-[--border] rounded-2xl p-8 max-w-sm w-full mx-4 shadow-xl text-center">
+          <div className="w-14 h-14 bg-[--brand-primary-subtle] rounded-full flex items-center justify-center mx-auto mb-4">
+            <Icon name="lock" className="text-2xl text-[--brand-primary]" />
           </div>
           <h3 className="text-lg font-black text-primary mb-2">
             Sign In to Split Bills
@@ -23,7 +23,7 @@ export default function AuthOverlay({ children }) {
           <div className="flex flex-col gap-3">
             <button
               onClick={() => navigate('/login')}
-              className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-all cursor-pointer"
+              className="w-full py-3 bg-[--brand-primary] hover:bg-[--brand-primary-hover] text-[--text-inverse] font-bold rounded-xl transition-all cursor-pointer shadow-sm active:scale-[0.98]"
             >
               Sign In
             </button>

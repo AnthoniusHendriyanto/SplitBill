@@ -8,6 +8,7 @@ function Step5Settlement({
   receiptSubtotal, receiptDiscount, personTotals, setActiveTab
 }) {
   const [toastMsg, setToastMsg] = useState(null);
+  const [saving, setSaving] = useState(false);
   const bill = useBillStore((s) => s.bill);
   const updatePerson = useBillStore((s) => s.updatePerson);
   const completeBill = useBillStore((s) => s.completeBill);
@@ -15,11 +16,14 @@ function Step5Settlement({
   const updateUI = useBillStore((s) => s.updateUI);
   const totalGrand = personTotals.reduce((sum, p) => sum + p.total, 0);
   const handleSave = async (status) => {
+    if (saving) return;
+    setSaving(true);
     try {
       await completeBill(status);
     } catch (err) {
       setToastMsg(err?.message || 'Failed to save bill');
       setTimeout(() => setToastMsg(null), 5000);
+      setSaving(false);
       return;
     }
     resetBill();
@@ -41,11 +45,11 @@ function Step5Settlement({
       {/* Left: Totals + Shares + DebtMap */}
       <div className="col-span-12 lg:col-span-7 space-y-5">
         {/* Grand Total */}
-        <div className="bg-surface-elevated/80 backdrop-blur-xl border border-white/[0.04] rounded-3xl p-6 relative overflow-hidden shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_8px_32px_rgba(0,0,0,0.3)]">
-          <div className="absolute top-0 right-0 w-40 h-40 bg-brand-primary/5 rounded-full blur-3xl pointer-events-none" />
-          <span className="text-[10px] font-medium text-tertiary uppercase tracking-wider block mb-1">Grand Total</span>
-          <h3 className="text-4xl font-bold text-primary font-numeric tracking-tight mb-5">Rp {totalGrand.toLocaleString('id-ID')}</h3>
-          <div className="space-y-2 pt-5 border-t border-white/[0.04] font-numeric">
+        <div className="receipt-panel p-6 sm:p-8 relative overflow-hidden">
+          <div className="flex justify-between items-center gap-3 mb-5"><span className="text-sm font-semibold text-secondary">{bill.title || 'Your split'}</span><span className="bg-brand-primary text-[#151714] rounded-full p-2 flex"><Icon name="done_all" className="text-xl" /></span></div>
+          <span className="text-sm text-secondary block mb-2">Grand total</span>
+          <h3 className="text-[clamp(2rem,4vw,3.5rem)] font-extrabold text-primary font-numeric tracking-tighter mb-6 break-words">Rp {totalGrand.toLocaleString('id-ID')}</h3>
+          <div className="space-y-3 pt-5 receipt-divider font-numeric">
             <div className="flex justify-between items-center">
               <span className="text-[9px] font-medium text-tertiary uppercase tracking-wider">Subtotal</span>
               <span className="text-sm font-semibold text-secondary">Rp {receiptSubtotal.toLocaleString('id-ID')}</span>
@@ -66,13 +70,12 @@ function Step5Settlement({
 
         {/* Individual Shares */}
         <div>
-          <h4 className="text-[10px] font-medium text-tertiary uppercase tracking-wider mb-3 flex items-center gap-2">
-            <span className="w-1 h-3 bg-brand-primary rounded-full inline-block" />
-            Settlement Shares
+          <h4 className="text-xl font-bold tracking-tight text-primary mb-4">
+            Everyone’s share
           </h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[360px] overflow-y-auto pr-1 hide-scrollbar">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {personTotals.map((p) => (
-              <div key={p.id} className="bg-surface-elevated/60 backdrop-blur-sm border border-white/[0.04] rounded-2xl p-4 hover:border-white/[0.08] transition-all font-numeric shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
+              <div key={p.id} className="bg-[--surface-elevated] border border-[--border] rounded-2xl p-4 hover:border-[--border-strong] transition-all font-numeric shadow-card">
                 <div className="flex items-center gap-3 mb-3">
                   <div className="w-8 h-8 rounded-xl bg-brand-primary/5 border border-brand-primary/10 flex items-center justify-center text-xs font-bold text-brand-primary">
                     {p.name.charAt(0) || 'P'}
@@ -104,11 +107,10 @@ function Step5Settlement({
       </div>
 
       {/* Right: Transfer Details + Actions */}
-      <div className="col-span-12 lg:col-span-5 bg-surface-elevated/80 backdrop-blur-xl border border-white/[0.04] rounded-3xl p-6 flex flex-col justify-between min-h-[500px] shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_8px_32px_rgba(0,0,0,0.3)]">
+      <div className="col-span-12 lg:col-span-5 bg-[--surface-elevated] border border-[--border] rounded-2xl p-6 flex flex-col justify-between min-h-[500px] shadow-card">
         <div className="space-y-5">
-          <h4 className="text-[10px] font-medium text-tertiary uppercase tracking-wider flex items-center gap-2">
-            <span className="w-1 h-3 bg-brand-primary rounded-full inline-block" />
-            Transfer Details
+          <h4 className="text-xl font-bold tracking-tight text-primary">
+            Pay them back.
           </h4>
           {bill.payerId ? (
             <div className="space-y-4">
@@ -127,17 +129,19 @@ function Step5Settlement({
               </div>
               <div className="bg-black/20 border border-white/[0.04] p-4 rounded-2xl space-y-3">
                 <span className="text-[9px] font-medium text-tertiary uppercase tracking-wider block">Payment Info</span>
+                <label htmlFor="settlement-bank" className="block text-sm text-secondary">Bank name</label>
                 <div className="relative">
                   <Icon name="account_balance" className="absolute left-3 top-1/2 -translate-y-1/2 text-tertiary text-sm pointer-events-none" />
-                  <input placeholder="Bank Name (e.g. BCA)"
+                  <input id="settlement-bank" placeholder="e.g. BCA"
                     value={bill.persons.find(p => p.id === bill.payerId)?.paymentInfo?.bank || ''}
                     onChange={(e) => updatePerson(bill.payerId, { paymentInfo: { ...bill.persons.find(p => p.id === bill.payerId)?.paymentInfo, bank: e.target.value } })}
                     className="w-full h-11 pl-9 pr-3 bg-black/20 border border-white/[0.06] rounded-xl text-xs font-medium text-primary placeholder:text-tertiary/60 transition-all hover:border-white/[0.12] focus:border-brand-primary/50 focus:shadow-[0_0_0_1px_var(--brand-primary)] focus:outline-none"
                   />
                 </div>
+                <label htmlFor="settlement-account" className="block text-sm text-secondary">Account number</label>
                 <div className="relative">
                   <Icon name="credit_card" className="absolute left-3 top-1/2 -translate-y-1/2 text-tertiary text-sm pointer-events-none" />
-                  <input placeholder="Account Number"
+                  <input id="settlement-account" inputMode="numeric" placeholder="Account number"
                     value={bill.persons.find(p => p.id === bill.payerId)?.paymentInfo?.accountNumber || ''}
                     onChange={(e) => updatePerson(bill.payerId, { paymentInfo: { ...bill.persons.find(p => p.id === bill.payerId)?.paymentInfo, accountNumber: e.target.value } })}
                     className="w-full h-11 pl-9 pr-3 bg-black/20 border border-white/[0.06] rounded-xl text-xs font-medium text-primary placeholder:text-tertiary/60 transition-all hover:border-white/[0.12] focus:border-brand-primary/50 focus:shadow-[0_0_0_1px_var(--brand-primary)] focus:outline-none"
@@ -157,15 +161,15 @@ function Step5Settlement({
 
         <div className="mt-6 space-y-3 pt-5 border-t border-white/[0.04]">
           <div className="grid grid-cols-2 gap-3">
-            <button onClick={() => handleSave('draft')}
+              <button disabled={saving} onClick={() => handleSave('draft')}
               className="h-11 rounded-2xl bg-transparent border border-white/[0.06] hover:bg-white/[0.04] text-secondary hover:text-primary text-xs font-medium transition-all flex items-center justify-center gap-1.5 cursor-pointer outline-none"
             >
-              <Icon name="drafts" className="text-sm text-brand-primary" /> Save Draft
+              <Icon name="drafts" className="text-sm text-[--brand-primary]" /> Save Draft
             </button>
-            <button onClick={() => handleSave('pending')}
-              className="h-11 rounded-2xl bg-gradient-to-r from-brand-primary to-indigo-500 text-white text-xs font-semibold shadow-xl shadow-brand-primary/20 hover:shadow-[0_0_24px_var(--brand-primary-glow)] transition-all flex items-center justify-center gap-1.5 cursor-pointer border-none outline-none"
+            <button disabled={saving} aria-busy={saving} onClick={() => handleSave('pending')}
+              className="h-11 rounded-2xl bg-[--brand-primary] hover:bg-[--brand-primary-hover] active:scale-[0.98] text-[--text-inverse] text-xs font-bold shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer border-none outline-none"
             >
-              <Icon name="check_circle" className="text-sm" /> Finalize Split
+              <Icon name="check_circle" className="text-sm" /> {saving ? 'Saving…' : 'Finalize Split'}
             </button>
           </div>
           <button
@@ -182,7 +186,7 @@ function Step5Settlement({
                 setTimeout(() => setToastMsg(null), 5000);
               }
             }}
-            className="w-full h-11 rounded-2xl bg-emerald-950/20 border border-emerald-500/20 hover:bg-emerald-950/30 text-emerald-400 text-xs font-medium transition-all flex items-center justify-center gap-2 cursor-pointer outline-none"
+            className="w-full h-11 rounded-2xl bg-[--brand-primary-subtle] border border-[--brand-primary]/20 hover:bg-[--brand-primary-subtle] text-[--brand-primary] text-xs font-medium transition-all flex items-center justify-center gap-2 cursor-pointer outline-none"
           >
             <Icon name="share" className="text-sm" />
             Share via WhatsApp
@@ -191,7 +195,7 @@ function Step5Settlement({
       </div>
 
       {toastMsg && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 bg-surface-elevated/90 backdrop-blur-xl border border-white/[0.06] rounded-xl shadow-xl text-xs font-medium text-primary" aria-live="polite">
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 bg-[--surface-elevated] border border-[--border] rounded-xl shadow-lg text-xs font-medium text-[--text-primary]" aria-live="polite">
           {toastMsg}
         </div>
       )}

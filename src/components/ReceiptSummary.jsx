@@ -3,7 +3,7 @@ import { memo } from 'react';
 const fmtIDR = (v) => (v ?? 0).toLocaleString('id-ID');
 
 const DualRow = ({ label, pct, flat, onPctChange, onFlatChange, amber }) => {
-  const textColor = amber ? 'text-amber-300' : 'text-primary';
+  const textColor = amber ? 'text-warning' : 'text-primary';
   const placeholderColor = amber ? 'placeholder:text-amber-400/30' : 'placeholder:text-tertiary/40';
   const borderColor = amber ? 'border-amber-500/20' : 'border-white/[0.06]';
   const focusStyles = amber
@@ -11,10 +11,10 @@ const DualRow = ({ label, pct, flat, onPctChange, onFlatChange, amber }) => {
     : 'focus-within:border-brand-primary/50 focus-within:shadow-[0_0_0_1px_var(--brand-primary)]';
 
   return (
-    <div className="flex justify-between items-center">
-      <span className="text-[11px] font-medium text-tertiary">{label}</span>
-      <div className={`flex items-center h-10 bg-black/20 border rounded-xl px-2 w-56 transition-all ${borderColor} ${focusStyles}`}>
-        <input type="number" value={Math.round(pct * 10) / 10}
+    <div className="flex flex-wrap justify-between items-center gap-2">
+      <span className="text-sm font-medium text-secondary">{label}</span>
+      <div className={`flex items-center h-11 bg-surface-base border rounded-xl px-2 w-56 max-w-full transition-all ${borderColor} ${focusStyles}`}>
+        <input type="number" aria-label={`${label} percent`} value={Math.round(pct * 10) / 10}
           onChange={(e) => onPctChange(parseFloat(e.target.value) || 0)}
           className={`w-0 flex-1 bg-transparent border-none outline-none text-xs font-semibold p-0 text-right appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield] ${textColor} ${placeholderColor}`}
           placeholder="0"
@@ -24,7 +24,7 @@ const DualRow = ({ label, pct, flat, onPctChange, onFlatChange, amber }) => {
         <div className="w-px h-5 bg-white/[0.06] mx-1.5 shrink-0" />
 
         <span className="text-[9px] font-bold text-tertiary shrink-0 mr-0.5">Rp</span>
-        <input type="number" value={flat}
+        <input type="number" aria-label={`${label} amount in rupiah`} value={flat}
           onChange={(e) => onFlatChange(parseFloat(e.target.value) || 0)}
           className={`w-0 flex-1 bg-transparent border-none outline-none text-xs font-semibold p-0 text-right appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield] ${textColor} ${placeholderColor}`}
           placeholder="0"
@@ -71,10 +71,10 @@ const ReceiptSummary = memo(({
         onFlatChange={(v) => onServiceChange(v)}
       />
 
-      <div className="pt-4 mt-4 border-t border-white/[0.06]">
+      <div className="pt-5 mt-5 receipt-divider">
         <div className="flex justify-between items-center">
           <span className="text-sm font-bold text-primary">Grand Total</span>
-          <span className="text-xl font-black text-brand-primary font-numeric w-36 text-right">
+          <span className="text-2xl font-extrabold text-primary font-numeric text-right">
             Rp {fmtIDR(grandTotal)}
           </span>
         </div>

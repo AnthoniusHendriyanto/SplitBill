@@ -8,10 +8,13 @@ export default {
   theme: {
     extend: {
       borderRadius: {
-        '2xl': '14px',
-        '3xl': '24px',
+        '2xl': '16px',
+        '3xl': '16px',
       },
       colors: {
+        primary: 'var(--text-primary)',
+        secondary: 'var(--text-secondary)',
+        tertiary: 'var(--text-tertiary)',
         surface: {
           base: 'var(--surface-base)',
           elevated: 'var(--surface-elevated)',
@@ -50,12 +53,10 @@ export default {
         'error-boundary': 'var(--error-boundary-bg)',
       },
       fontFamily: {
-        inter: ['Inter', 'sans-serif'],
-        geist: ['Geist', 'sans-serif'],
+        sans: ['Plus Jakarta Sans', 'system-ui', '-apple-system', 'sans-serif'],
+        inter: ['Plus Jakarta Sans', 'system-ui', '-apple-system', 'sans-serif'],
       },
       boxShadow: {
-        glow: 'var(--shadow-glow)',
-        glass: 'var(--glass-shadow)',
         card: 'var(--shadow-card)',
         'card-hover': 'var(--shadow-card-hover)',
       },

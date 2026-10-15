@@ -3,7 +3,7 @@ import { api } from '../lib/api';
 import useBillStore from './useBillStore';
 
 // Clear stale localStorage key from old auth implementation
-try { localStorage.removeItem('splitmate-auth'); } catch {}
+try { localStorage.removeItem('splitmate-auth'); } catch { /* Storage may be disabled by the browser. */ }
 
 const resetActiveBill = () => {
   try {

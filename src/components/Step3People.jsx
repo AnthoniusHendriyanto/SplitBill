@@ -14,12 +14,11 @@ function Step3People({ receiptGrandTotal, setStep }) {
   const isAuthenticated = useAuthStore((s) => !!s.accessToken);
   const [participantInput, setParticipantInput] = useState('');
   const [contacts, setContacts] = useState([]);
-  const [loadingContacts, setLoadingContacts] = useState(false);
+  const [loadingContacts, setLoadingContacts] = useState(isAuthenticated);
   const [payerError, setPayerError] = useState('');
 
   useEffect(() => {
     if (!isAuthenticated) return;
-    setLoadingContacts(true);
     api.getContacts()
       .then(setContacts)
       .catch(() => {})
@@ -65,7 +64,7 @@ function Step3People({ receiptGrandTotal, setStep }) {
     if (bill.persons.length === 1 && bill.payerId !== bill.persons[0].id) {
       updateBill({ payerId: bill.persons[0].id });
     }
-  }, [bill.persons.length, bill.payerId]);
+  }, [bill.persons, bill.payerId, updateBill]);
 
   return (
     <motion.div
@@ -75,11 +74,10 @@ function Step3People({ receiptGrandTotal, setStep }) {
       className="grid grid-cols-12 gap-6 w-full"
     >
       {/* Bill Info Panel */}
-      <div className="col-span-12 lg:col-span-5 bg-surface-elevated/80 backdrop-blur-xl border border-white/[0.04] rounded-3xl p-6 flex flex-col justify-between min-h-[460px] shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_8px_32px_rgba(0,0,0,0.3)]">
+      <div className="col-span-12 lg:col-span-5 receipt-panel p-6 flex flex-col justify-between gap-6">
         <div className="space-y-6">
-          <h3 className="text-xs font-bold text-primary tracking-wide flex items-center gap-2">
-            <span className="w-1 h-4 bg-brand-primary rounded-full inline-block" />
-            Bill Details
+          <h3 className="text-xl font-bold text-primary tracking-tight">
+            Name the occasion.
           </h3>
           <div>
             <label htmlFor="step3-title" className="block text-[10px] font-medium text-secondary tracking-wide mb-1.5">
@@ -90,7 +88,7 @@ function Step3People({ receiptGrandTotal, setStep }) {
               value={bill.title}
               onChange={(e) => updateBill({ title: e.target.value })}
               className="w-full h-11 px-4 bg-black/20 border border-white/[0.06] rounded-2xl text-sm font-medium text-primary placeholder:text-tertiary/60 shadow-[inset_0_1px_2px_rgba(0,0,0,0.4)] transition-all duration-200 hover:border-white/[0.12] focus:border-brand-primary/50 focus:shadow-[0_0_0_1px_var(--brand-primary),inset_0_1px_2px_rgba(0,0,0,0.4)] focus:outline-none"
-              placeholder="e.g. Dinner at Le Petit Bistro"
+              placeholder="e.g. Friday dinner"
             />
           </div>
           <div className="pt-4 border-t border-white/[0.04]">
@@ -102,11 +100,12 @@ function Step3People({ receiptGrandTotal, setStep }) {
                   return (
                     <button
                       key={p.id}
+                      aria-pressed={isSelected}
                       onClick={() => updateBill({ payerId: p.id })}
                       className={cn(
                         "px-4 py-3 rounded-2xl border text-xs font-medium transition-all flex items-center justify-between gap-3 cursor-pointer outline-none",
                         isSelected
-                          ? "border-brand-primary/50 bg-brand-primary/5 text-primary shadow-sm"
+                          ? "border-[--brand-ink] bg-brand-subtle text-primary"
                           : "border-white/[0.06] bg-black/20 text-secondary hover:border-white/[0.12]"
                       )}
                     >
@@ -125,24 +124,24 @@ function Step3People({ receiptGrandTotal, setStep }) {
             )}
           </div>
         </div>
-        <div className="pt-4 border-t border-white/[0.04] flex justify-between items-center text-[10px] font-medium text-tertiary font-numeric">
+        <div className="pt-5 receipt-divider flex flex-wrap gap-2 justify-between items-center text-sm font-medium text-secondary font-numeric">
           <span>Grand Total</span>
           <span className="text-base font-bold text-primary">Rp {receiptGrandTotal.toLocaleString('id-ID')}</span>
         </div>
       </div>
 
       {/* People Panel */}
-      <div className="col-span-12 lg:col-span-7 bg-surface-elevated/80 backdrop-blur-xl border border-white/[0.04] rounded-3xl p-6 flex flex-col justify-between shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_8px_32px_rgba(0,0,0,0.3)]">
+      <div className="col-span-12 lg:col-span-7 bg-[--surface-elevated] border border-[--border] rounded-2xl p-6 flex flex-col justify-between shadow-card">
         <div>
           <div className="flex justify-between items-center mb-5">
-            <h3 className="text-xs font-bold text-primary tracking-wide flex items-center gap-2">
-              <span className="w-1 h-4 bg-brand-primary rounded-full inline-block" />
-              Participants
+            <h3 className="text-xl font-bold text-primary tracking-tight">
+              The people at the table
             </h3>
+            <span className="bg-brand-primary text-[#151714] rounded-full min-w-8 h-8 px-2 flex items-center justify-center font-bold text-sm">{bill.persons.length}</span>
           </div>
 
+          <label htmlFor="step3-participant" className="block text-sm font-medium text-secondary mb-2">Participant name</label>
           <div className="flex gap-2 mb-5">
-            <label htmlFor="step3-participant" className="sr-only">Participant name</label>
             <input
               id="step3-participant"
               value={participantInput || ''}
@@ -153,15 +152,16 @@ function Step3People({ receiptGrandTotal, setStep }) {
                   setParticipantInput('');
                 }
               }}
-              className="flex-1 h-11 px-4 bg-black/20 border border-white/[0.06] rounded-2xl text-sm font-medium text-primary placeholder:text-tertiary/60 shadow-[inset_0_1px_2px_rgba(0,0,0,0.4)] transition-all duration-200 hover:border-white/[0.12] focus:border-brand-primary/50 focus:shadow-[0_0_0_1px_var(--brand-primary),inset_0_1px_2px_rgba(0,0,0,0.4)] focus:outline-none"
+              className="min-w-0 flex-1 h-12 px-4 bg-surface-base border border-border-strong rounded-xl text-sm text-primary"
               placeholder="Type name and press Enter..."
             />
             <button
+              aria-label="Add participant"
               onClick={() => {
                 handleAddPerson(participantInput);
                 setParticipantInput('');
               }}
-              className="w-11 h-11 rounded-2xl bg-gradient-to-r from-brand-primary to-indigo-500 flex items-center justify-center text-white shadow-xl shadow-brand-primary/20 hover:shadow-[0_0_24px_var(--brand-primary-glow)] transition-all duration-200 cursor-pointer border-none outline-none"
+              className="w-12 h-12 shrink-0 rounded-xl bg-brand-primary hover:bg-brand-hover flex items-center justify-center text-[#151714] transition-colors"
             >
               <Icon name="person_add" className="text-sm" />
             </button>
@@ -191,18 +191,18 @@ function Step3People({ receiptGrandTotal, setStep }) {
                         </div>
                         <span className="text-[11px] font-medium text-secondary max-w-[80px] truncate">{c.name}</span>
                         {c.connected_user_id && (
-                          <span className="text-[8px] px-1 py-0.5 rounded-full text-emerald-400 bg-emerald-500/10 font-medium leading-none shrink-0">
+                          <span className="text-[8px] px-1 py-0.5 rounded-full text-[--brand-primary] bg-[--brand-primary-subtle] font-medium leading-none shrink-0">
                             connected
                           </span>
                         )}
                         {inBill ? (
-                          <span className="w-4 h-4 flex items-center justify-center text-[10px] text-emerald-400">
+                          <span className="w-4 h-4 flex items-center justify-center text-[10px] text-[--brand-primary]">
                             <Icon name="check" />
                           </span>
                         ) : (
                           <button
                             onClick={() => { addPerson(c.name); }}
-                            className="w-4 h-4 flex items-center justify-center rounded-full hover:bg-brand-primary/10 text-tertiary hover:text-brand-primary transition-colors cursor-pointer border-none outline-none"
+                            className="icon-button"
                             aria-label={`Add ${c.name}`}
                           >
                             <Icon name="add" className="text-[10px]" />
@@ -213,7 +213,7 @@ function Step3People({ receiptGrandTotal, setStep }) {
                             api.deleteContact(c.id).catch(() => {});
                             setContacts(prev => prev.filter(x => x.id !== c.id));
                           }}
-                          className="w-4 h-4 flex items-center justify-center rounded-full opacity-0 group-hover:opacity-100 hover:bg-red-950 hover:text-red-400 text-tertiary transition-all cursor-pointer border-none outline-none"
+                          className="icon-button hover:text-error"
                           aria-label={`Remove ${c.name}`}
                         >
                           <Icon name="close" className="text-[9px]" />
@@ -226,7 +226,7 @@ function Step3People({ receiptGrandTotal, setStep }) {
             )
           )}
 
-          <div className="min-h-[160px] max-h-[240px] overflow-y-auto rounded-2xl border border-white/[0.04] bg-black/20 p-4 shadow-[inset_0_1px_2px_rgba(0,0,0,0.4)]">
+          <div className="min-h-[160px] max-h-[320px] overflow-y-auto border-t border-border py-5">
             {bill.persons.length > 0 ? (
               <div className="flex flex-wrap gap-2.5">
                 <AnimatePresence>
@@ -236,16 +236,16 @@ function Step3People({ receiptGrandTotal, setStep }) {
                       initial={{ opacity: 0, scale: 0.9 }}
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.9 }}
-                      className="flex items-center gap-2 pl-2 pr-1.5 py-1.5 bg-white/[0.04] border border-white/[0.06] rounded-full group transition-all hover:border-white/[0.12]"
+                      className="flex items-center gap-3 pl-2 pr-1 py-1 bg-brand-subtle border border-border-strong rounded-full"
                     >
-                      <div className="w-5 h-5 rounded-full bg-brand-primary/10 border border-brand-primary/20 flex items-center justify-center text-[9px] font-bold text-brand-primary uppercase">
+                      <div className="w-10 h-10 rounded-full bg-brand-primary flex items-center justify-center text-base font-bold text-[#151714] uppercase">
                         {p.name.charAt(0) || "?"}
                       </div>
-                      <span className="text-[11px] font-medium text-primary max-w-[120px] truncate">{p.name || "Unnamed"}</span>
+                      <span className="text-sm font-semibold text-primary max-w-[120px] truncate">{p.name || "Unnamed"}</span>
                       <button
                         onClick={() => removePerson(p.id)}
-                        className="w-4 h-4 rounded-full flex items-center justify-center hover:bg-red-950 hover:text-red-400 text-tertiary border-none transition-colors cursor-pointer outline-none"
-                        aria-label="Remove person"
+                        className="icon-button hover:text-error"
+                        aria-label={`Remove ${p.name}`}
                       >
                         <Icon name="close" className="text-[10px]" />
                       </button>
@@ -264,25 +264,15 @@ function Step3People({ receiptGrandTotal, setStep }) {
           </div>
         </div>
 
-        <div className="mt-6 pt-5 border-t border-white/[0.04] flex justify-between items-center gap-3">
-          <button
-            onClick={() => {
-              const text = encodeURIComponent(`Hey! I'm splitting our bill using SplitMate. Join here: http://splitmate.id/invite/${bill.id || 'new'}`);
-              window.open(`https://wa.me/?text=${text}`, '_blank');
-            }}
-            className="h-10 px-4 rounded-2xl bg-transparent border border-white/[0.06] hover:bg-white/[0.04] text-tertiary hover:text-secondary text-[10px] font-medium transition-all flex items-center gap-2 cursor-pointer outline-none"
-          >
-            <Icon name="share" className="text-sm" />
-            Share Invite
-          </button>
-          <div className="flex gap-2.5">
+        <div className="mt-6 pt-5 border-t border-border">
+          <div className="flex gap-2.5 justify-between flex-wrap">
             <button onClick={() => setStep(2)}
               className="h-10 px-4 rounded-2xl bg-transparent border border-white/[0.06] text-secondary hover:text-primary hover:border-white/[0.1] text-[10px] font-medium transition-all flex items-center gap-1.5 cursor-pointer outline-none"
             >
               <Icon name="arrow_back" className="text-xs" /> Back
             </button>
             <button
-              disabled={bill.persons.length === 0}
+              disabled={bill.persons.length === 0 || !bill.title.trim()}
               onClick={() => {
                 if (!bill.payerId) {
                   setPayerError('Select who paid the bill to continue.');
@@ -295,7 +285,7 @@ function Step3People({ receiptGrandTotal, setStep }) {
                 "h-10 px-5 rounded-2xl text-xs font-semibold transition-all flex items-center gap-1.5 border-none outline-none cursor-pointer",
                 bill.persons.length === 0
                   ? "bg-white/[0.04] text-tertiary cursor-not-allowed"
-                  : "bg-gradient-to-r from-brand-primary to-indigo-500 text-white shadow-xl shadow-brand-primary/20 hover:shadow-[0_0_24px_var(--brand-primary-glow)]"
+                  : "bg-[--brand-primary] hover:bg-[--brand-primary-hover] active:scale-[0.98] text-[--text-inverse] shadow-sm"
               )}
             >
               Continue

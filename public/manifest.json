@@ -1,12 +1,12 @@
 {
   "short_name": "SplitMate",
-  "name": "SplitMate - Premium Bill Splitter",
+  "name": "SplitMate - Good times. Fair shares.",
   "description": "Split bills intelligently with AI-powered receipt scanning",
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
-  "theme_color": "#1B1B24",
-  "background_color": "#FCF8FF",
+  "theme_color": "#151714",
+  "background_color": "#f5f6f0",
   "categories": ["finance", "productivity", "utilities"],
   "icons": [
     {

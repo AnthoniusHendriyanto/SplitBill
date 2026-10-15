@@ -195,7 +195,7 @@ const useBillStore = create(
         }
 
         if (state.bill.id) {
-          try { await api.deleteBill(state.bill.id); } catch (_) {}
+          try { await api.deleteBill(state.bill.id); } catch { /* Preserve the existing draft replacement behavior. */ }
         }
         try {
           await api.createBill(billData);
@@ -363,7 +363,7 @@ const useBillStore = create(
       },
 
       settings: {
-        darkMode: true,
+        darkMode: null,
         currency: 'IDR',
         autoScan: true,
         roundNumbers: true,

@@ -4,16 +4,15 @@ import { motion } from 'framer-motion';
 import useAuthStore from '../store/useAuthStore';
 import Icon from '../components/Icon';
 import Skeleton from '../components/Skeleton';
-import useIsMobile from '../hooks/useIsMobile';
 import { api } from '../lib/api';
 import { cn } from '../utils/cn';
+import ThemeToggle from '../components/ThemeToggle';
 
-const avatarColors = ["bg-indigo-600", "bg-teal-500", "bg-violet-500", "bg-red-500", "bg-amber-500"];
+const avatarColors = ['bg-brand-primary text-[#151714]', 'bg-brand-subtle text-primary', 'bg-surface-raised text-primary'];
 
 function BillDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const isMobile = useIsMobile();
   const isAuthenticated = useAuthStore((s) => !!s.accessToken);
   const [bill, setBill] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -58,7 +57,7 @@ function BillDetailPage() {
         .catch(err => console.error('Failed to fetch bill:', err))
         .finally(() => setLoading(false));
     } else {
-      setLoading(false);
+      useAuthStore.getState().silentRefresh().then(ok => { if (!ok) setLoading(false); });
     }
   }, [id, isAuthenticated]);
 
@@ -92,10 +91,10 @@ function BillDetailPage() {
       <div className="min-h-screen bg-page flex items-center justify-center p-4">
         <div className="text-center">
           <Icon name="receipt_long" className="text-6xl text-primary mb-4" />
-          <h2 className="text-xl font-bold text-tertiary mb-2">Bill not found</h2>
+          <h1 className="text-xl font-bold text-primary mb-5">{isAuthenticated ? 'Bill unavailable' : 'Sign in to see this bill'}</h1>
           <button
             onClick={() => navigate('/')}
-            className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all cursor-pointer"
+            className="px-6 py-3 bg-[--brand-primary] text-[--text-inverse] rounded-xl font-bold hover:bg-[--brand-primary-hover] transition-all cursor-pointer"
           >
             Back to Dashboard
           </button>
@@ -108,20 +107,23 @@ function BillDetailPage() {
   const payer = persons.find(p => p.id === payerId);
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-surface-base font-inter antialiased">
-      <div className={cn("max-w-4xl mx-auto", isMobile ? "p-4 pb-20" : "p-8")}>
+    <div className="min-h-[100dvh] bg-page antialiased">
+      <div className="page-content max-w-5xl">
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+          <div className="flex justify-between items-center mb-6">
           <button
             onClick={() => navigate('/')}
-            className="flex items-center gap-2 text-sm text-tertiary hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors mb-6 cursor-pointer"
+            className="btn-secondary"
           >
             <Icon name="arrow_back" className="text-lg" />
             Back to Dashboard
           </button>
+          <ThemeToggle />
+          </div>
 
-          <div className="flex items-center justify-between mb-8">
+          <div className="flex flex-wrap gap-6 items-center justify-between mb-8 pb-6 border-b border-border">
             <div>
-              <h1 className="text-3xl font-black text-primary tracking-tight">{bill.title}</h1>
+              <h1 className="page-title">{bill.title}</h1>
               <p className="text-sm text-tertiary mt-1 font-medium">
                 {bill.bill_date
                   ? new Date(bill.bill_date + 'T12:00:00').toLocaleDateString('id-ID', {
@@ -134,15 +136,15 @@ function BillDetailPage() {
             </div>
             <div className="text-right">
               <p className="text-[10px] font-bold text-secondary uppercase tracking-widest mb-1">Grand Total</p>
-              <p className="text-3xl font-black text-indigo-600">Rp {grandTotal.toLocaleString('id-ID')}</p>
+              <p className="text-3xl font-black text-[--brand-primary] tabular-nums">Rp {grandTotal.toLocaleString('id-ID')}</p>
             </div>
           </div>
 
           <div className="grid gap-6">
             {/* Items */}
-            <div className="bg-white dark:bg-surface-elevated border border-slate-200 dark:border-strong rounded-2xl p-6 shadow-sm">
+            <div className="receipt-panel p-6">
               <h2 className="font-bold text-primary mb-4 flex items-center gap-2">
-                <Icon name="receipt" className="text-indigo-600" />
+                <Icon name="receipt" className="text-[--brand-primary]" />
                 Items
               </h2>
               <div className="divide-y divide-slate-100 dark:divide-border">
@@ -160,24 +162,24 @@ function BillDetailPage() {
             </div>
 
             {/* Settlement */}
-            <div className="bg-white dark:bg-surface-elevated border border-slate-200 dark:border-strong rounded-2xl p-6 shadow-sm">
+            <div className="receipt-panel p-6">
               <h2 className="font-bold text-primary mb-4 flex items-center gap-2">
-                <Icon name="account_balance" className="text-indigo-600" />
+                <Icon name="account_balance" className="text-[--brand-primary]" />
                 Settlement
               </h2>
 
               {payer && (
-                <div className="flex items-center gap-3 p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl border border-indigo-100 dark:border-indigo-800 mb-4">
-                  <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold shadow-sm">
+                <div className="flex items-center gap-3 p-4 bg-[--brand-primary-subtle] rounded-xl border border-[--brand-primary]/20 mb-4">
+                  <div className="w-10 h-10 rounded-full bg-[--brand-primary] flex items-center justify-center text-[--text-inverse] font-bold shadow-sm">
                     {payer.name?.charAt(0) || 'P'}
                   </div>
                   <div>
-                    <p className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest">Payer</p>
+                    <p className="text-[11px] font-bold text-[--brand-primary] uppercase tracking-wider">Payer</p>
                     <p className="font-bold text-primary">{payer.name}</p>
                   </div>
                   <div className="ml-auto text-right">
-                    <p className="text-[10px] font-bold text-tertiary uppercase">Paid</p>
-                    <p className="font-black text-primary">Rp {grandTotal.toLocaleString('id-ID')}</p>
+                    <p className="text-[11px] font-bold text-tertiary uppercase">Paid</p>
+                    <p className="font-bold text-primary tabular-nums">Rp {grandTotal.toLocaleString('id-ID')}</p>
                   </div>
                 </div>
               )}
@@ -185,9 +187,9 @@ function BillDetailPage() {
               <div className="space-y-3">
                 {totals.map((person, i) => {
                   return (
-                    <div key={person.id} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-surface-raised/50 rounded-xl">
+                    <div key={person.id} className="flex flex-wrap gap-4 items-center justify-between p-4 bg-surface-base rounded-xl">
                       <div className="flex items-center gap-3">
-                        <div className={cn("w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold", avatarColors[i % avatarColors.length])}>
+                        <div className={cn("w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold", avatarColors[i % avatarColors.length])}>
                           {person.name?.charAt(0) || '?'}
                         </div>
                         <div>
@@ -200,12 +202,12 @@ function BillDetailPage() {
                       <div className="text-right">
                         <p className={cn(
                           "font-black text-sm",
-                          person.id === payerId ? "text-emerald-600" : "text-primary"
+                          person.id === payerId ? "text-[--brand-primary]" : "text-primary"
                         )}>
                           Rp {person.total.toLocaleString('id-ID')}
                         </p>
                         {person.id !== payerId && (
-                          <p className="text-[10px] text-red-500 font-bold">
+                          <p className="text-xs text-error font-bold">
                             owes Rp {person.total.toLocaleString('id-ID')}
                           </p>
                         )}
@@ -221,9 +223,9 @@ function BillDetailPage() {
               {totals.map((person, i) => {
                 const assignedItems = items.filter(item => assignments[person.id]?.[item.id]);
                 return (
-                  <div key={person.id} className="bg-white dark:bg-surface-elevated border border-slate-200 dark:border-strong rounded-2xl p-5 shadow-sm">
+                  <div key={person.id} className="receipt-panel p-5">
                     <div className="flex items-center gap-3 mb-4">
-                      <div className={cn("w-10 h-10 rounded-full flex items-center justify-center text-white font-bold", avatarColors[i % avatarColors.length])}>
+                      <div className={cn("w-10 h-10 rounded-full flex items-center justify-center font-bold", avatarColors[i % avatarColors.length])}>
                         {person.name?.charAt(0) || '?'}
                       </div>
                       <div>
@@ -233,8 +235,8 @@ function BillDetailPage() {
                         </p>
                       </div>
                       <div className="ml-auto text-right">
-                        <p className="text-[10px] text-secondary uppercase tracking-widest font-bold">Total</p>
-                        <p className="font-black text-indigo-600">Rp {person.total.toLocaleString('id-ID')}</p>
+                        <p className="text-[11px] text-secondary uppercase tracking-wider font-bold">Total</p>
+                        <p className="font-bold text-[--brand-primary] tabular-nums">Rp {person.total.toLocaleString('id-ID')}</p>
                       </div>
                     </div>
                     <div className="space-y-2">

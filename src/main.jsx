@@ -1,4 +1,7 @@
-import { Suspense, lazy } from 'react'
+/* eslint-disable react-refresh/only-export-components -- Entry module mounts the root rather than exporting components. */
+import { Suspense, lazy, useEffect } from 'react'
+import { MotionConfig } from 'framer-motion'
+import useBillStore from './store/useBillStore'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import './index.css'
@@ -9,12 +12,26 @@ const LoginPage = lazy(() => import('./pages/LoginPage.jsx'))
 const RegisterPage = lazy(() => import('./pages/RegisterPage.jsx'))
 const BillDetailPage = lazy(() => import('./pages/BillDetailPage.jsx'))
 
-createRoot(document.getElementById('root')).render(
+function Application() {
+  const darkMode = useBillStore(s => s.settings.darkMode)
+  useEffect(() => {
+    const system = window.matchMedia('(prefers-color-scheme: dark)')
+    const apply = () => {
+      const dark = darkMode ?? system.matches
+      document.documentElement.classList.toggle('dark', dark)
+      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? '#151714' : '#f5f6f0')
+    }
+    apply()
+    system.addEventListener('change', apply)
+    return () => system.removeEventListener('change', apply)
+  }, [darkMode])
+  return (
+  <MotionConfig reducedMotion="user">
   <BrowserRouter>
     <ErrorBoundary>
       <Suspense fallback={
         <div className="min-h-screen bg-page flex items-center justify-center">
-          <div className="w-10 h-10 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+          <div className="w-10 h-10 border-2 border-[--brand-primary] border-t-transparent rounded-full animate-spin" />
         </div>
       }>
         <Routes>
@@ -25,5 +42,9 @@ createRoot(document.getElementById('root')).render(
         </Routes>
       </Suspense>
     </ErrorBoundary>
-  </BrowserRouter>,
-)
+  </BrowserRouter>
+  </MotionConfig>
+  )
+}
+
+createRoot(document.getElementById('root')).render(<Application />)

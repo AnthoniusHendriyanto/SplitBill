@@ -1,58 +1,66 @@
+/* Ink + citron. Surfaces: 16px; controls: 12px; people/status chips: pill. */
 :root {
-  --surface-base: #050816;
-  --surface-elevated: #0B1020;
-  --surface-raised: #111827;
-  --surface-overlay: rgba(0,0,0,0.5);
-
-  --text-primary: #F1F5F9;
-  --text-secondary: #94A3B8;
-  --text-tertiary: #64748B;
-  --text-inverse: #050816;
-
-  --border: rgba(255,255,255,0.06);
-  --border-strong: rgba(255,255,255,0.10);
-  --border-focus: #7C5CFF;
-
-  --brand-primary: #7C5CFF;
-  --brand-primary-hover: #6A4BE8;
-  --brand-primary-active: #5A3DD6;
-  --brand-primary-subtle: rgba(124,92,255,0.10);
-  --brand-primary-glow: rgba(124,92,255,0.15);
-
-  --semantic-success: #22C55E;
-  --semantic-success-bg: rgba(34,197,94,0.10);
-  --semantic-warning: #F59E0B;
-  --semantic-warning-bg: rgba(245,158,11,0.10);
-  --semantic-error: #EF4444;
-  --semantic-error-bg: rgba(239,68,68,0.10);
-  --semantic-info: #7C5CFF;
-  --semantic-info-bg: rgba(124,92,255,0.10);
-
-  --shadow-sm: 0 1px 2px rgba(0,0,0,0.2);
-  --shadow-md: 0 4px 16px rgba(0,0,0,0.25);
-  --shadow-lg: 0 8px 32px rgba(0,0,0,0.3);
-  --shadow-xl: 0 16px 48px rgba(0,0,0,0.35);
-  --shadow-glow: 0 0 24px var(--brand-primary-glow), 0 4px 16px rgba(0,0,0,0.2);
-  --shadow-card: 0 1px 3px rgba(0,0,0,0.2), 0 0 0 1px rgba(255,255,255,0.04);
-  --shadow-card-hover: 0 8px 32px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.06);
-
-  --glass-bg: rgba(11,16,32,0.8);
-  --glass-border: rgba(255,255,255,0.04);
-  --glass-shadow: 0 8px 32px rgba(0,0,0,0.3);
-
+  color-scheme: light;
+  --surface-base: #f5f6f0;
+  --surface-elevated: #fdfef9;
+  --surface-raised: #e9ece2;
+  --surface-overlay: #fdfef9;
+  --text-primary: #151714;
+  --text-secondary: #4d5447;
+  --text-tertiary: #606956;
+  --text-inverse: #151714;
+  --border: #d9decf;
+  --border-strong: #9ca78e;
+  --border-focus: #5a7016;
+  --brand-primary: #d5ed58;
+  --brand-primary-hover: #c7e33e;
+  --brand-primary-active: #bfd736;
+  --brand-primary-subtle: #ebf1d2;
+  --brand-ink: #48600c;
+  --semantic-success: #27623b;
+  --semantic-success-bg: #e5efe3;
+  --semantic-warning: #805b14;
+  --semantic-warning-bg: #f6efd9;
+  --semantic-error: #b2343d;
+  --semantic-error-bg: #f9e8e6;
+  --semantic-info: var(--brand-ink);
+  --semantic-info-bg: var(--brand-primary-subtle);
+  --shadow-sm: 0 2px 3px #25310c05;
+  --shadow-md: 0 6px 20px #25310c08;
+  --shadow-lg: 0 12px 40px #25310c12;
+  --shadow-xl: 0 24px 64px #25310c20;
+  --shadow-card: 0 3px 0 #25310c06;
+  --shadow-card-hover: 0 6px 0 #25310c0a;
   --page-bg: var(--surface-base);
   --card-bg: var(--surface-elevated);
-  --card-alt-bg: #111827;
-  --table-hover-bg: #151F33;
+  --card-alt-bg: var(--surface-raised);
+  --table-hover-bg: var(--surface-raised);
   --toast-error-bg: var(--semantic-error-bg);
   --toast-success-bg: var(--semantic-success-bg);
-  --btn-success-hover-bg: #16a34a;
-  --error-boundary-bg: #450a0a;
-
-  --input-bg: rgba(255,255,255,0.04);
-  --input-border: rgba(255,255,255,0.06);
-  --input-height: 48px;
-  --input-radius: 14px;
+  --btn-success-hover-bg: var(--semantic-success);
+  --error-boundary-bg: var(--surface-elevated);
 }
 
-/* ponytail: single dark mode, no light mode - premium fintech is dark */
+:root.dark {
+  color-scheme: dark;
+  --surface-base: #151714;
+  --surface-elevated: #1e211c;
+  --surface-raised: #2a2f25;
+  --surface-overlay: #1e211c;
+  --text-primary: #f5f6f0;
+  --text-secondary: #c0c8b6;
+  --text-tertiary: #a0ac92;
+  --border: #383f31;
+  --border-strong: #68765a;
+  --border-focus: #d5ed58;
+  --brand-primary-subtle: #30391c;
+  --brand-ink: #d5ed58;
+  --semantic-success: #a9d5ac;
+  --semantic-success-bg: #253625;
+  --semantic-warning: #e1c780;
+  --semantic-warning-bg: #39331e;
+  --semantic-error: #ffaaa6;
+  --semantic-error-bg: #40282a;
+  --shadow-card: 0 3px 0 #080b061f;
+  --shadow-card-hover: 0 6px 0 #080b0630;
+}

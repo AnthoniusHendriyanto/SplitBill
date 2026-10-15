@@ -17,54 +17,52 @@ function getRelativeTime(iso) {
 }
 
 const statusColors = {
-  completed: 'bg-emerald-500/15 text-emerald-500 border-emerald-500/20',
-  pending: 'bg-amber-500/15 text-amber-500 border-amber-500/20',
-  draft: 'bg-indigo-500/15 text-indigo-500 border-indigo-500/20',
+  completed: 'bg-[--brand-primary-subtle] text-[--brand-primary] border-[--brand-primary]/20',
+  pending: 'bg-[--semantic-warning-bg] text-warning border-border',
+  draft: 'bg-surface-raised text-secondary border-border',
 };
 
 function ActivityItem({ item, index, onSelect }) {
   const payerName = item.payerName || 'Someone';
   return (
-    <motion.div
+    <motion.button
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.04 }}
-      role="button"
-      tabIndex={0}
+      type="button"
       onClick={() => onSelect?.(item.id)}
-      onKeyDown={(e) => { if (e.key === 'Enter') onSelect?.(item.id); }}
-      className="flex items-center gap-4 p-4 rounded-2xl bg-white/50 dark:bg-[#12152a]/50 hover:bg-white/80 dark:hover:bg-[#1a1d3a]/80 border border-transparent hover:border-[--border] transition-all cursor-pointer group"
+      className="w-full text-left flex items-center gap-3 sm:gap-5 py-5 px-4 sm:px-6 border-b border-border last:border-0 hover:bg-surface-raised transition-colors cursor-pointer group"
     >
-      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[--brand-primary] to-violet-600 flex items-center justify-center text-white text-sm font-bold shrink-0 ring-2 ring-[--brand-primary-glow]">
-        {payerName.charAt(0).toUpperCase()}
+      <div className="w-11 h-11 rounded-xl bg-surface-raised border border-border flex items-center justify-center text-primary shrink-0">
+        <Icon name="receipt_long" className="text-xl" />
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold text-[--text-primary] truncate">
-          <span className="font-medium text-secondary">{payerName}</span> paid {item.title || 'a bill'}
+          {item.title || 'Untitled bill'}
         </p>
-        <p className="text-xs text-tertiary mt-0.5">{getRelativeTime(item.completedAt)}</p>
+        <p className="text-xs text-secondary mt-1 truncate">{payerName} paid · {getRelativeTime(item.completedAt)}</p>
       </div>
       <div className="text-right flex-shrink-0">
         <p className="text-sm font-bold tabular-nums text-[--text-primary]">Rp {(item.grandTotal || 0).toLocaleString('id-ID')}</p>
         <span className={cn(
-          "inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full border mt-1 uppercase tracking-wide",
+          "inline-block text-xs font-semibold px-2 py-0.5 rounded-full border mt-1",
           statusColors[item.status] || statusColors.pending
         )}>
-          {item.status || 'pending'}
+          {item.status === 'completed' ? 'Settled' : item.status === 'draft' ? 'Draft' : 'Pending'}
         </span>
       </div>
-    </motion.div>
+    </motion.button>
   );
 }
 
 function LoadingSkeleton() {
   return (
-    <div className="space-y-3" aria-busy="true" aria-label="Loading activities">
+    <div role="status" className="space-y-3" aria-busy="true" aria-label="Loading activities">
       {[1, 2, 3].map((i) => (
-        <div key={i} className="flex items-center gap-4 p-4 rounded-2xl bg-white/30 dark:bg-[#12152a]/30 animate-pulse">
+        <div key={i} className="flex items-center gap-4 p-4 rounded-2xl bg-surface-elevated animate-pulse">
           <div className="w-10 h-10 rounded-full bg-[--border]" />
           <div className="flex-1 space-y-2">
-            <div className="h-4 w-48 bg-[--border] rounded" />
+            <div className="h-4 w-full max-w-48 bg-[--border] rounded" />
             <div className="h-3 w-24 bg-[--border] rounded" />
           </div>
           <div className="space-y-2 text-right">
@@ -77,25 +75,22 @@ function LoadingSkeleton() {
   );
 }
 
-function EmptyState() {
+function EmptyState({ onNewBill, searching }) {
   return (
-    <div className="flex flex-col items-center justify-center py-16 text-center">
-      <div className="w-16 h-16 rounded-3xl bg-[--brand-primary]/10 flex items-center justify-center mb-4">
-        <Icon name="celebration" className="text-3xl text-[--brand-primary]" />
+    <div className="flex flex-col items-center justify-center py-12 text-center">
+      <div className="w-12 h-12 rounded-2xl bg-[--brand-primary-subtle] border border-[--brand-primary]/20 flex items-center justify-center mb-3 text-[--brand-primary]">
+        <Icon name="receipt_long" className="text-xl" />
       </div>
-      <p className="text-lg font-bold text-[--text-primary] mb-1">No activity yet 🎉</p>
-      <p className="text-sm text-tertiary max-w-xs leading-relaxed">Create your first split bill to get started tracking expenses.</p>
+      <p className="text-lg font-bold text-primary mb-2">{searching ? 'No matching splits' : 'Your next memory starts here.'}</p>
+      <p className="text-sm text-secondary max-w-xs leading-relaxed">{searching ? 'Try a different merchant, title or date.' : 'Your saved bills and shared moments will show up here.'}</p>
+      {!searching && onNewBill && <button className="btn-secondary mt-5" onClick={onNewBill}>New Split <Icon name="arrow_forward" className="text-base" /></button>}
     </div>
   );
 }
 
-export default memo(function ActivityFeed({ bills, isLoading, error, onSelectBill, onNewBill }) {
+export default memo(function ActivityFeed({ bills, isLoading, error, onSelectBill, onNewBill, searching = false }) {
   return (
-    <div className="rounded-3xl bg-white/60 dark:bg-[#12152a]/60 backdrop-blur-xl border border-white/30 dark:border-white/5 shadow-glass p-6">
-        <div className="flex items-center gap-3 mb-5">
-          <div className="w-1.5 h-6 rounded-full bg-[--brand-primary]" />
-          <h2 className="text-base font-bold text-[--text-primary]">Activity Feed</h2>
-        </div>
+    <div className="panel overflow-hidden">
 
       {isLoading ? (
         <LoadingSkeleton />
@@ -108,13 +103,13 @@ export default memo(function ActivityFeed({ bills, isLoading, error, onSelectBil
       ) : bills.length > 0 ? (
         <div className="space-y-1">
           <AnimatePresence mode="popLayout">
-            {bills.slice(0, 10).map((item, i) => (
+            {bills.map((item, i) => (
               <ActivityItem key={item.id} item={item} index={i} onSelect={onSelectBill} />
             ))}
           </AnimatePresence>
         </div>
       ) : (
-        <EmptyState />
+        <EmptyState onNewBill={onNewBill} searching={searching} />
       )}
     </div>
   );
