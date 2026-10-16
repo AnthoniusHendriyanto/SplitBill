@@ -41,8 +41,16 @@ func main() {
 	usageRepo := postgres.NewUsageRepository(pool)
 	contactRepo := postgres.NewContactRepository(pool)
 	invitationRepo := postgres.NewInvitationRepository(pool)
+	notifications := &postgres.NotificationRepository{Pool: pool}
+	emailCtx, stopEmail := context.WithCancel(context.Background())
+	emailDone := make(chan struct{})
+	go func() {
+		defer close(emailDone)
+		notifications.DeliverEmails(emailCtx, cfg.ResendAPIKey, cfg.EmailFrom, cfg.FrontendURL)
+	}()
+	defer func() { stopEmail(); <-emailDone }()
 
-	runServer(cfg, userRepo, billRepo, itemRepo, personRepo, assignmentRepo, paymentRepo, usageRepo, contactRepo, invitationRepo, postgres.NewOCRService(cfg.GroqAPIKey, cfg.PythonPath), timeoutContext)
+	runServer(cfg, userRepo, billRepo, itemRepo, personRepo, assignmentRepo, paymentRepo, usageRepo, contactRepo, invitationRepo, notifications, postgres.NewOCRService(cfg.GroqAPIKey, cfg.PythonPath), timeoutContext)
 }
 
 func runServer(
@@ -56,11 +64,12 @@ func runServer(
 	usageRepo domain.UsageRepository,
 	contactRepo domain.ContactRepository,
 	invitationRepo domain.InvitationRepository,
+	notifications domain.NotificationRepository,
 	ocrSvc domain.OCRService,
 	timeout time.Duration,
 ) {
 	authUsecase := usecase.NewAuthUsecase(userRepo, cfg)
-	billUsecase := usecase.NewBillUsecase(billRepo, itemRepo, personRepo, assignmentRepo, paymentRepo, usageRepo, userRepo, ocrSvc, timeout, cfg.UsageLimit)
+	billUsecase := usecase.NewBillUsecase(billRepo, itemRepo, personRepo, assignmentRepo, paymentRepo, usageRepo, userRepo, contactRepo, ocrSvc, timeout, cfg.UsageLimit)
 	premiumUsecase := usecase.NewPremiumUsecase(userRepo, cfg)
 
 	authHandler := delivery.NewAuthHandler(authUsecase)
@@ -74,7 +83,7 @@ func runServer(
 	authMiddleware := middleware.NewAuthMiddleware(authUsecase)
 	ocrRateLimiter := middleware.NewRateLimiter(10, time.Minute)
 	authRateLimiter := middleware.NewRateLimiter(5, time.Minute)
-	router := delivery.NewRouter(authHandler, billHandler, premiumHandler, usageHandler, contactHandler, invitationHandler, authMiddleware, ocrRateLimiter, authRateLimiter, cfg.FrontendURL)
+	router := delivery.NewRouter(authHandler, billHandler, premiumHandler, usageHandler, contactHandler, invitationHandler, &delivery.NotificationHandler{Repo: notifications}, authMiddleware, ocrRateLimiter, authRateLimiter, cfg.FrontendURL)
 
 	server := &http.Server{
 		Addr:         ":" + cfg.Port,

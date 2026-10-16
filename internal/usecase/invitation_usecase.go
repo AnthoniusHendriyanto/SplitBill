@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/user/split-mate/internal/domain"
 )
@@ -20,7 +21,7 @@ func NewInvitationUsecase(invRepo domain.InvitationRepository, userRepo domain.U
 func (uc *invitationUsecase) Send(ctx context.Context, fromUserID, toEmail string) (*domain.Invitation, error) {
 	inv := &domain.Invitation{
 		FromUserID: fromUserID,
-		ToEmail:    toEmail,
+		ToEmail:    strings.ToLower(strings.TrimSpace(toEmail)),
 		Status:     "pending",
 	}
 	if err := uc.invRepo.Create(ctx, inv); err != nil {
@@ -38,7 +39,10 @@ func (uc *invitationUsecase) List(ctx context.Context, userID string) ([]domain.
 		return []domain.InvitationResponse{}, nil
 	}
 
-	fromUser, _ := uc.userRepo.GetByID(ctx, userID)
+	fromUser, err := uc.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
 
 	var resps []domain.InvitationResponse
 	for _, inv := range invs {
@@ -83,38 +87,27 @@ func (uc *invitationUsecase) Accept(ctx context.Context, userID, invID string) e
 	if err != nil {
 		return err
 	}
-	if acceptingUser.Email != inv.ToEmail {
+	if !strings.EqualFold(acceptingUser.Email, inv.ToEmail) {
 		return errors.New("this invitation was sent to a different email")
 	}
 
-	if err := uc.invRepo.UpdateStatus(ctx, invID, "accepted", userID); err != nil {
-		return err
-	}
-
-	fromUser, _ := uc.userRepo.GetByID(ctx, inv.FromUserID)
-
-	// Mutual contacts: add both sides
-	uc.contactRepo.Create(ctx, &domain.Contact{
-		UserID:          inv.FromUserID,
-		Name:            acceptingUser.Name,
-		ConnectedUserID: userID,
-	})
-	uc.contactRepo.Create(ctx, &domain.Contact{
-		UserID:          userID,
-		Name:            fromUser.Name,
-		ConnectedUserID: inv.FromUserID,
-	})
-
-	return nil
+	return uc.invRepo.UpdateStatus(ctx, invID, "accepted", userID)
 }
 
 func (uc *invitationUsecase) Reject(ctx context.Context, userID, invID string) error {
+	user, err := uc.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return err
+	}
 	inv, err := uc.invRepo.GetByID(ctx, invID)
 	if err != nil {
 		return err
 	}
 	if inv.Status != "pending" {
 		return errors.New("invitation is not pending")
+	}
+	if !strings.EqualFold(user.Email, inv.ToEmail) {
+		return domain.ErrNotFound
 	}
 	return uc.invRepo.UpdateStatus(ctx, invID, "rejected", userID)
 }

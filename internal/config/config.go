@@ -7,52 +7,56 @@ import (
 )
 
 type Config struct {
-	DBUser              string
-	DBPass              string
-	DBHost              string
-	DBPort              string
-	DBName              string
-	DBSSLMode           string
-	DBMaxConns          int
-	DBMinConns          int
-	Port                string
-	FrontendURL         string
-	JWTSecret           string
-	JWTRefreshSecret    string
-	JWTExpiration       int
-	RefreshTokenExpiry  int
-	GroqAPIKey       string
-	ReadTimeout      int
-	WriteTimeout     int
-	IdleTimeout      int
-	UsageLimit           int
-	PythonPath           string
+	ResendAPIKey          string
+	EmailFrom             string
+	DBUser                string
+	DBPass                string
+	DBHost                string
+	DBPort                string
+	DBName                string
+	DBSSLMode             string
+	DBMaxConns            int
+	DBMinConns            int
+	Port                  string
+	FrontendURL           string
+	JWTSecret             string
+	JWTRefreshSecret      string
+	JWTExpiration         int
+	RefreshTokenExpiry    int
+	GroqAPIKey            string
+	ReadTimeout           int
+	WriteTimeout          int
+	IdleTimeout           int
+	UsageLimit            int
+	PythonPath            string
 	PremiumCallbackSecret string
 }
 
 func LoadConfig() *Config {
 	cfg := &Config{
-		DBUser:              getEnv("DB_USER", "postgres"),
-		DBPass:              getEnv("DB_PASS", "postgres"),
-		DBHost:              getEnv("DB_HOST", "localhost"),
-		DBPort:              getEnv("DB_PORT", "5432"),
-		DBName:              getEnv("DB_NAME", "splitmate"),
-		DBSSLMode:           getEnv("DB_SSLMODE", "disable"),
-		DBMaxConns:          getEnvInt("DB_MAX_CONNS", 25),
-		DBMinConns:          getEnvInt("DB_MIN_CONNS", 5),
-		Port:                getEnv("PORT", "8080"),
-		FrontendURL:         getEnv("FRONTEND_URL", "http://localhost:5173"),
-		JWTSecret:           getEnv("JWT_SECRET", "your-secret-key-change-in-production"),
-		JWTRefreshSecret:    getEnv("JWT_REFRESH_SECRET", "your-refresh-secret-key-change-in-production"),
-		JWTExpiration:       getEnvInt("JWT_EXPIRATION", 15),
-		RefreshTokenExpiry:  getEnvInt("REFRESH_TOKEN_EXPIRY", 7),
-		GroqAPIKey:    getEnv("GROQ_API_KEY", ""),
-		ReadTimeout:   getEnvInt("SERVER_READ_TIMEOUT", 30),
-		WriteTimeout:  getEnvInt("SERVER_WRITE_TIMEOUT", 180),
-		IdleTimeout:   getEnvInt("SERVER_IDLE_TIMEOUT", 120),
-		UsageLimit:    getEnvInt("USAGE_LIMIT", 50),
-		PythonPath:              getEnv("PYTHON_PATH", "python3"),
-		PremiumCallbackSecret:   getEnv("PREMIUM_CALLBACK_SECRET", ""),
+		ResendAPIKey:          getEnv("RESEND_API_KEY", ""),
+		EmailFrom:             getEnv("EMAIL_FROM", ""),
+		DBUser:                getEnv("DB_USER", "postgres"),
+		DBPass:                getEnv("DB_PASS", "postgres"),
+		DBHost:                getEnv("DB_HOST", "localhost"),
+		DBPort:                getEnv("DB_PORT", "5432"),
+		DBName:                getEnv("DB_NAME", "splitmate"),
+		DBSSLMode:             getEnv("DB_SSLMODE", "disable"),
+		DBMaxConns:            getEnvInt("DB_MAX_CONNS", 25),
+		DBMinConns:            getEnvInt("DB_MIN_CONNS", 5),
+		Port:                  getEnv("PORT", "8080"),
+		FrontendURL:           getEnv("FRONTEND_URL", "http://localhost:5173"),
+		JWTSecret:             getEnv("JWT_SECRET", "your-secret-key-change-in-production"),
+		JWTRefreshSecret:      getEnv("JWT_REFRESH_SECRET", "your-refresh-secret-key-change-in-production"),
+		JWTExpiration:         getEnvInt("JWT_EXPIRATION", 15),
+		RefreshTokenExpiry:    getEnvInt("REFRESH_TOKEN_EXPIRY", 7),
+		GroqAPIKey:            getEnv("GROQ_API_KEY", ""),
+		ReadTimeout:           getEnvInt("SERVER_READ_TIMEOUT", 30),
+		WriteTimeout:          getEnvInt("SERVER_WRITE_TIMEOUT", 180),
+		IdleTimeout:           getEnvInt("SERVER_IDLE_TIMEOUT", 120),
+		UsageLimit:            getEnvInt("USAGE_LIMIT", 50),
+		PythonPath:            getEnv("PYTHON_PATH", "python3"),
+		PremiumCallbackSecret: getEnv("PREMIUM_CALLBACK_SECRET", ""),
 	}
 
 	if cfg.JWTSecret == "your-secret-key-change-in-production" {

@@ -3,6 +3,7 @@ package domain
 import "context"
 
 type BillRepository interface {
+	FindRequest(ctx context.Context, userID, key, hash string) (*Bill, error)
 	Create(ctx context.Context, bill *Bill) error
 	GetByID(ctx context.Context, id string) (Bill, error)
 	GetByUserID(ctx context.Context, userID string, page, limit int, fromDate, toDate string) ([]Bill, int, error)

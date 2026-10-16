@@ -63,12 +63,26 @@ func (r *paymentRepository) Update(ctx context.Context, payment *domain.Payment)
 }
 
 func (r *paymentRepository) MarkPersonPaymentsPaid(ctx context.Context, billID, personID string) (int64, error) {
-	query := `UPDATE payments SET is_paid = true, paid_at = NOW() WHERE bill_id = $1 AND from_person_id = $2`
-	res, err := r.Pool.Exec(ctx, query, billID, personID)
+	tx, err := r.Pool.Begin(ctx)
 	if err != nil {
 		return 0, err
 	}
-	return res.RowsAffected(), nil
+	defer tx.Rollback(ctx)
+	if _, err = tx.Exec(ctx, `SELECT id FROM bills WHERE id=$1 FOR UPDATE`, billID); err != nil {
+		return 0, err
+	}
+	query := `UPDATE payments SET is_paid = true, paid_at = NOW() WHERE bill_id = $1 AND from_person_id = $2`
+	res, err := tx.Exec(ctx, query, billID, personID)
+	if err != nil {
+		return 0, err
+	}
+	if res.RowsAffected() == 0 {
+		return 0, domain.ErrNotFound
+	}
+	if _, err = tx.Exec(ctx, `UPDATE bills SET status='completed',updated_at=NOW() WHERE id=$1 AND NOT EXISTS(SELECT 1 FROM payments WHERE bill_id=$1 AND NOT is_paid)`, billID); err != nil {
+		return 0, err
+	}
+	return res.RowsAffected(), tx.Commit(ctx)
 }
 
 func (r *paymentRepository) AllPaymentsPaid(ctx context.Context, billID string) (bool, error) {
@@ -92,7 +106,7 @@ func (r *paymentRepository) GetUserPaymentSummaryByBillIDs(ctx context.Context, 
 
 	query := `
 		SELECT p.bill_id,
-			COALESCE(SUM(CASE
+			COALESCE(MAX(p.share_amount),SUM(CASE
 				WHEN pm.from_person_id = p.id THEN pm.amount
 				WHEN pm.to_person_id = p.id AND p.is_payer THEN -pm.amount
 				ELSE 0
@@ -101,7 +115,7 @@ func (r *paymentRepository) GetUserPaymentSummaryByBillIDs(ctx context.Context, 
 			COALESCE(SUM(CASE WHEN pm.from_person_id = p.id AND NOT pm.is_paid THEN pm.amount ELSE 0 END), 0) AS payable
 		FROM persons p
 		LEFT JOIN payments pm ON pm.bill_id = p.bill_id
-		WHERE p.bill_id = ANY($1) AND (p.user_id = $2 OR p.name = (SELECT name FROM users WHERE id = $2))
+		WHERE p.bill_id = ANY($1) AND p.user_id = $2
 		GROUP BY p.bill_id
 	`
 	args := []interface{}{billIDs, userID}

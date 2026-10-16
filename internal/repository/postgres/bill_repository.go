@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -36,7 +37,7 @@ func (r *billRepository) Create(ctx context.Context, bill *domain.Bill) error {
 
 func (r *billRepository) GetByID(ctx context.Context, id string) (domain.Bill, error) {
 	query := `
-		SELECT id, user_id, title, merchant, total_amount, service_charge, service_mode, tax, tax_mode, discount, grand_total, status, split_type, bill_date, created_at, updated_at
+		SELECT id, user_id, title, merchant, total_amount, service_charge, service_mode, tax, tax_mode, discount, grand_total, status, split_type, bill_date::text, created_at, updated_at
 		FROM bills WHERE id = $1
 	`
 	var bill domain.Bill
@@ -54,7 +55,7 @@ func (r *billRepository) GetByID(ctx context.Context, id string) (domain.Bill, e
 func (r *billRepository) GetByUserID(ctx context.Context, userID string, page, limit int, fromDate, toDate string) ([]domain.Bill, int, error) {
 	offset := (page - 1) * limit
 
-	baseQuery := `FROM bills WHERE user_id = $1 OR id IN (SELECT bill_id FROM persons WHERE user_id = $1 OR (user_id IS NULL AND is_payer AND bill_id IN (SELECT id FROM bills WHERE user_id = $1)))`
+	baseQuery := `FROM bills WHERE (user_id = $1 OR id IN (SELECT bill_id FROM persons WHERE user_id = $1))`
 	args := []interface{}{userID}
 
 	if fromDate != "" {
@@ -73,7 +74,7 @@ func (r *billRepository) GetByUserID(ctx context.Context, userID string, page, l
 	}
 
 	selectQuery := fmt.Sprintf(`
-		SELECT id, user_id, title, merchant, total_amount, service_charge, service_mode, tax, tax_mode, discount, grand_total, status, split_type, bill_date, created_at, updated_at
+		SELECT id, user_id, title, merchant, total_amount, service_charge, service_mode, tax, tax_mode, discount, grand_total, status, split_type, bill_date::text, created_at, updated_at
 		%s ORDER BY created_at DESC LIMIT $%d OFFSET $%d
 	`, baseQuery, len(args)+1, len(args)+2)
 	args = append(args, limit, offset)
@@ -105,8 +106,8 @@ func (r *billRepository) GetByUserID(ctx context.Context, userID string, page, l
 
 func (r *billRepository) GetByUserIDAndID(ctx context.Context, userID, billID string) (domain.Bill, error) {
 	query := `
-		SELECT id, user_id, title, merchant, total_amount, service_charge, service_mode, tax, tax_mode, discount, grand_total, status, split_type, bill_date, created_at, updated_at
-		FROM bills WHERE id = $1 AND (user_id = $2 OR id IN (SELECT bill_id FROM persons WHERE user_id = $2 OR (user_id IS NULL AND name = (SELECT name FROM users WHERE id = $2))))
+		SELECT id, user_id, title, merchant, total_amount, service_charge, service_mode, tax, tax_mode, discount, grand_total, status, split_type, bill_date::text, created_at, updated_at
+		FROM bills WHERE id = $1 AND (user_id = $2 OR id IN (SELECT bill_id FROM persons WHERE user_id = $2))
 	`
 	var bill domain.Bill
 	err := r.Pool.QueryRow(ctx, query, billID, userID).Scan(
@@ -144,16 +145,39 @@ func (r *billRepository) CreateFull(ctx context.Context, bill *domain.Bill, item
 		return fmt.Errorf("begin tx: %w", err)
 	}
 	defer tx.Rollback(ctx)
+	// Serialize retries before checking the committed request snapshot.
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, bill.UserID); err != nil {
+		return err
+	}
+	var previousHash string
+	var snapshot []byte
+	err = tx.QueryRow(ctx, `SELECT request_hash,saved_response FROM bills WHERE user_id=$1 AND request_key=$2`, bill.UserID, bill.RequestKey).Scan(&previousHash, &snapshot)
+	if err == nil {
+		if previousHash != bill.RequestHash {
+			return fmt.Errorf("%w: request key already used for another payload", domain.ErrInvalidInput)
+		}
+		return json.Unmarshal(snapshot, bill)
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return err
+	}
+	var limit, count int
+	if err := tx.QueryRow(ctx, `SELECT COALESCE(t.monthly_bill_limit,50),COALESCE(ut.count,0) FROM users u LEFT JOIN tier_limits t ON t.tier=CASE WHEN u.tier='premium' AND u.premium_expires_at>NOW() THEN 'premium' ELSE 'free' END LEFT JOIN usage_tracking ut ON ut.user_id=u.id AND ut.action='create_bill' AND ut.month=$2 WHERE u.id=$1`, bill.UserID, bill.CreatedAt.Format("2006-01")).Scan(&limit, &count); err != nil {
+		return err
+	}
+	if limit >= 0 && count >= limit {
+		return domain.ErrBillLimitExceeded
+	}
 
 	bill.ID = uuid.New().String()
 	billQuery := `
-		INSERT INTO bills (id, user_id, title, merchant, total_amount, service_charge, service_mode, tax, tax_mode, discount, grand_total, status, split_type, bill_date, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+		INSERT INTO bills (id, user_id, title, merchant, total_amount, service_charge, service_mode, tax, tax_mode, discount, grand_total, status, split_type, bill_date, created_at, updated_at,request_key,request_hash)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,$17,$18)
 	`
 	if _, err := tx.Exec(ctx, billQuery,
 		bill.ID, bill.UserID, bill.Title, bill.Merchant, bill.TotalAmount, bill.ServiceCharge, bill.ServiceMode,
 		bill.Tax, bill.TaxMode, bill.Discount, bill.GrandTotal, bill.Status,
-		bill.SplitType, bill.BillDate, bill.CreatedAt, bill.UpdatedAt); err != nil {
+		bill.SplitType, bill.BillDate, bill.CreatedAt, bill.UpdatedAt, bill.RequestKey, bill.RequestHash); err != nil {
 		return fmt.Errorf("insert bill: %w", err)
 	}
 
@@ -177,14 +201,17 @@ func (r *billRepository) CreateFull(ctx context.Context, bill *domain.Bill, item
 
 	personIDMap := make(map[string]string, len(persons))
 	for i := range persons {
+		if persons[i].PaymentInfo == nil {
+			persons[i].PaymentInfo = map[string]interface{}{}
+		}
 		oldID := persons[i].ID
 		persons[i].ID = uuid.New().String()
 		persons[i].BillID = bill.ID
 		personIDMap[oldID] = persons[i].ID
 		if _, err := tx.Exec(ctx, `
-			INSERT INTO persons (id, bill_id, name, email, is_payer, percentage, payment_info, created_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		`, persons[i].ID, persons[i].BillID, persons[i].Name, persons[i].Email, persons[i].IsPayer, persons[i].Percentage, persons[i].PaymentInfo, persons[i].CreatedAt); err != nil {
+			INSERT INTO persons (id, bill_id, name, email, is_payer, percentage, payment_info, created_at,user_id,custom_amount,share_amount)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8,$9,$10,$11)
+		`, persons[i].ID, persons[i].BillID, persons[i].Name, persons[i].Email, persons[i].IsPayer, persons[i].Percentage, persons[i].PaymentInfo, persons[i].CreatedAt, persons[i].UserID, persons[i].CustomAmount, persons[i].ShareAmount); err != nil {
 			return fmt.Errorf("insert person: %w", err)
 		}
 	}
@@ -205,7 +232,54 @@ func (r *billRepository) CreateFull(ctx context.Context, bill *domain.Bill, item
 		}
 	}
 
+	for i := range bill.Payments {
+		p := &bill.Payments[i]
+		p.ID = uuid.NewString()
+		p.BillID = bill.ID
+		p.FromPersonID = personIDMap[p.FromPersonID]
+		p.ToPersonID = personIDMap[p.ToPersonID]
+		if _, err := tx.Exec(ctx, `INSERT INTO payments(id,bill_id,from_person_id,to_person_id,amount,is_paid,created_at) VALUES($1,$2,$3,$4,$5,false,$6)`, p.ID, bill.ID, p.FromPersonID, p.ToPersonID, p.Amount, p.CreatedAt); err != nil {
+			return err
+		}
+	}
+	for _, p := range persons {
+		if p.UserID != nil && *p.UserID != bill.UserID && p.ShareAmount != nil && *p.ShareAmount > 0 {
+			if _, err := tx.Exec(ctx, `INSERT INTO notifications(id,user_id,actor_user_id,bill_id,amount) VALUES($1,$2,$3,$4,$5)`, uuid.NewString(), *p.UserID, bill.UserID, bill.ID, *p.ShareAmount); err != nil {
+				return err
+			}
+		}
+	}
+	bill.Items = items
+	bill.Persons = persons
+	snapshot, err = json.Marshal(bill)
+	if err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE bills SET saved_response=$1 WHERE id=$2`, snapshot, bill.ID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO usage_tracking(user_id,action,count,month) VALUES($1,'create_bill',1,$2) ON CONFLICT(user_id,action,month) DO UPDATE SET count=usage_tracking.count+1`, bill.UserID, bill.CreatedAt.Format("2006-01")); err != nil {
+		return err
+	}
 	return tx.Commit(ctx)
+}
+
+func (r *billRepository) FindRequest(ctx context.Context, userID, key, hash string) (*domain.Bill, error) {
+	var oldHash string
+	var data []byte
+	err := r.Pool.QueryRow(ctx, `SELECT request_hash,saved_response FROM bills WHERE user_id=$1 AND request_key=$2`, userID, key).Scan(&oldHash, &data)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if oldHash != hash {
+		return nil, fmt.Errorf("%w: request key already used for another payload", domain.ErrInvalidInput)
+	}
+	var bill domain.Bill
+	err = json.Unmarshal(data, &bill)
+	return &bill, err
 }
 
 func (r *billRepository) CreatePayments(ctx context.Context, billID string, payments []domain.Payment) error {

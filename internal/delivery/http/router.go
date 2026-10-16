@@ -31,6 +31,7 @@ func NewRouter(
 	usageHandler *UsageHandler,
 	contactHandler *ContactHandler,
 	invitationHandler *InvitationHandler,
+	notificationHandler *NotificationHandler,
 	authMiddleware *middleware.AuthMiddleware,
 	ocrRateLimiter *middleware.RateLimiter,
 	authRateLimiter *middleware.RateLimiter,
@@ -63,6 +64,9 @@ func NewRouter(
 	protected.Use(middleware.ContentTypeValidator)
 
 	protected.Handle("/bills", http.HandlerFunc(billHandler.Fetch)).Methods("GET")
+	protected.HandleFunc("/notifications", notificationHandler.List).Methods("GET")
+	protected.HandleFunc("/notifications/{id}/read", notificationHandler.Read).Methods("PATCH")
+	protected.HandleFunc("/debts", notificationHandler.Debts).Methods("GET")
 	protected.Handle("/bills", http.HandlerFunc(billHandler.Create)).Methods("POST")
 
 	protected.Handle("/users/me", http.HandlerFunc(authHandler.GetMe)).Methods("GET")

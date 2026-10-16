@@ -89,7 +89,7 @@ func (r *personRepository) Create(ctx context.Context, person *domain.Person) er
 }
 
 func (r *personRepository) GetByBillID(ctx context.Context, billID string) ([]domain.Person, error) {
-	query := `SELECT id, bill_id, user_id, name, is_payer, percentage, created_at FROM persons WHERE bill_id = $1`
+	query := `SELECT id, bill_id, user_id, name, is_payer, percentage, created_at,COALESCE(email,''),custom_amount,share_amount,payment_info FROM persons WHERE bill_id = $1 ORDER BY created_at,id`
 	rows, err := r.Pool.Query(ctx, query, billID)
 	if err != nil {
 		return nil, err
@@ -99,7 +99,7 @@ func (r *personRepository) GetByBillID(ctx context.Context, billID string) ([]do
 	var persons []domain.Person
 	for rows.Next() {
 		var person domain.Person
-		if err := rows.Scan(&person.ID, &person.BillID, &person.UserID, &person.Name, &person.IsPayer, &person.Percentage, &person.CreatedAt); err != nil {
+		if err := rows.Scan(&person.ID, &person.BillID, &person.UserID, &person.Name, &person.IsPayer, &person.Percentage, &person.CreatedAt, &person.Email, &person.CustomAmount, &person.ShareAmount, &person.PaymentInfo); err != nil {
 			return nil, err
 		}
 		persons = append(persons, person)

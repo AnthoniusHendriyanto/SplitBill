@@ -45,6 +45,10 @@ func (h *BillHandler) Create(w http.ResponseWriter, r *http.Request) {
 	bill, err := h.BillUsecase.Create(r.Context(), userID, &req)
 	if err != nil {
 		log.Printf("Create bill error: %v", err)
+		if errors.Is(err, domain.ErrInvalidInput) {
+			writeError(w, http.StatusBadRequest, "INVALID_INPUT", err.Error())
+			return
+		}
 		if errors.Is(err, domain.ErrPremiumRequired) {
 			writeError(w, http.StatusForbidden, "PREMIUM_REQUIRED", "Custom and percentage split are premium features")
 			return
