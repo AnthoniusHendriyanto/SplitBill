@@ -7,6 +7,7 @@ import Skeleton from '../components/Skeleton';
 import { api } from '../lib/api';
 import { cn } from '../utils/cn';
 import ThemeToggle from '../components/ThemeToggle';
+import { savedShares } from '../utils/shares';
 
 const avatarColors = ['bg-brand-primary text-[#151714]', 'bg-brand-subtle text-primary', 'bg-surface-raised text-primary'];
 
@@ -37,21 +38,7 @@ function BillDetailPage() {
             serviceCharge: billData.service_charge,
             tax: billData.tax,
             assignments: {},
-            totals: persons.map(p => {
-              const personItems = items.filter(item =>
-                item.assigned_to?.includes(p.name)
-              );
-              const subtotal = personItems.reduce((sum, item) => sum + item.price, 0);
-              const serviceShare = subtotal * ((billData.service_charge || 0) / 100);
-              const taxShare = subtotal * ((billData.tax || 0) / 100);
-              return {
-                id: p.id, name: p.name,
-                subtotal,
-                tax: taxShare,
-                service: serviceShare,
-                total: subtotal + serviceShare + taxShare,
-              };
-            }),
+            totals: savedShares(billData),
           });
         })
         .catch(err => console.error('Failed to fetch bill:', err))

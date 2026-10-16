@@ -19,7 +19,6 @@ function Step4Shares({ receiptGrandTotal, setStep }) {
   const totalPercent = persons.reduce((s, p) => s + (p.percentage || 0), 0);
   const items = useMemo(() => bill.items || [], [bill.items]);
   const lineTotal = (item) => (item.unitPrice ?? item.price) * (item.qty ?? item.quantity ?? 1);
-  const totalBillSubtotal = items.reduce((sum, item) => sum + lineTotal(item), 0);
   const assignAllToAll = () => {
     persons.forEach(p => items.forEach(item => { if (!assignments[p.id]?.[item.id]) toggleAssignment(p.id, item.id); }));
   };
@@ -63,8 +62,8 @@ function Step4Shares({ receiptGrandTotal, setStep }) {
             <button
               key={tab}
                 onClick={() => {
-                  if (!isPremium && (tab === 'percent' || tab === 'custom')) {
-                    setItemError('Percent and Custom splits require Premium. Equal and By Item are available on your plan.');
+                  if (!isPremium && tab !== 'equal') {
+                    setItemError('By Item, Percent and Custom splits require Premium.');
                     return;
                   }
                   setSplitTab(tab);
@@ -78,7 +77,7 @@ function Step4Shares({ receiptGrandTotal, setStep }) {
               )}
               aria-pressed={splitTab === tab}
             >
-              {!isPremium && (tab === 'percent' || tab === 'custom') && <Icon name="lock" className="text-sm" />}
+              {!isPremium && tab !== 'equal' && <Icon name="lock" className="text-sm" />}
               {tab === 'equal' ? 'Equal' : tab === 'item' ? 'By Item' : tab === 'percent' ? 'Percent' : 'Custom'}
             </button>
           ))}
@@ -256,8 +255,8 @@ function Step4Shares({ receiptGrandTotal, setStep }) {
               ) : (
                 <>
                   <div className="flex justify-between items-center mb-3">
-                    <span className="text-[10px] font-medium text-tertiary tracking-wide">Set custom amounts</span>
-                    <span className="text-[10px] font-medium text-brand-primary bg-brand-primary/5 border border-brand-primary/10 px-2.5 py-0.5 rounded-lg">Total: Rp {totalBillSubtotal.toLocaleString('id-ID')}</span>
+                    <span className="text-[10px] font-medium text-tertiary tracking-wide">Final shares (fees and discount included)</span>
+                    <span className="text-[10px] font-medium text-brand-primary bg-brand-primary/5 border border-brand-primary/10 px-2.5 py-0.5 rounded-lg">Total: Rp {receiptGrandTotal.toLocaleString('id-ID')}</span>
                   </div>
                   <div className="space-y-4 max-h-[280px] overflow-y-auto pr-1 hide-scrollbar">
                     {persons.map((p) => {
@@ -285,6 +284,8 @@ function Step4Shares({ receiptGrandTotal, setStep }) {
           <div className="flex flex-wrap items-center gap-3">
             {itemError && <span role="alert" className="text-sm font-medium text-error max-w-sm">{itemError}</span>}
             <button onClick={() => {
+              if (!isPremium && splitTab !== 'equal') { setItemError('This split method requires Premium.'); return; }
+              if (splitTab === 'custom' && persons.reduce((s,p) => s + Math.round((p.customAmount || 0)*100),0) !== Math.round(receiptGrandTotal*100)) { setItemError('Custom final shares must add up to the grand total.'); return; }
               if (splitTab === 'equal') { updateBill({ splitType: 'equal' }); assignAllToAll(); }
               if (splitTab === 'percent' && totalPercent !== 100) {
                 setItemError(`Percentages must total 100% (currently ${totalPercent}%)`);

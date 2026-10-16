@@ -38,7 +38,6 @@ export default function App() {
   const completedBills = useBillStore((s) => s.completedBills);
   const isLoadingBills = useBillStore((s) => s.isLoadingBills);
   const billsError = useBillStore((s) => s.billsError);
-  const completeBill = useBillStore((s) => s.completeBill);
   const accessToken = useAuthStore((state) => state.accessToken);
   const isAuthenticated = !!accessToken;
   const step = ui?.step ?? 1;
@@ -83,12 +82,9 @@ export default function App() {
   const [ocrProgress, setOcrProgress] = useState(0);
   const handleSelectBill = useCallback((id) => setSelectedBillId(id), []);
   const handleNewBill = useCallback(() => { updateUI({ activeTab: 'bills', step: 1 }); }, [updateUI]);
-  const handleNext = useCallback(async () => {
-    if (step === 4) {
-      try { await completeBill('draft'); } catch (err) { console.error('Failed to auto-save draft:', err); }
-    }
+  const handleNext = useCallback(() => {
     setStep(s => Math.min(s + 1, 5));
-  }, [step, completeBill, setStep]);
+  }, [setStep]);
   const handleBack = useCallback(() => setStep(s => Math.max(s - 1, 1)), [setStep]);
   const [ocrStageIndex, setOcrStageIndex] = useState(0);
   const uploadedFileRef = useRef(null);
@@ -144,6 +140,7 @@ export default function App() {
       const data = await api.processOCR(file);
       clearInterval(interval);
       if (data?.items?.length) {
+		useBillStore.getState().resetBill();
         const items = data.items.map(item => ({ id: crypto.randomUUID(), name: item.name, price: item.price, qty: item.quantity || 1 }));
         updateBill({
           title: data.title || '',
@@ -192,8 +189,8 @@ export default function App() {
   );
 
   const receiptSubtotal = useMemo(
-    () => bill.ocrSubtotal || computedSubtotal,
-    [bill.ocrSubtotal, computedSubtotal]
+    () => computedSubtotal,
+    [computedSubtotal]
   );
 
   const receiptService = useMemo(() =>
@@ -207,12 +204,12 @@ export default function App() {
   );
 
   const receiptDiscount = useMemo(() =>
-    bill.discountMode === 'percent' ? Math.round(receiptSubtotal * (bill.discount || 0) / 100) : (bill.discount || 0),
-    [receiptSubtotal, bill.discount, bill.discountMode]
+    bill.discount || 0,
+    [bill.discount]
   );
 
   const receiptGrandTotal = useMemo(() =>
-    receiptSubtotal + receiptService + receiptTax - receiptDiscount,
+    Math.round((receiptSubtotal + receiptService + receiptTax - receiptDiscount) * 100) / 100,
     [receiptSubtotal, receiptService, receiptTax, receiptDiscount]
   );
 

@@ -6,6 +6,8 @@ import ConfirmDialog from './ConfirmDialog';
 import { cn } from '../utils/cn';
 import { api } from '../lib/api';
 import ModalFrame from './ModalFrame';
+import { savedShares } from '../utils/shares';
+import ShareSummary from './ShareSummary';
 
 function BillDetailsModal({ billId, onClose }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -15,6 +17,7 @@ function BillDetailsModal({ billId, onClose }) {
   const fetchCompletedBills = useBillStore((s) => s.fetchCompletedBills);
   const updateUI = useBillStore((s) => s.updateUI);
   const isAuthenticated = useAuthStore((s) => !!s.accessToken);
+  const userId = useAuthStore(s => s.user?.id);
   const [bill, setBill] = useState(null);
   const [loading, setLoading] = useState(() => isAuthenticated && !!billId);
   const [error, setError] = useState('');
@@ -37,6 +40,8 @@ function BillDetailsModal({ billId, onClose }) {
 
           setBill({
             id: billData.id,
+            ownerId: billData.user_id,
+            serverData: billData,
             title: billData.title,
             merchant: billData.merchant || '',
             billDate: billData.bill_date || '',
@@ -52,41 +57,7 @@ function BillDetailsModal({ billId, onClose }) {
             discount: billData.discount || 0,
             status: billData.status || 'pending',
             assignments: {},
-            totals: (() => {
-              const lineTotal = (item) => item.price * (item.quantity || 1);
-              const totalAmount = items.reduce((sum, item) => sum + lineTotal(item), 0);
-
-              const svcAmount = billData.service_mode === 'percent'
-                ? totalAmount * (billData.service_charge || 0) / 100
-                : (billData.service_charge || 0);
-              const taxAmount = billData.tax_mode === 'percent'
-                ? totalAmount * (billData.tax || 0) / 100
-                : (billData.tax || 0);
-
-              return persons.map(p => {
-                let subtotal = 0;
-                items.forEach(item => {
-                  const assigned = item.assigned_to || [];
-                  if (assigned.length === 0) {
-                    subtotal += lineTotal(item) / persons.length;
-                  } else if (assigned.includes(p.name)) {
-                    subtotal += lineTotal(item) / assigned.length;
-                  }
-                });
-
-                const ratio = totalAmount > 0 ? subtotal / totalAmount : 0;
-                const serviceShare = svcAmount * ratio;
-                const taxShare = taxAmount * ratio;
-
-                return {
-                  id: p.id, name: p.name,
-                  subtotal,
-                  tax: taxShare,
-                  service: serviceShare,
-                  total: subtotal + serviceShare + taxShare,
-                };
-              });
-            })(),
+            totals: savedShares(billData),
           });
         })
         .catch(err => setError(err.message || 'Could not load this bill. Please try again.'))
@@ -197,7 +168,7 @@ function BillDetailsModal({ billId, onClose }) {
                           })()}
                         </div>
                       </div>
-                      {bill.status === 'pending' && !isPayer && (
+                      {bill.ownerId === userId && bill.status === 'pending' && !isPayer && total > 0 && (
                         bill.personPaid?.[person.id]
                           ? <span className="text-xs font-bold text-[--brand-primary] flex items-center gap-1"><span className="material-symbols-outlined text-sm">check_circle</span> Paid</span>
                           : <button
@@ -232,9 +203,11 @@ function BillDetailsModal({ billId, onClose }) {
               )}
             </div>
           </div>
+          {bill.status !== 'draft' && <ShareSummary bill={bill.serverData} />}
         </div>
         <div className="p-4 sm:p-6 receipt-divider bg-surface-base flex flex-wrap justify-between gap-3">
           <button
+            disabled={bill.ownerId !== userId}
             onClick={() => setShowDeleteConfirm(true)}
             className="px-6 py-2.5 rounded-xl border border-red-500/20 text-red-400 font-bold text-sm hover:bg-red-500/10 transition-all cursor-pointer"
           >
@@ -246,15 +219,14 @@ function BillDetailsModal({ billId, onClose }) {
             message="Are you absolutely sure you want to delete this bill history?"
             confirmLabel="Delete"
             variant="danger"
-            onConfirm={() => { deleteCompletedBill(bill.id); onClose(); }}
+            onConfirm={async () => { try { await deleteCompletedBill(bill.id); onClose(); } catch (err) { setError(err.message); } }}
             onCancel={() => setShowDeleteConfirm(false)}
           />
-          {bill.status === 'draft' ? (
+          {bill.status === 'draft' && bill.ownerId === userId ? (
             <button
-                onClick={() => {
-                loadBillDraft(bill.id);
-                updateUI({ step: 4, activeTab: 'bills' });
-                onClose();
+                onClick={async () => {
+                try { await loadBillDraft(bill.id); updateUI({ step: 4, activeTab: 'bills' }); onClose(); }
+                catch (err) { setError(err.message); }
               }}
               className="px-6 py-2.5 rounded-xl bg-[--brand-primary] hover:bg-[--brand-primary-hover] text-[--text-inverse] font-bold text-sm transition-all cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-[0.98]"
             >
