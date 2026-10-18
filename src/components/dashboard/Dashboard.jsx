@@ -1,8 +1,9 @@
-import { memo, useMemo } from 'react';
+import { memo, useMemo, useEffect } from 'react';
 import useBillStore from '../../store/useBillStore';
 import useAuthStore from '../../store/useAuthStore';
 import Icon from '../Icon';
 import ActivityFeed from './ActivityFeed';
+import AssignmentInbox from './AssignmentInbox';
 
 const money = amount => `Rp ${Math.abs(amount).toLocaleString('id-ID')}`;
 
@@ -19,8 +20,20 @@ export default memo(function Dashboard({ setActiveTab, setStep, setSelectedBillI
     receivable: sum.receivable + (debt.direction === 'receivable' ? debt.amount : 0),
     payable: sum.payable + (debt.direction === 'payable' ? debt.amount : 0),
   }), { receivable: 0, payable: 0 }), [debts]);
+  // Keep balances live without duplicating the store's debts state.
+  useEffect(() => {
+    let pending = false;
+    const refresh = () => {
+      if (document.hidden || pending) return;
+      pending = true;
+      fetchDebts().finally(() => { pending = false; });
+    };
+    const timer = setInterval(refresh, 30000);
+    window.addEventListener('focus', refresh);
+    return () => { clearInterval(timer); window.removeEventListener('focus', refresh); };
+  }, [fetchDebts]);
   const recent = useMemo(() => [...bills].sort((a, b) => new Date(b.completedAt || 0) - new Date(a.completedAt || 0)).slice(0, 5), [bills]);
-  const newBill = () => { setActiveTab('bills'); setStep(1); };
+  const newBill = () => { useBillStore.getState().resetBill(); setActiveTab('bills'); setStep(1); };
   const net = metrics.receivable - metrics.payable;
   return (
     <div className="flex-1 overflow-y-auto">
@@ -45,6 +58,12 @@ export default memo(function Dashboard({ setActiveTab, setStep, setSelectedBillI
             <div className="receipt-divider pt-4 flex justify-between text-xs text-secondary"><span>Made for shared moments</span><Icon name="done_all" className="text-lg" /></div>
           </aside>
         </div>
+        <AssignmentInbox onSelectBill={setSelectedBillId} />
+        <section className="panel p-6 space-y-3"><h2 className="text-xl font-bold">Who owes whom</h2>
+          {balanceError && <p role="alert" className="text-error">{balanceError}</p>}
+          {!balanceLoading && !balanceError && !debts.length && <p>No outstanding payments.</p>}
+          {debts.map(d => <button key={`${d.bill_id}:${d.person_id}:${d.direction}`} onClick={() => setSelectedBillId(d.bill_id)} className="block w-full py-3 text-left border-b border-border"><span className="font-semibold">{d.direction === 'payable' ? `You owe ${d.name}` : `${d.name} owes you`}: {money(d.amount)}</span><span className="block text-sm text-secondary">{d.title}</span></button>)}
+        </section>
         <div>
           <div className="flex justify-between items-center gap-4 mb-4"><h2 className="text-xl font-bold tracking-tight">Recent splits</h2><button className="text-sm font-semibold text-brand-primary min-h-11 flex items-center gap-2" onClick={() => setActiveTab('history')}>View history <Icon name="arrow_forward" className="text-base" /></button></div>
           <ActivityFeed bills={recent} isLoading={isLoading} error={error} onSelectBill={setSelectedBillId} onNewBill={newBill} />

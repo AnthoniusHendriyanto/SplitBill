@@ -4,7 +4,7 @@ import useAuthStore from '../store/useAuthStore';
 import CurrencyInput from './CurrencyInput';
 import Icon from './Icon';
 import { cn } from '../utils/cn';
-import { splitError, calculatePersonTotals } from '../utils/shares';
+import { splitError, calculateShares } from '../utils/shares';
 
 function Step4Shares({ receiptGrandTotal, setStep }) {
   const bill = useBillStore((s) => s.bill);
@@ -20,7 +20,7 @@ function Step4Shares({ receiptGrandTotal, setStep }) {
   const totalPercent = persons.reduce((s, p) => s + (p.percentage || 0), 0);
   const items = useMemo(() => bill.items || [], [bill.items]);
   const lineTotal = (item) => (item.unitPrice ?? item.price) * (item.qty ?? item.quantity ?? 1);
-  const previews = calculatePersonTotals(bill, assignments);
+  const previews = calculateShares(bill, assignments);
   const assignAllToAll = () => {
     persons.forEach(p => items.forEach(item => { if (!assignments[p.id]?.[item.id]) toggleAssignment(p.id, item.id); }));
   };
@@ -64,8 +64,8 @@ function Step4Shares({ receiptGrandTotal, setStep }) {
             <button
               key={tab}
                 onClick={() => {
-                  if (!isPremium && (tab === 'percent' || tab === 'custom')) {
-                    setItemError('Percent and Custom splits require Premium. Equal and By Item are available on your plan.');
+                  if (!isPremium && tab !== 'equal') {
+                    setItemError('By Item, Percent and Custom splits require Premium.');
                     return;
                   }
                   setSplitTab(tab);
@@ -79,7 +79,7 @@ function Step4Shares({ receiptGrandTotal, setStep }) {
               )}
               aria-pressed={splitTab === tab}
             >
-              {!isPremium && (tab === 'percent' || tab === 'custom') && <Icon name="lock" className="text-sm" />}
+              {!isPremium && tab !== 'equal' && <Icon name="lock" className="text-sm" />}
               {tab === 'equal' ? 'Equal' : tab === 'item' ? 'By Item' : tab === 'percent' ? 'Percent' : 'Custom'}
             </button>
           ))}

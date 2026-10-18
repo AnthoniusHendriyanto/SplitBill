@@ -3,12 +3,14 @@ import { motion } from 'framer-motion';
 import useBillStore from '../store/useBillStore';
 import DebtMap from './DebtMap';
 import Icon from './Icon';
+import ShareSummary from './ShareSummary';
 
 function Step5Settlement({
   receiptSubtotal, receiptDiscount, personTotals, setActiveTab
 }) {
   const [toastMsg, setToastMsg] = useState(null);
   const [saving, setSaving] = useState(false);
+  const saved = useBillStore(s => s.savedBill);
   const bill = useBillStore((s) => s.bill);
   const updatePerson = useBillStore((s) => s.updatePerson);
   const completeBill = useBillStore((s) => s.completeBill);
@@ -20,6 +22,7 @@ function Step5Settlement({
     setSaving(true);
     try {
       await completeBill(status);
+      if (status !== 'draft') { setSaving(false); return; }
     } catch (err) {
       setToastMsg(err?.message || 'Failed to save bill');
       setTimeout(() => setToastMsg(null), 5000);
@@ -34,6 +37,8 @@ function Step5Settlement({
   const totalTax = bill.taxMode === 'percent' ? receiptSubtotal * (bill.tax / 100) : (bill.tax || 0);
   const totalTaxAndService = totalTax + totalService;
   const personsMap = new Map(bill.persons.map(p => [p.id, p]));
+
+  if (saved) return <div className="space-y-4"><ShareSummary bill={saved} /><button className="btn-primary" onClick={() => { resetBill(); updateUI({ step: 1 }); setActiveTab('dashboard'); }}>Back to Home</button></div>;
 
   return (
     <motion.div
@@ -85,7 +90,17 @@ function Step5Settlement({
                     <span className="text-[8px] font-medium text-tertiary uppercase tracking-wider">Participant</span>
                   </div>
                 </div>
-                <p className="text-xs text-secondary">Includes tax, service, and discount.</p>
+                <div className="space-y-1 pt-3 border-t border-white/[0.04] text-[11px] text-secondary">
+                  <div className="flex justify-between">
+                    <span>Items</span>
+                    <span className="font-medium text-primary">Rp {p.subtotal.toLocaleString('id-ID')}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Tax & Service</span>
+                    <span className="font-medium text-primary">Rp {((p.tax || 0) + (p.service || 0)).toLocaleString('id-ID')}</span>
+                  </div>
+                  {p.discount > 0 && <div className="flex justify-between"><span>Discount</span><span>−Rp {p.discount.toLocaleString('id-ID')}</span></div>}
+                </div>
                 <div className="mt-3 pt-3 border-t border-white/[0.04] flex justify-between items-center">
                   <span className="text-[9px] font-semibold text-brand-primary uppercase tracking-wider">Total due</span>
                   <span className="text-sm font-bold text-primary">Rp {p.total.toLocaleString('id-ID')}</span>
@@ -164,25 +179,7 @@ function Step5Settlement({
               <Icon name="check_circle" className="text-sm" /> {saving ? 'Saving…' : 'Finalize Split'}
             </button>
           </div>
-          <button
-            onClick={() => {
-              const payer = bill.persons.find(p => p.id === bill.payerId);
-              if (!payer) { setToastMsg('Please select a payer first.'); setTimeout(() => setToastMsg(null), 3000); return; }
-              const otherTotals = personTotals.filter(p => p.id !== bill.payerId && p.total > 0);
-              const totalToReceive = totalGrand - (personTotals.find(p => p.id === bill.payerId)?.total || 0);
-              const message = `✨ *SplitMate Settlement: ${bill.title || 'Untitled'}* ✨\n\nTotal: *Rp ${totalToReceive.toLocaleString('id-ID')}*\n${otherTotals.map(p => `💸 ${p.name}: Rp ${p.total.toLocaleString('id-ID')}`).join('\n')}\n\n🏦 Transfer to ${payer.name}\n${payer.paymentInfo?.bank || 'Bank'}: ${payer.paymentInfo?.accountNumber || 'Account'}`;
-              const waWindow = window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
-              if (!waWindow || waWindow.closed) {
-                navigator.clipboard?.writeText(message);
-                setToastMsg('Copied to clipboard.');
-                setTimeout(() => setToastMsg(null), 5000);
-              }
-            }}
-            className="w-full h-11 rounded-2xl bg-[--brand-primary-subtle] border border-[--brand-primary]/20 hover:bg-[--brand-primary-subtle] text-[--brand-primary] text-xs font-medium transition-all flex items-center justify-center gap-2 cursor-pointer outline-none"
-          >
-            <Icon name="share" className="text-sm" />
-            Share via WhatsApp
-          </button>
+          <p className="text-xs text-secondary">Finalize to notify linked friends and share the saved summary.</p>
         </div>
       </div>
 

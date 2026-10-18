@@ -43,6 +43,7 @@ function Step1Scan({
   const bill = useBillStore((s) => s.bill);
   const updateBill = useBillStore((s) => s.updateBill);
   const addItem = useBillStore((s) => s.addItem);
+  const resetBill = useBillStore((s) => s.resetBill);
   const { imageUrl, title } = bill;
   const isScanningOrImage = imageUrl || isScanning;
 
@@ -77,7 +78,7 @@ function Step1Scan({
             <div className="receipt-panel p-6">
               <div className="flex gap-3 items-center mb-3"><Icon name="edit_note" className="text-2xl" /><h2 className="text-lg font-bold">No receipt? No problem.</h2></div>
               <p className="text-sm text-secondary mb-5">Add the items and prices yourself.</p>
-              <button type="button" onClick={() => { updateBill({ title: 'Manual Ledger', imageUrl: '', items: [], persons: [] }); addItem(); setStep(2); }} className="btn-secondary w-full">Enter Manually <Icon name="arrow_forward" className="text-lg" /></button>
+              <button type="button" onClick={() => { resetBill(); updateBill({ title: 'Manual Ledger' }); addItem(); setStep(2); }} className="btn-secondary w-full">Enter Manually <Icon name="arrow_forward" className="text-lg" /></button>
             </div>
           </aside>
         </div>

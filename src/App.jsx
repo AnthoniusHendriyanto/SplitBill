@@ -144,6 +144,7 @@ export default function App() {
       const data = await api.processOCR(file);
       clearInterval(interval);
       if (data?.items?.length) {
+		useBillStore.getState().resetBill();
         const items = data.items.map(item => ({ id: crypto.randomUUID(), name: item.name, price: item.price, qty: item.quantity || 1 }));
         updateBill({
           title: data.title || '',

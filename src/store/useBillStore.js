@@ -3,7 +3,7 @@ import { persist } from 'zustand/middleware';
 const createId = () => crypto.randomUUID();
 import { api } from '../lib/api';
 import useAuthStore from './useAuthStore';
-import { billAmounts, calculatePersonTotals, splitError } from '../utils/shares';
+import { billAmounts, calculateShares, splitError } from '../utils/shares';
 
 let accountEpoch = 0;
 let listRequest = 0;
@@ -115,12 +115,16 @@ const useBillStore = create(
           serviceMode: 'percent',
           discount: 0,
           discountMode: 'amount',
+          ocrConfidence: 0,
+          ocrSubtotal: 0,
+          ocrGrandTotal: 0,
           payerId: null,
           splitType: 'equal',
           date: new Date().toISOString().slice(0, 10),
         },
         assignments: {},
         pendingSave: null,
+        savedBill: null,
       }),
 
       completedBills: [],
@@ -202,6 +206,10 @@ const useBillStore = create(
         const isAuth = !!useAuthStore.getState().accessToken;
         if (!isAuth) throw new Error('Must be logged in to save bills');
         const status = customStatus || 'pending';
+        if (state.savedBill) {
+          if (state.savedBill.user_id === useAuthStore.getState().user?.id) return state.savedBill;
+          throw new Error('Start a new bill for this account.');
+        }
         const validation = splitError(status === 'draft' ? { ...state.bill, splitType: 'equal' } : state.bill);
         if (validation) throw new Error(validation);
         const epoch = accountEpoch;
@@ -236,16 +244,25 @@ const useBillStore = create(
         };
         const payload = JSON.stringify(billData);
         const userId = useAuthStore.getState().user?.id;
-        const pendingSave = state.pendingSave?.payload === payload && state.pendingSave.userId === userId
-          ? state.pendingSave : { payload, userId, key: createId() };
+        // ponytail: an ambiguous save may already have landed. Until it is resolved, refuse a
+        // changed payload rather than risk a second bill for the same receipt.
+        if (state.pendingSave && (state.pendingSave.payload !== payload || state.pendingSave.userId !== userId)) {
+          throw new Error('A previous save is unresolved. Retry the same values, or start a new bill after checking History.');
+        }
+        const pendingSave = state.pendingSave || { payload, userId, key: createId() };
         set({ isSaving: true, pendingSave });
         try {
           // ponytail: resuming saves a copy; preserve the original draft rather than delete-before-create.
           const saved = await api.createBill({ ...billData, request_key: pendingSave.key });
           if (epoch !== accountEpoch) throw new Error('Account changed while saving.');
+          set({ pendingSave: null, savedBill: status === 'draft' ? null : saved });
           await Promise.all([get().fetchCompletedBills(), get().fetchDebts()]);
           if (epoch !== accountEpoch) throw new Error('Account changed while saving.');
           return saved;
+        } catch (err) {
+          // ponytail: a client-rejected payload is not an ambiguous save; drop the key so the user can correct and resubmit.
+          if (err?.status === 400) set({ pendingSave: null });
+          throw err;
         } finally {
           if (epoch === accountEpoch) set({ isSaving: false });
         }
@@ -321,7 +338,7 @@ const useBillStore = create(
       // Selection Strategy: Calculate Shares
       calculateTotals: () => {
         const { bill, assignments } = get();
-        return calculatePersonTotals(bill, assignments);
+        return calculateShares(bill, assignments);
       },
 
       settings: {

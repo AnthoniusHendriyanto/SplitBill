@@ -2,7 +2,7 @@ import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import useBillStore from '../store/useBillStore';
 import useAuthStore from '../store/useAuthStore';
 import { api } from '../lib/api';
-import { billAmounts, calculatePersonTotals, savedShares, splitError } from '../utils/shares';
+import { billAmounts, calculateShares, savedShares, splitError } from '../utils/shares';
 
 const baseBill = () => ({
   id: 'original-draft', title: 'Lunch', date: '2026-10-18', splitType: 'equal', payerId: 'a',
@@ -23,11 +23,11 @@ it('matches backend allocations for all split types, discount, fees, and quantit
   const bill = { ...baseBill(), items: [{ id: 'meal', name: 'Meal', price: 100, quantity: 3 }], serviceCharge: 10, serviceMode: 'percent', tax: 20, discount: 14.99,
     persons: [{ id: 'a', name: 'A', percentage: 20, customAmount: 50 }, { id: 'b', name: 'B', percentage: 30, customAmount: 100 }, { id: 'c', name: 'C', percentage: 50, customAmount: 185.01 }] };
   for (const [splitType, expected] of Object.entries({ equal: [111.67, 111.67, 111.67], percentage: [67, 100.5, 167.51], custom: [50, 100, 185.01], shared_items: [0, 0, 335.01] })) {
-    const totals = calculatePersonTotals({ ...bill, splitType }, { c: { meal: true } });
+    const totals = calculateShares({ ...bill, splitType }, { c: { meal: true } });
     expect(totals.map(p => p.total)).toEqual(expected);
     expect(totals.reduce((sum, p) => sum + Math.round(p.total * 100), 0)).toBe(33501);
   }
-  const thirds = calculatePersonTotals({ ...baseBill(), persons: bill.persons }, { c: { meal: true } });
+  const thirds = calculateShares({ ...baseBill(), persons: bill.persons }, { c: { meal: true } });
   expect(thirds.map(p => p.total)).toEqual([33.34, 33.33, 33.33]);
   expect(billAmounts({ ...baseBill(), ocrSubtotal: 999, discount: 10, discountMode: 'percent' }).total).toBe(90);
   expect(splitError({ ...baseBill(), splitType: 'custom' })).toMatch(/Custom final/);
@@ -51,8 +51,9 @@ it('keeps the original draft and retries the same payload with one key', async (
   expect(create.mock.calls[0][0].request_key).toMatch(/^[0-9a-f-]{36}$/);
   expect(create.mock.calls[0][0].persons[1]).toMatchObject({ user_id: 'friend', custom_amount: 50 });
   useBillStore.getState().updateBill({ title: 'Changed' });
-  await useBillStore.getState().completeBill();
-  expect(create.mock.calls[2][0].request_key).not.toBe(create.mock.calls[0][0].request_key);
+  // The bill already saved, so the saved-bill guard blocks a second save for this draft.
+  await expect(useBillStore.getState().completeBill()).rejects.toThrow('Start a new bill');
+  expect(create).toHaveBeenCalledTimes(2);
 });
 
 it('restores all draft split data and assignments by ID, not duplicate names', async () => {

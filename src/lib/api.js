@@ -93,20 +93,20 @@ async function request(path, options = {}) {
         const retryBody = await retryRes.json().catch(() => ({}));
         checkSession();
         if (retryBody.success) return retryBody.data;
-        throw new Error(getErrorMessage({
+        throw Object.assign(new Error(getErrorMessage({
           code: retryBody.error?.code,
-          message: retryBody.message,
-        }));
+          message: retryBody.error?.message || retryBody.message,
+        })), { status: retryRes.status });
       }
       useAuthStore.getState().logout();
       throw new Error('Session expired. Please login again.');
     }
 
     if (!body.success) {
-      throw new Error(getErrorMessage({
+      throw Object.assign(new Error(getErrorMessage({
         code: body.error?.code,
-        message: body.message,
-      }));
+        message: body.error?.message || body.message,
+      })), { status: res.status });
     }
 
     return body.data;
@@ -115,11 +115,14 @@ async function request(path, options = {}) {
     if (err.name === 'AbortError') {
       throw new Error('Request timed out. Please try again.', { cause: err });
     }
-    throw new Error(err.message, { cause: err });
+    throw err;
   }
 }
 
 export const api = {
+  getNotifications: (page = 1) => request(`/api/v1/notifications?page=${page}`),
+  readNotification: id => request(`/api/v1/notifications/${id}/read`, { method: 'PATCH' }),
+  getDebts: () => request('/api/v1/debts'),
   // Auth
   login: (email, password) =>
     request('/api/v1/auth/login', {
@@ -145,7 +148,6 @@ export const api = {
   },
 
   // Bills
-  getDebts: () => request('/api/v1/debts'),
   getBills: (page = 1, limit = 20, fromDate = '', toDate = '') => {
     const params = new URLSearchParams({ page, limit });
     if (fromDate) params.append('from_date', fromDate);

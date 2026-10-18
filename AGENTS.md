@@ -22,14 +22,14 @@ Older inventory/status sections below retain historical context; this contract a
 
 | File | Purpose |
 |------|---------|
-| `src/App.jsx` | Wizard orchestrator (~245 lines, extracted from 3381) |
+| `src/App.jsx` | Five-step wizard orchestrator and OCR integration |
 | `src/components/Step1Scan.jsx` | Camera/upload/manual → OCR |
 | `src/components/Step2Ledger.jsx` | Edit items, service charge, tax |
 | `src/components/Step3People.jsx` | Add people, select payer |
 | `src/components/Step4Shares.jsx` | Split method + assignment grid + premium gating |
 | `src/components/Step5Settlement.jsx` | Summary + DebtMap + save |
-| `src/components/Dashboard.jsx` | KPI cards (receivable/payable/pending/spending), month selector for Spending, real month-over-month trend from `bill_date`, activity feed, charts, sidebar widgets |
-| `src/components/SettingsPage.jsx` | 3-tab settings (Account, Security, Billing) |
+| `src/components/Dashboard.jsx` | Re-exports dashboard/Dashboard: balances, assignment inbox, counterpart debts, recent splits |
+| `src/components/SettingsPage.jsx` | Account, Security, Billing tabs |
 | `src/components/HelpCenterModal.jsx` | Usage guide modal |
 | `src/components/BillDetailsModal.jsx` | Completed bill breakdown |
 | `src/components/SideNavBar.jsx` | Desktop nav with tier badge |
@@ -37,7 +37,7 @@ Older inventory/status sections below retain historical context; this contract a
 | `src/store/useBillStore.js` | Bill data, UI step (persisted), calculations, API sync |
 | `src/store/useAuthStore.js` | Auth state (uses centralized api.js) |
 | `src/lib/api.js` | Centralized API client (AbortController, 30s, auto-refresh) |
-| `src/utils/shares.js` | Final-cent allocation mirroring the backend |
+| `src/utils/shares.js` | Reconciled preview shares and persisted share display; IDR only |
 | `src/pages/LoginPage.jsx` | Login page |
 | `src/pages/RegisterPage.jsx` | Register page |
 | `src/pages/BillDetailPage.jsx` | Backend-bill detail view |
@@ -67,10 +67,28 @@ Older inventory/status sections below retain historical context; this contract a
 | `internal/repository/postgres/ocr_service.go` | Groq vision OCR (sole path; no local fallback); model from `GROQ_VISION_MODEL` |
 | `internal/domain/bill.go` | Data models (Bill, Item, Person with is_payer, Payment) |
 | `internal/domain/ocr_service.go` | OCRItem with Quantity, OCRResult |
-| `migrations/001-012` | Database schema (12 migrations) |
+| `migrations/` | 17 files: 001–008, 011, 013–020 |
 | `run_migrations.sh` | Idempotent migration runner |
 
 ---
+
+## Current assignment integration (October 2026)
+
+- Preserve Manual/AI → Ledger → People → Shares → Summary. Finalize before notification/sharing.
+- Custom is final amounts including fees/discount; all non-Equal methods remain premium-gated.
+- Step3 links self or existing friends by validated user ID; names/unmatched emails stay unlinked.
+- Atomic backend save persists accounts, shares, payments, recipient events, usage, and retry snapshot.
+- Home AssignmentInbox and debts refresh every 30 seconds while visible. Reading is not paying.
+- ShareSummary uses saved totals, Web Share/WhatsApp/copy. No public links or direct IG guarantee.
+- SMTP is not used: Resend key/sender configure delivery; absent keys leave jobs queued. Registration
+  lacks mailbox verification, so emails contain generic authenticated links, not financial details.
+- Only creators can mutate bills. Identity is never inferred from name or payer status.
+- Settings has three tabs; no multi-currency formatter, Stripe checkout, or offline guest mode.
+
+## Historical notes (superseded where conflicting with current behavior)
+
+Preserved below as an append-only history. In particular, prior localStorage-token and name-matching
+descriptions are not current implementation guidance. See README and workspace business-flow.md.
 
 ### Known Consideration — Resolved
 

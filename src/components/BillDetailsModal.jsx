@@ -7,6 +7,7 @@ import { cn } from '../utils/cn';
 import { api } from '../lib/api';
 import ModalFrame from './ModalFrame';
 import { savedShares } from '../utils/shares';
+import ShareSummary from './ShareSummary';
 
 function BillDetailsModal({ billId, onClose }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -43,6 +44,7 @@ function BillDetailsModal({ billId, onClose }) {
           setBill({
             id: billData.id,
             ownerId: billData.user_id,
+            serverData: billData,
             title: billData.title,
             merchant: billData.merchant || '',
             billDate: billData.bill_date || '',
@@ -199,6 +201,7 @@ function BillDetailsModal({ billId, onClose }) {
               )}
             </div>
           </div>
+          {bill.status !== 'draft' && <ShareSummary bill={bill.serverData} />}
         </div>
         <div className="p-4 sm:p-6 receipt-divider bg-surface-base flex flex-wrap justify-between gap-3">
           {bill.ownerId === userId && <button
@@ -213,21 +216,14 @@ function BillDetailsModal({ billId, onClose }) {
             message="Are you absolutely sure you want to delete this bill history?"
             confirmLabel="Delete"
             variant="danger"
-            onConfirm={async () => {
-              setShowDeleteConfirm(false);
-              try { await deleteCompletedBill(bill.id); onClose(); }
-              catch (err) { setError(err.message); }
-            }}
+            onConfirm={async () => { try { await deleteCompletedBill(bill.id); onClose(); } catch (err) { setError(err.message); } }}
             onCancel={() => setShowDeleteConfirm(false)}
           />
           {bill.status === 'draft' && bill.ownerId === userId ? (
             <button
                 onClick={async () => {
-                try {
-                  await loadBillDraft(bill.id);
-                  updateUI({ step: 4, activeTab: 'bills' });
-                  onClose();
-                } catch (err) { setError(err.message); }
+                try { await loadBillDraft(bill.id); updateUI({ step: 4, activeTab: 'bills' }); onClose(); }
+                catch (err) { setError(err.message); }
               }}
               className="px-6 py-2.5 rounded-xl bg-[--brand-primary] hover:bg-[--brand-primary-hover] text-[--text-inverse] font-bold text-sm transition-all cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-[0.98]"
             >

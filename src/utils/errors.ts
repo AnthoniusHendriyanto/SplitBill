@@ -27,6 +27,7 @@ export function getErrorMessage(err: ErrorArg | null | undefined): string {
   if (!err) return 'Something went wrong. Please try again.';
 
   const code = err?.code;
+  if (code === 'INVALID_INPUT' && err.message) return err.message;
   if (code && ERROR_MESSAGES[code]) {
     return ERROR_MESSAGES[code];
   }

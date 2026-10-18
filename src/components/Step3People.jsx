@@ -13,6 +13,7 @@ function Step3People({ receiptGrandTotal, setStep }) {
   const addPerson = useBillStore((s) => s.addPerson);
   const isAuthenticated = useAuthStore((s) => !!s.accessToken);
   const [participantInput, setParticipantInput] = useState('');
+  const [emailInput, setEmailInput] = useState('');
   const [contacts, setContacts] = useState([]);
   const [loadingContacts, setLoadingContacts] = useState(isAuthenticated);
   const [payerError, setPayerError] = useState('');
@@ -26,9 +27,12 @@ function Step3People({ receiptGrandTotal, setStep }) {
   }, [isAuthenticated]);
 
   const handleAddPerson = (name) => {
-    const trimmed = (name || '').trim();
+    const friend = contacts.find(c => c.connected_user_id && c.email?.toLowerCase() === emailInput.trim().toLowerCase());
+    const trimmed = (friend?.name || name || '').trim();
     if (!trimmed) return;
-    addPerson(trimmed);
+    if (friend && bill.persons.some(p => p.userId === friend.connected_user_id)) { setPayerError('This friend is already included.'); return; }
+    addPerson(friend?.name || trimmed, friend?.email || '', friend?.connected_user_id || '');
+    setEmailInput('');
     if (isAuthenticated) {
       api.createContact(trimmed).catch(() => {});
     }
@@ -140,6 +144,9 @@ function Step3People({ receiptGrandTotal, setStep }) {
             <span className="bg-brand-primary text-[#151714] rounded-full min-w-8 h-8 px-2 flex items-center justify-center font-bold text-sm">{bill.persons.length}</span>
           </div>
 
+          <label htmlFor="friend-email" className="block text-sm text-secondary mb-2">Friend email (optional)</label>
+          <input id="friend-email" type="email" value={emailInput} onChange={e => setEmailInput(e.target.value)} className="w-full h-11 px-4 mb-2 bg-surface-base border border-border-strong rounded-xl" placeholder="Find an existing connected friend" />
+          <p className="text-xs text-secondary mb-4">{contacts.find(c => c.connected_user_id && c.email?.toLowerCase() === emailInput.trim().toLowerCase())?.name || 'No linked friend selected. Add a name below; no account or email notification is required.'}</p>
           <label htmlFor="step3-participant" className="block text-sm font-medium text-secondary mb-2">Participant name</label>
           <div className="flex gap-2 mb-5">
             <input
@@ -242,6 +249,7 @@ function Step3People({ receiptGrandTotal, setStep }) {
                         {p.name.charAt(0) || "?"}
                       </div>
                       <span className="text-sm font-semibold text-primary max-w-[120px] truncate">{p.name || "Unnamed"}</span>
+                      {p.userId && <span className="text-xs text-secondary">Linked</span>}
                       <button
                         onClick={() => removePerson(p.id)}
                         className="icon-button hover:text-error"
