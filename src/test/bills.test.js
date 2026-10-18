@@ -120,3 +120,53 @@ it('does not refresh or retry an old request under a new account', async () => {
   await expect(request).rejects.toThrow('Account changed');
   expect(fetch).toHaveBeenCalledTimes(1);
 });
+
+it('removes the source draft after finalising a resumed draft', async () => {
+  vi.spyOn(api, 'createBill').mockResolvedValue({ id: 'new-bill', user_id: 'actor' });
+  const remove = vi.spyOn(api, 'deleteBill').mockResolvedValue({});
+  vi.spyOn(api, 'getBills').mockResolvedValue({ data: [], pagination: { page: 1, total_pages: 0, total_items: 0 } });
+  vi.spyOn(api, 'getDebts').mockResolvedValue([]);
+  useBillStore.setState({ bill: baseBill(), resumedDraftId: 'draft-1' });
+
+  await useBillStore.getState().completeBill('pending');
+
+  expect(remove).toHaveBeenCalledWith('draft-1');
+  expect(useBillStore.getState().resumedDraftId).toBeNull();
+  expect(useBillStore.getState().savedBill).toMatchObject({ id: 'new-bill' });
+});
+
+it('keeps the source draft when the resumed draft is saved again as a draft', async () => {
+  vi.spyOn(api, 'createBill').mockResolvedValue({ id: 'new-draft', user_id: 'actor' });
+  const remove = vi.spyOn(api, 'deleteBill').mockResolvedValue({});
+  vi.spyOn(api, 'getBills').mockResolvedValue({ data: [], pagination: { page: 1, total_pages: 0, total_items: 0 } });
+  vi.spyOn(api, 'getDebts').mockResolvedValue([]);
+  useBillStore.setState({ bill: baseBill(), resumedDraftId: 'draft-1' });
+
+  await useBillStore.getState().completeBill('draft');
+
+  expect(remove).not.toHaveBeenCalled();
+  expect(useBillStore.getState().resumedDraftId).toBe('draft-1');
+});
+
+it('completes the save when draft cleanup fails', async () => {
+  vi.spyOn(api, 'createBill').mockResolvedValue({ id: 'new-bill', user_id: 'actor' });
+  vi.spyOn(api, 'deleteBill').mockRejectedValue(new Error('network lost'));
+  vi.spyOn(api, 'getBills').mockResolvedValue({ data: [], pagination: { page: 1, total_pages: 0, total_items: 0 } });
+  vi.spyOn(api, 'getDebts').mockResolvedValue([]);
+  useBillStore.setState({ bill: baseBill(), resumedDraftId: 'draft-1' });
+
+  await expect(useBillStore.getState().completeBill('pending')).resolves.toMatchObject({ id: 'new-bill' });
+  expect(useBillStore.getState().savedBill).toMatchObject({ id: 'new-bill' });
+});
+
+it('does not delete the draft when the created bill is the draft itself', async () => {
+  vi.spyOn(api, 'createBill').mockResolvedValue({ id: 'draft-1', user_id: 'actor' });
+  const remove = vi.spyOn(api, 'deleteBill').mockResolvedValue({});
+  vi.spyOn(api, 'getBills').mockResolvedValue({ data: [], pagination: { page: 1, total_pages: 0, total_items: 0 } });
+  vi.spyOn(api, 'getDebts').mockResolvedValue([]);
+  useBillStore.setState({ bill: baseBill(), resumedDraftId: 'draft-1' });
+
+  await useBillStore.getState().completeBill('pending');
+
+  expect(remove).not.toHaveBeenCalled();
+});

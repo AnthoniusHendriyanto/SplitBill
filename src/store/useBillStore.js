@@ -124,6 +124,7 @@ const useBillStore = create(
         },
         assignments: {},
         pendingSave: null,
+        resumedDraftId: null,
         savedBill: null,
       }),
 
@@ -133,6 +134,7 @@ const useBillStore = create(
       debtsError: null,
       isLoadingDebts: false,
       pendingSave: null,
+      resumedDraftId: null,
 
       resetAccountData: () => {
         accountEpoch++;
@@ -252,10 +254,21 @@ const useBillStore = create(
         const pendingSave = state.pendingSave || { payload, userId, key: createId() };
         set({ isSaving: true, pendingSave });
         try {
-          // ponytail: resuming saves a copy; preserve the original draft rather than delete-before-create.
           const saved = await api.createBill({ ...billData, request_key: pendingSave.key });
           if (epoch !== accountEpoch) throw new Error('Account changed while saving.');
           set({ pendingSave: null, savedBill: status === 'draft' ? null : saved });
+          // Finalising a resumed draft supersedes it. Delete only after the new bill exists, so a
+          // failed create can never lose the user's work. Deliberately BEFORE the refetches below so
+          // History is already clean when fetchCompletedBills resolves.
+          // ponytail: swallows cleanup failure; the orphan stays visible in History and is still
+          // deletable via the owner-gated Delete button. Escalate to a backend in-place draft
+          // update if orphan cleanup ever needs to be guaranteed.
+          if (state.resumedDraftId && status !== 'draft' && saved?.id !== state.resumedDraftId) {
+            try {
+              await api.deleteBill(state.resumedDraftId);
+              set({ resumedDraftId: null });
+            } catch { /* bill is saved; orphan remains manually deletable */ }
+          }
           await Promise.all([get().fetchCompletedBills(), get().fetchDebts()]);
           if (epoch !== accountEpoch) throw new Error('Account changed while saving.');
           return saved;
@@ -306,6 +319,7 @@ const useBillStore = create(
             },
             assignments: Object.fromEntries(persons.map(p => [p.id, Object.fromEntries((billData.items || []).filter(item => item.assigned_person_ids?.includes(p.id)).map(item => [item.id, true]))])),
             pendingSave: null,
+            resumedDraftId: billData.id,
           });
         } catch (err) {
           console.error('Failed to load bill draft:', err);
@@ -368,6 +382,7 @@ const useBillStore = create(
         assignments: state.assignments,
         ui: state.ui,
         pendingSave: state.pendingSave,
+        resumedDraftId: state.resumedDraftId,
       }),
       merge: (persisted, current) => {
         const merged = { ...current, ...persisted };

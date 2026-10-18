@@ -2,13 +2,13 @@
 
 ## Current reliability contract (October 2026)
 
-- Saves send a stable `request_key` for retries of the same payload, plus explicit participant `user_id` and `custom_amount`. Resumed drafts save as copies; no delete-before-create.
+- Saves send a stable `request_key` for retries of the same payload, plus explicit participant `user_id` and `custom_amount`. Finalising a resumed draft deletes the source draft only after the new bill is created; saving the draft again as a draft keeps the original.
 - `src/utils/shares.js` mirrors backend final-cent allocation. Custom amounts include fees and discount; equal/percentage/item splits conserve the grand total. Saved views prefer `share_amount`, with payment-ID fallback for older bills.
 - Equal and By Item are free. Percentage and custom require an unexpired premium tier. Currency is IDR-only; local formatting preferences never change payable amounts.
 - Dashboard balances use `/api/v1/debts`, independently of paginated history. History exposes Load more and labels search as filtering loaded rows.
 - Account changes clear bill/balance/draft state. Session and request generations prevent stale responses from crossing accounts.
 - Settings has three tabs (Account, Security, Billing). Authentication uses routed pages; the unused AuthOverlay was removed.
-- Run `npm run lint`, `npm test`, and `npm run build`. Tests include save retry safety, draft restoration, allocation parity, account isolation, and pagination.
+- Run `npm run lint`, `npm test`, and `npm run build`. Tests include save retry safety, draft restoration and source-draft cleanup, allocation parity, account isolation, and pagination.
 
 Older inventory/status sections below retain historical context; this contract and current source take precedence.
 
