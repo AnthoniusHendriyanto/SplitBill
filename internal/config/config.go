@@ -7,8 +7,10 @@ import (
 )
 
 type Config struct {
-	ResendAPIKey          string
-	EmailFrom             string
+	ResendAPIKey string
+	EmailFrom    string
+	// DBURL overrides the discrete DB_* fields when set (Supabase pooler URLs).
+	DBURL                 string
 	DBUser                string
 	DBPass                string
 	DBHost                string
@@ -24,11 +26,10 @@ type Config struct {
 	JWTExpiration         int
 	RefreshTokenExpiry    int
 	GroqAPIKey            string
+	GroqVisionModel       string
 	ReadTimeout           int
 	WriteTimeout          int
 	IdleTimeout           int
-	UsageLimit            int
-	PythonPath            string
 	PremiumCallbackSecret string
 }
 
@@ -36,6 +37,7 @@ func LoadConfig() *Config {
 	cfg := &Config{
 		ResendAPIKey:          getEnv("RESEND_API_KEY", ""),
 		EmailFrom:             getEnv("EMAIL_FROM", ""),
+		DBURL:                 getEnv("DATABASE_URL", ""),
 		DBUser:                getEnv("DB_USER", "postgres"),
 		DBPass:                getEnv("DB_PASS", "postgres"),
 		DBHost:                getEnv("DB_HOST", "localhost"),
@@ -51,11 +53,10 @@ func LoadConfig() *Config {
 		JWTExpiration:         getEnvInt("JWT_EXPIRATION", 15),
 		RefreshTokenExpiry:    getEnvInt("REFRESH_TOKEN_EXPIRY", 7),
 		GroqAPIKey:            getEnv("GROQ_API_KEY", ""),
+		GroqVisionModel:       getEnv("GROQ_VISION_MODEL", "qwen/qwen3.8-27b"),
 		ReadTimeout:           getEnvInt("SERVER_READ_TIMEOUT", 30),
 		WriteTimeout:          getEnvInt("SERVER_WRITE_TIMEOUT", 180),
 		IdleTimeout:           getEnvInt("SERVER_IDLE_TIMEOUT", 120),
-		UsageLimit:            getEnvInt("USAGE_LIMIT", 50),
-		PythonPath:            getEnv("PYTHON_PATH", "python3"),
 		PremiumCallbackSecret: getEnv("PREMIUM_CALLBACK_SECRET", ""),
 	}
 

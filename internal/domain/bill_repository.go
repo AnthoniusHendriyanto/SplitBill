@@ -25,6 +25,7 @@ type ItemRepository interface {
 type PersonRepository interface {
 	Create(ctx context.Context, person *Person) error
 	GetByBillID(ctx context.Context, billID string) ([]Person, error)
+	GetByBillIDs(ctx context.Context, billIDs []string) (map[string][]Person, error)
 	Update(ctx context.Context, person *Person) error
 	Delete(ctx context.Context, id string) error
 	DeleteByBillID(ctx context.Context, billID string) error

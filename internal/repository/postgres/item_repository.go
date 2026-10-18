@@ -89,20 +89,25 @@ func (r *personRepository) Create(ctx context.Context, person *domain.Person) er
 }
 
 func (r *personRepository) GetByBillID(ctx context.Context, billID string) ([]domain.Person, error) {
-	query := `SELECT id, bill_id, user_id, name, is_payer, percentage, created_at,COALESCE(email,''),custom_amount,share_amount,payment_info FROM persons WHERE bill_id = $1 ORDER BY created_at,id`
-	rows, err := r.Pool.Query(ctx, query, billID)
+	persons, err := r.GetByBillIDs(ctx, []string{billID})
+	return persons[billID], err
+}
+
+func (r *personRepository) GetByBillIDs(ctx context.Context, billIDs []string) (map[string][]domain.Person, error) {
+	query := `SELECT id, bill_id, user_id, name, is_payer, percentage, created_at,COALESCE(email,''),custom_amount,share_amount,payment_info FROM persons WHERE bill_id = ANY($1) ORDER BY created_at,id`
+	rows, err := r.Pool.Query(ctx, query, billIDs)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var persons []domain.Person
+	persons := make(map[string][]domain.Person)
 	for rows.Next() {
 		var person domain.Person
 		if err := rows.Scan(&person.ID, &person.BillID, &person.UserID, &person.Name, &person.IsPayer, &person.Percentage, &person.CreatedAt, &person.Email, &person.CustomAmount, &person.ShareAmount, &person.PaymentInfo); err != nil {
 			return nil, err
 		}
-		persons = append(persons, person)
+		persons[person.BillID] = append(persons[person.BillID], person)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

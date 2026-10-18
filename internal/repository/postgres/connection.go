@@ -10,8 +10,11 @@ import (
 )
 
 func NewPostgresConnection(cfg *config.Config) (*pgxpool.Pool, error) {
-	dsn := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s",
-		cfg.DBUser, cfg.DBPass, cfg.DBHost, cfg.DBPort, cfg.DBName, cfg.DBSSLMode)
+	dsn := cfg.DBURL
+	if dsn == "" {
+		dsn = fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s",
+			cfg.DBUser, cfg.DBPass, cfg.DBHost, cfg.DBPort, cfg.DBName, cfg.DBSSLMode)
+	}
 
 	poolConfig, err := pgxpool.ParseConfig(dsn)
 	if err != nil {

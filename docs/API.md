@@ -73,3 +73,14 @@ non-self linked recipients with positive shares, after successful finalization.
 Notification rows include `id`, `bill_id`, `actor`, `title`, `amount`, `read_at`, `created_at`,
 and `email_status`. Debt rows include `bill_id`, `title`, `person_id`, optional `user_id`, `name`,
 `direction` (`payable`/`receivable`), and `amount`. Rows remain bill-scoped; no automatic debt netting.
+# Current bill contract — October 2026
+
+This section supersedes older bill examples below.
+
+- `POST /api/v1/bills` requires a UUID `request_key`. Identical retries return the saved response; reusing the key with a changed payload is invalid.
+- Each participant may include `user_id` (self or an existing connected contact) and `custom_amount` (final payable amount for custom splits).
+- `equal` and `shared_items` are free; `percentage` and `custom` require active premium. Discounts reduce the grand total before final-cent allocation.
+- Bill detail includes `persons[].share_amount` and `items[].assigned_person_ids`. Consumers must not derive identity or access from names.
+- `GET /api/v1/bills?page=1&limit=20` returns `{data, pagination}` inside the standard success envelope. Financial-summary query failures return errors, not zero balances.
+- `GET /api/v1/debts` returns all unpaid payment rows involving the authenticated account: `bill_id`, `title`, counterpart `person_id`, optional `user_id`, `name`, `direction` (`payable`/`receivable`), and `amount`.
+- All amounts are IDR. Draft resumption currently saves a new copy; the original is retained until explicitly deleted.

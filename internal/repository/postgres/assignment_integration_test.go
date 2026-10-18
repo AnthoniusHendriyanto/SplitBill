@@ -56,7 +56,7 @@ func TestFinalizeIdentityDeliveryAndSettlement(t *testing.T) {
 	}
 	users := NewUserRepository(pool)
 	bills := NewBillRepository(pool)
-	uc := usecase.NewBillUsecase(bills, NewItemRepository(pool), NewPersonRepository(pool), NewAssignmentRepository(pool), NewPaymentRepository(pool), NewUsageRepository(pool), users, contacts, nil, 10*time.Second, 50)
+	uc := usecase.NewBillUsecase(bills, NewItemRepository(pool), NewPersonRepository(pool), NewAssignmentRepository(pool), NewPaymentRepository(pool), NewUsageRepository(pool), users, contacts, nil, 10*time.Second)
 	req := domain.CreateBillRequest{RequestKey: uuid.NewString(), Title: "Dinner", BillDate: "2026-10-16", SplitType: "custom", ServiceMode: "amount", TaxMode: "amount", Discount: 10,
 		Items: []domain.ItemRequest{{ID: "i", Name: "Meal", Price: 100, Quantity: 1}}, Persons: []domain.PersonRequest{{ID: "a", Name: "Actor", UserID: actor, CustomAmount: 30}, {ID: "f", Name: "Fake name", UserID: friend, Email: "wrong@example.test", IsPayer: true, CustomAmount: 60}}}
 	saved, err := uc.Create(ctx, actor, &req)
@@ -165,6 +165,61 @@ func TestInvitationRecipientAndAtomicContacts(t *testing.T) {
 	pool.QueryRow(ctx, `SELECT COUNT(*) FROM contacts`).Scan(&count)
 	if count != 2 {
 		t.Fatal("mutual contacts missing")
+	}
+}
+
+func TestFreeItemSplitAndCompleteBalances(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+	actor := uuid.NewString()
+	if _, err := pool.Exec(ctx, `INSERT INTO users(id,email,password_hash,name) VALUES($1,'actor@example.test','test','Actor')`, actor); err != nil {
+		t.Fatal(err)
+	}
+	bills := NewBillRepository(pool)
+	uc := usecase.NewBillUsecase(bills, NewItemRepository(pool), NewPersonRepository(pool), NewAssignmentRepository(pool), NewPaymentRepository(pool), NewUsageRepository(pool), NewUserRepository(pool), NewContactRepository(pool), nil, 10*time.Second)
+	for i := 0; i < 21; i++ {
+		req := domain.CreateBillRequest{RequestKey: uuid.NewString(), Title: "Lunch", BillDate: "2026-10-18", SplitType: "shared_items", ServiceMode: "amount", TaxMode: "amount",
+			Items:       []domain.ItemRequest{{ID: "meal", Name: "Meal", Price: 100, Quantity: 1}},
+			Persons:     []domain.PersonRequest{{ID: "a", Name: "Actor", UserID: actor, IsPayer: true}, {ID: "b", Name: "Friend"}},
+			Assignments: []domain.AssignmentRequest{{ItemID: "meal", PersonID: "b"}}}
+		if _, err := uc.Create(ctx, actor, &req); err != nil {
+			t.Fatalf("free By Item: %v", err)
+		}
+		if i == 0 {
+			req.RequestKey = uuid.NewString()
+			req.SplitType = "custom"
+			if _, err := uc.Create(ctx, actor, &req); !errors.Is(err, domain.ErrPremiumRequired) {
+				t.Fatalf("custom premium enforcement: %v", err)
+			}
+		}
+	}
+	first, err := uc.Fetch(ctx, actor, 1, 20, "", "")
+	if err != nil || len(first.Data) != 20 || first.Pagination.TotalItems != 21 {
+		t.Fatalf("first page: %v %v", first, err)
+	}
+	for _, b := range first.Data {
+		if b.PersonCount != 2 || b.PayerName != "Actor" || b.Receivable != 100 {
+			t.Fatalf("summary: %+v", b)
+		}
+	}
+	second, err := uc.Fetch(ctx, actor, 2, 20, "", "")
+	if err != nil || len(second.Data) != 1 {
+		t.Fatalf("second page: %v %v", second, err)
+	}
+	for _, b := range first.Data {
+		if b.ID == second.Data[0].ID {
+			t.Fatal("overlapping pages")
+		}
+	}
+	debts, err := (&NotificationRepository{Pool: pool}).Debts(ctx, actor)
+	if err != nil || len(debts) != 21 {
+		t.Fatalf("complete balances: %v %v", debts, err)
+	}
+	if _, err := pool.Exec(ctx, `ALTER TABLE payments RENAME TO unavailable_payments`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := uc.Fetch(ctx, actor, 1, 20, "", ""); err == nil {
+		t.Fatal("payment summary failure reported as zero")
 	}
 }
 func preparePool(t *testing.T, admin *pgxpool.Pool, url string) *pgxpool.Pool {

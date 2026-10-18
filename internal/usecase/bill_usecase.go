@@ -22,7 +22,6 @@ type billUsecase struct {
 	contactRepo    domain.ContactRepository
 	ocrService     domain.OCRService
 	contextTimeout time.Duration
-	usageLimit     int
 }
 
 func NewBillUsecase(
@@ -36,7 +35,6 @@ func NewBillUsecase(
 	contactRepo domain.ContactRepository,
 	ocrService domain.OCRService,
 	timeout time.Duration,
-	usageLimit int,
 ) BillUsecase {
 	return &billUsecase{
 		billRepo:       billRepo,
@@ -49,7 +47,6 @@ func NewBillUsecase(
 		contactRepo:    contactRepo,
 		ocrService:     ocrService,
 		contextTimeout: timeout,
-		usageLimit:     usageLimit,
 	}
 }
 
@@ -84,7 +81,7 @@ func (bu *billUsecase) Create(ctx context.Context, userID string, req *domain.Cr
 		}
 	}
 
-	if req.SplitType == string(domain.SplitTypeCustom) || req.SplitType == string(domain.SplitTypePercentage) || req.SplitType == string(domain.SplitTypeSharedItems) {
+	if req.SplitType == string(domain.SplitTypeCustom) || req.SplitType == string(domain.SplitTypePercentage) {
 		if !isPremium {
 			return nil, domain.ErrPremiumRequired
 		}
@@ -360,14 +357,20 @@ func (bu *billUsecase) Fetch(ctx context.Context, userID string, page, limit int
 	}
 
 	paymentSummaries := map[string]domain.UserPaymentSummary{}
+	peopleByBill := map[string][]domain.Person{}
 	if len(billIDs) > 0 {
-		if ps, err := bu.paymentRepo.GetUserPaymentSummaryByBillIDs(ctx, billIDs, userID); err == nil {
-			paymentSummaries = ps
+		paymentSummaries, err = bu.paymentRepo.GetUserPaymentSummaryByBillIDs(ctx, billIDs, userID)
+		if err != nil {
+			return nil, err
+		}
+		peopleByBill, err = bu.personRepo.GetByBillIDs(ctx, billIDs)
+		if err != nil {
+			return nil, err
 		}
 	}
 
 	for i, bill := range bills {
-		persons, _ := bu.personRepo.GetByBillID(ctx, bill.ID)
+		persons := peopleByBill[bill.ID]
 
 		payerName := ""
 		for _, p := range persons {

@@ -50,7 +50,7 @@ func main() {
 	}()
 	defer func() { stopEmail(); <-emailDone }()
 
-	runServer(cfg, userRepo, billRepo, itemRepo, personRepo, assignmentRepo, paymentRepo, usageRepo, contactRepo, invitationRepo, notifications, postgres.NewOCRService(cfg.GroqAPIKey, cfg.PythonPath), timeoutContext)
+	runServer(cfg, userRepo, billRepo, itemRepo, personRepo, assignmentRepo, paymentRepo, usageRepo, contactRepo, invitationRepo, notifications, postgres.NewOCRService(cfg.GroqAPIKey, cfg.GroqVisionModel), timeoutContext)
 }
 
 func runServer(
@@ -69,7 +69,7 @@ func runServer(
 	timeout time.Duration,
 ) {
 	authUsecase := usecase.NewAuthUsecase(userRepo, cfg)
-	billUsecase := usecase.NewBillUsecase(billRepo, itemRepo, personRepo, assignmentRepo, paymentRepo, usageRepo, userRepo, contactRepo, ocrSvc, timeout, cfg.UsageLimit)
+	billUsecase := usecase.NewBillUsecase(billRepo, itemRepo, personRepo, assignmentRepo, paymentRepo, usageRepo, userRepo, contactRepo, ocrSvc, timeout)
 	premiumUsecase := usecase.NewPremiumUsecase(userRepo, cfg)
 
 	authHandler := delivery.NewAuthHandler(authUsecase)

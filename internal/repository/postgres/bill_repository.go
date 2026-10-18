@@ -75,7 +75,7 @@ func (r *billRepository) GetByUserID(ctx context.Context, userID string, page, l
 
 	selectQuery := fmt.Sprintf(`
 		SELECT id, user_id, title, merchant, total_amount, service_charge, service_mode, tax, tax_mode, discount, grand_total, status, split_type, bill_date::text, created_at, updated_at
-		%s ORDER BY created_at DESC LIMIT $%d OFFSET $%d
+		%s ORDER BY created_at DESC, id DESC LIMIT $%d OFFSET $%d
 	`, baseQuery, len(args)+1, len(args)+2)
 	args = append(args, limit, offset)
 
