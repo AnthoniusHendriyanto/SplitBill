@@ -4,7 +4,7 @@ import useAuthStore from '../store/useAuthStore';
 import CurrencyInput from './CurrencyInput';
 import Icon from './Icon';
 import { cn } from '../utils/cn';
-import { splitError, calculateShares } from '../utils/shares';
+import { splitError, calculateShares, isPremiumSplit, splitTypeForTab } from '../utils/shares';
 
 function Step4Shares({ receiptGrandTotal, setStep }) {
   const bill = useBillStore((s) => s.bill);
@@ -64,14 +64,14 @@ function Step4Shares({ receiptGrandTotal, setStep }) {
             <button
               key={tab}
                 onClick={() => {
-                  if (!isPremium && tab !== 'equal') {
-                    setItemError('By Item, Percent and Custom splits require Premium.');
+                  const splitType = splitTypeForTab(tab);
+                  if (!isPremium && isPremiumSplit(splitType)) {
+                    setItemError('Percent and Custom splits require Premium.');
                     return;
                   }
                   setSplitTab(tab);
                   setItemError('');
-                  const splitMap = { equal: 'equal', item: 'shared_items', percent: 'percentage', custom: 'custom' };
-                  updateBill({ splitType: splitMap[tab] || 'equal' });
+                  updateBill({ splitType });
                 }}
               className={cn(
                 "px-4 py-3 text-sm font-semibold rounded-xl transition-colors border cursor-pointer flex items-center justify-center gap-2",
@@ -79,7 +79,7 @@ function Step4Shares({ receiptGrandTotal, setStep }) {
               )}
               aria-pressed={splitTab === tab}
             >
-              {!isPremium && tab !== 'equal' && <Icon name="lock" className="text-sm" />}
+              {!isPremium && isPremiumSplit(splitTypeForTab(tab)) && <Icon name="lock" className="text-sm" />}
               {tab === 'equal' ? 'Equal' : tab === 'item' ? 'By Item' : tab === 'percent' ? 'Percent' : 'Custom'}
             </button>
           ))}
@@ -287,7 +287,7 @@ function Step4Shares({ receiptGrandTotal, setStep }) {
           <div className="flex flex-wrap items-center gap-3">
             {itemError && <span role="alert" className="text-sm font-medium text-error max-w-sm">{itemError}</span>}
              <button onClick={() => {
-              if (!isPremium && (splitTab === 'custom' || splitTab === 'percent')) { setItemError('This split method requires Premium.'); return; }
+              if (!isPremium && isPremiumSplit(splitTypeForTab(splitTab))) { setItemError('This split method requires Premium.'); return; }
               const error = splitError(bill);
               if (error) { setItemError(error); return; }
               if (splitTab === 'equal') { updateBill({ splitType: 'equal' }); assignAllToAll(); }

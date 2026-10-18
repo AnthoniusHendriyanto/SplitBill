@@ -50,6 +50,13 @@ export function calculateShares(bill, assignments) {
   });
 }
 
+// Equal and By Item are free on both tiers. Percentage and Custom require Premium.
+// Single source of truth so the tab lock and the save guard cannot drift apart.
+const PREMIUM_SPLITS = new Set(['percentage', 'custom']);
+export const isPremiumSplit = (splitType) => PREMIUM_SPLITS.has(splitType);
+export const SPLIT_TABS = { equal: 'equal', item: 'shared_items', percent: 'percentage', custom: 'custom' };
+export const splitTypeForTab = (tab) => SPLIT_TABS[tab] || 'equal';
+
 export function splitError(bill) {
   const amounts = billAmounts(bill);
   const money = value => Number.isFinite(value) && value >= 0 && value <= 1e10 && Math.abs(value * 100 - Math.round(value * 100)) < 0.00001;
