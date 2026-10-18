@@ -144,7 +144,7 @@ export default function App() {
       const data = await api.processOCR(file);
       clearInterval(interval);
       if (data?.items?.length) {
-		useBillStore.getState().resetBill();
+        resetBill();
         const items = data.items.map(item => ({ id: crypto.randomUUID(), name: item.name, price: item.price, qty: item.quantity || 1 }));
         updateBill({
           title: data.title || '',
@@ -178,7 +178,7 @@ export default function App() {
       setUploadError(error.message || 'Could not read receipt. Check that the backend is running and try again.');
       setIsScanning(false);
     }
-  }, [updateBill, setStep]);
+  }, [updateBill, setStep, resetBill]);
 
   const reRunOcr = useCallback(() => {
     const file = uploadedFileRef.current;
