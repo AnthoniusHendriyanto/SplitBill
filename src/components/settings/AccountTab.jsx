@@ -15,6 +15,7 @@ export default function AccountTab({ profileForm, setProfileForm, onHasChanges, 
         <div><label htmlFor="profile-email" className={labelClass}>Email address</label><input id="profile-email" className={inputClass} value={profileForm.email || ''} readOnly autoComplete="email" /><p className="text-xs text-secondary mt-2">Email changes aren’t available yet.</p></div>
       </div>
       <section className="border-t border-border pt-6">
+        <p className="text-sm text-secondary mb-5">Currency: Indonesian Rupiah (IDR). Multi-currency and conversion aren’t available.</p>
         <div className="flex flex-wrap justify-between gap-3 mb-2"><h3 className="font-bold">Default transfer details</h3><span className="text-xs border border-border rounded-full px-3 py-1 text-secondary">Coming soon</span></div>
         <p className="text-sm text-secondary mb-5">For now, add bank details on each bill’s settlement screen.</p>
         <fieldset disabled className="grid grid-cols-1 md:grid-cols-2 gap-5">

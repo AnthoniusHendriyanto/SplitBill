@@ -223,7 +223,7 @@ function Step2Ledger({
         <div className="overflow-y-auto flex-1 hide-scrollbar">
           {bill.items.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full min-h-[400px] text-center p-8">
-              <div className="w-20 h-20 rounded-3xl bg-brand-primary/5 border border-brand-primary/10 flex items-center justify-center mb-5">
+              <div className="w-20 h-20 rounded-2xl bg-brand-primary/5 border border-brand-primary/10 flex items-center justify-center mb-5">
                 <Icon name="receipt_long" className="text-4xl text-brand-primary/40" />
               </div>
               <h3 className="text-lg font-bold text-primary mb-1">No items found yet</h3>

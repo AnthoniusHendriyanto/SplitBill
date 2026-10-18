@@ -7,6 +7,7 @@ import Skeleton from '../components/Skeleton';
 import { api } from '../lib/api';
 import { cn } from '../utils/cn';
 import ThemeToggle from '../components/ThemeToggle';
+import { savedShares } from '../utils/shares';
 
 const avatarColors = ['bg-brand-primary text-[#151714]', 'bg-brand-subtle text-primary', 'bg-surface-raised text-primary'];
 
@@ -28,6 +29,8 @@ function BillDetailPage() {
 
           setBill({
             id: billData.id,
+            bill_date: billData.bill_date,
+            payments: billData.payments || [],
             title: billData.title,
             completedAt: billData.created_at,
             grandTotal: billData.grand_total,
@@ -36,22 +39,8 @@ function BillDetailPage() {
             payerId: payer?.id || null,
             serviceCharge: billData.service_charge,
             tax: billData.tax,
-            assignments: {},
-            totals: persons.map(p => {
-              const personItems = items.filter(item =>
-                item.assigned_to?.includes(p.name)
-              );
-              const subtotal = personItems.reduce((sum, item) => sum + item.price, 0);
-              const serviceShare = subtotal * ((billData.service_charge || 0) / 100);
-              const taxShare = subtotal * ((billData.tax || 0) / 100);
-              return {
-                id: p.id, name: p.name,
-                subtotal,
-                tax: taxShare,
-                service: serviceShare,
-                total: subtotal + serviceShare + taxShare,
-              };
-            }),
+            assignments: Object.fromEntries(persons.map(p => [p.id, Object.fromEntries(items.filter(item => item.assigned_person_ids?.includes(p.id)).map(item => [item.id, true]))])),
+            totals: savedShares(billData),
           });
         })
         .catch(err => console.error('Failed to fetch bill:', err))
@@ -151,13 +140,13 @@ function BillDetailPage() {
                 {items.map(item => (
                   <div key={item.id} className="flex justify-between py-3">
                     <span className="font-medium text-tertiary dark:text-primary">{item.name}</span>
-                    <span className="font-bold text-primary">Rp {item.price.toLocaleString('id-ID')}</span>
+                    <span className="font-bold text-primary">{item.quantity || 1} × Rp {item.price.toLocaleString('id-ID')} = Rp {(item.price * (item.quantity || 1)).toLocaleString('id-ID')}</span>
                   </div>
                 ))}
               </div>
               <div className="mt-4 pt-4 border-t-2 border-slate-200 dark:border-strong flex justify-between">
                 <span className="font-bold text-tertiary text-sm">Subtotal</span>
-                <span className="font-bold text-primary">Rp {items.reduce((s, i) => s + i.price, 0).toLocaleString('id-ID')}</span>
+                <span className="font-bold text-primary">Rp {items.reduce((s, i) => s + i.price * (i.quantity || 1), 0).toLocaleString('id-ID')}</span>
               </div>
             </div>
 
@@ -185,7 +174,8 @@ function BillDetailPage() {
               )}
 
               <div className="space-y-3">
-                {totals.map((person, i) => {
+                 {totals.map((person, i) => {
+                  const outstanding = bill.payments.filter(p => p.from_person_id === person.id && !p.is_paid).reduce((sum, p) => sum + p.amount, 0);
                   return (
                     <div key={person.id} className="flex flex-wrap gap-4 items-center justify-between p-4 bg-surface-base rounded-xl">
                       <div className="flex items-center gap-3">
@@ -195,7 +185,7 @@ function BillDetailPage() {
                         <div>
                           <p className="font-bold text-sm text-primary">{person.name}</p>
                           <p className="text-[10px] text-tertiary">
-                            {person.id === payerId ? 'Paid the bill' : 'Owes'}
+                            {person.id === payerId ? 'Paid the bill' : person.total == null ? 'Not finalized' : outstanding > 0 ? 'Pending' : 'Settled'}
                           </p>
                         </div>
                       </div>
@@ -204,11 +194,11 @@ function BillDetailPage() {
                           "font-black text-sm",
                           person.id === payerId ? "text-[--brand-primary]" : "text-primary"
                         )}>
-                          Rp {person.total.toLocaleString('id-ID')}
+                          {person.total == null ? 'Not finalized' : `Rp ${person.total.toLocaleString('id-ID')}`}
                         </p>
-                        {person.id !== payerId && (
+                        {person.id !== payerId && outstanding > 0 && (
                           <p className="text-xs text-error font-bold">
-                            owes Rp {person.total.toLocaleString('id-ID')}
+                            owes Rp {outstanding.toLocaleString('id-ID')}
                           </p>
                         )}
                       </div>
@@ -236,13 +226,13 @@ function BillDetailPage() {
                       </div>
                       <div className="ml-auto text-right">
                         <p className="text-[11px] text-secondary uppercase tracking-wider font-bold">Total</p>
-                        <p className="font-bold text-[--brand-primary] tabular-nums">Rp {person.total.toLocaleString('id-ID')}</p>
+                        <p className="font-bold text-[--brand-primary] tabular-nums">{person.total == null ? 'Not finalized' : `Rp ${person.total.toLocaleString('id-ID')}`}</p>
                       </div>
                     </div>
                     <div className="space-y-2">
                       {assignedItems.map(item => {
                         const sharers = persons.filter(p => assignments[p.id]?.[item.id]).length;
-                        const share = sharers > 0 ? Math.round(item.price / sharers) : 0;
+                        const share = sharers > 0 ? item.price * (item.quantity || 1) / sharers : 0;
                         return (
                           <div key={item.id} className="flex justify-between text-xs py-1.5 border-b border dark:border-strong last:border-0">
                             <span className="text-tertiary dark:text-secondary">{item.name}</span>

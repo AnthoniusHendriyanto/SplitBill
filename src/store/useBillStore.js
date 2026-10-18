@@ -3,6 +3,11 @@ import { persist } from 'zustand/middleware';
 const createId = () => crypto.randomUUID();
 import { api } from '../lib/api';
 import useAuthStore from './useAuthStore';
+import { billAmounts, calculatePersonTotals, splitError } from '../utils/shares';
+
+let accountEpoch = 0;
+let listRequest = 0;
+let debtsRequest = 0;
 
 const useBillStore = create(
   persist(
@@ -31,13 +36,14 @@ const useBillStore = create(
         bill: { ...state.bill, ...data } 
       })),
 
-      addPerson: (name, email = '') => set((state) => ({
+      addPerson: (name, email = '', userId = null) => set((state) => ({
         bill: {
           ...state.bill,
           persons: [...state.bill.persons, { 
             id: createId(), 
             name: name || '', 
             email: email || '',
+            userId,
             paymentInfo: { bank: '', accountNumber: '', qrisData: '' } 
           }]
         }
@@ -66,7 +72,8 @@ const useBillStore = create(
         return {
           bill: {
             ...state.bill,
-            persons: state.bill.persons.filter(p => p.id !== id)
+            persons: state.bill.persons.filter(p => p.id !== id),
+            payerId: state.bill.payerId === id ? null : state.bill.payerId,
           },
           assignments: restAssignments
         };
@@ -90,7 +97,8 @@ const useBillStore = create(
         bill: {
           ...state.bill,
           items: state.bill.items.filter(item => item.id !== id)
-        }
+        },
+        assignments: Object.fromEntries(Object.entries(state.assignments).map(([personId, items]) => [personId, Object.fromEntries(Object.entries(items).filter(([itemId]) => itemId !== id))])),
       })),
 
       resetBill: () => set({
@@ -105,29 +113,47 @@ const useBillStore = create(
           taxMode: 'percent',
           serviceCharge: 5,
           serviceMode: 'percent',
-        discount: 0,
-        discountMode: 'amount',
+          discount: 0,
+          discountMode: 'amount',
           payerId: null,
           splitType: 'equal',
           date: new Date().toISOString().slice(0, 10),
         },
         assignments: {},
+        pendingSave: null,
       }),
 
       completedBills: [],
+      pagination: null,
+      debts: [],
+      debtsError: null,
+      isLoadingDebts: false,
+      pendingSave: null,
+
+      resetAccountData: () => {
+        accountEpoch++;
+        listRequest++;
+        debtsRequest++;
+        get().resetBill();
+        set({ completedBills: [], pagination: null, debts: [], debtsError: null, isLoadingDebts: false, billsError: null, isLoadingBills: false, isSaving: false });
+      },
 
       isLoadingBills: false,
       billsError: null,
       isSaving: false,
 
-      fetchCompletedBills: async () => {
+      fetchCompletedBills: async (page = 1) => {
         const isAuth = !!useAuthStore.getState().accessToken;
         if (!isAuth) return;
+        const epoch = accountEpoch;
+        const request = ++listRequest;
         set({ isLoadingBills: true, billsError: null });
         try {
-          const res = await api.getBills();
+          const res = await api.getBills(page);
+          if (epoch !== accountEpoch || request !== listRequest) return;
+          const previous = page === 1 ? [] : get().completedBills;
           set({
-            completedBills: (res && res.data ? res.data.map(bill => ({
+            completedBills: [...previous, ...(res && res.data ? res.data.filter(b => !previous.some(p => p.id === b.id)).map(bill => ({
               id: bill.id,
               title: bill.title,
               merchant: bill.merchant || '',
@@ -146,21 +172,39 @@ const useBillStore = create(
               persons: [],
               assignments: {},
               serverData: bill,
-            })) : []),
+            })) : [])],
+            pagination: res.pagination,
             isLoadingBills: false,
           });
         } catch (err) {
+          if (epoch !== accountEpoch || request !== listRequest) return;
           console.error('Failed to fetch bills from server:', err);
           set({ isLoadingBills: false, billsError: err.message || 'Failed to load bills' });
+        }
+      },
+
+      fetchDebts: async () => {
+        if (!useAuthStore.getState().accessToken) return;
+        const epoch = accountEpoch;
+        const request = ++debtsRequest;
+        set({ isLoadingDebts: true, debtsError: null });
+        try {
+          const debts = await api.getDebts();
+          if (epoch === accountEpoch && request === debtsRequest) set({ debts: debts || [], isLoadingDebts: false });
+        } catch (err) {
+          if (epoch === accountEpoch && request === debtsRequest) set({ debtsError: err.message, isLoadingDebts: false });
         }
       },
 
       completeBill: async (customStatus = null) => {
         const state = get();
         if (state.isSaving) throw new Error('Save already in progress');
-        set({ isSaving: true });
-
         const isAuth = !!useAuthStore.getState().accessToken;
+        if (!isAuth) throw new Error('Must be logged in to save bills');
+        const status = customStatus || 'pending';
+        const validation = splitError(status === 'draft' ? { ...state.bill, splitType: 'equal' } : state.bill);
+        if (validation) throw new Error(validation);
+        const epoch = accountEpoch;
 
         const billData = {
           title: state.bill.title || 'Untitled Bill',
@@ -170,6 +214,8 @@ const useBillStore = create(
             id: p.id,
             name: p.name,
             email: p.email || '',
+            user_id: p.userId || undefined,
+            custom_amount: p.customAmount || 0,
             payment_info: p.paymentInfo || {},
             is_payer: p.id === state.bill.payerId,
             percentage: state.bill.splitType === 'percentage' ? (p.percentage || 0) : 0,
@@ -184,39 +230,36 @@ const useBillStore = create(
           service_mode: state.bill.serviceMode || 'percent',
           tax: state.bill.tax || 0,
           tax_mode: state.bill.taxMode || 'percent',
-          discount: state.bill.discount || 0,
+          discount: billAmounts(state.bill).discount,
           bill_date: state.bill.date || new Date().toISOString().slice(0, 10),
-          status: customStatus || (state.bill.persons.every(p => (p.id === (state.bill.payerId || state.bill.persons[0]?.id)) || false) ? 'completed' : 'pending'),
+          status,
         };
-
-        if (!isAuth) {
-          set({ isSaving: false });
-          throw new Error('Must be logged in to save bills');
-        }
-
-        if (state.bill.id) {
-          try { await api.deleteBill(state.bill.id); } catch { /* Preserve the existing draft replacement behavior. */ }
-        }
+        const payload = JSON.stringify(billData);
+        const userId = useAuthStore.getState().user?.id;
+        const pendingSave = state.pendingSave?.payload === payload && state.pendingSave.userId === userId
+          ? state.pendingSave : { payload, userId, key: createId() };
+        set({ isSaving: true, pendingSave });
         try {
-          await api.createBill(billData);
-        } catch (err) {
-          set({ isSaving: false });
-          throw err;
+          // ponytail: resuming saves a copy; preserve the original draft rather than delete-before-create.
+          const saved = await api.createBill({ ...billData, request_key: pendingSave.key });
+          if (epoch !== accountEpoch) throw new Error('Account changed while saving.');
+          await Promise.all([get().fetchCompletedBills(), get().fetchDebts()]);
+          if (epoch !== accountEpoch) throw new Error('Account changed while saving.');
+          return saved;
+        } finally {
+          if (epoch === accountEpoch) set({ isSaving: false });
         }
-        try {
-          await get().fetchCompletedBills();
-        } catch (err) {
-          console.error('Bill saved but failed to refresh list:', err);
-        }
-        set({ isSaving: false });
       },
 
       loadBillDraft: async (id) => {
+        const epoch = accountEpoch;
         try {
           const data = await api.getBill(id);
           const billData = data.bill || data;
           const persons = billData.persons || [];
           const payer = persons.find(p => p.is_payer);
+          if (epoch !== accountEpoch) throw new Error('Account changed while loading.');
+          if (billData.status !== 'draft') throw new Error('Only drafts can be resumed.');
 
           set({
             bill: {
@@ -228,6 +271,10 @@ const useBillStore = create(
               persons: persons.map(p => ({
                 id: p.id,
                 name: p.name,
+                email: p.email || '',
+                userId: p.user_id || null,
+                percentage: p.percentage || 0,
+                customAmount: p.custom_amount || 0,
                 paymentInfo: p.payment_info || { bank: '', accountNumber: '', qrisData: '' },
               })),
               tax: billData.tax || 0,
@@ -235,24 +282,25 @@ const useBillStore = create(
               serviceCharge: billData.service_charge || 0,
               serviceMode: billData.service_mode || 'percent',
               discount: billData.discount || 0,
+              discountMode: 'amount',
               date: billData.bill_date || new Date().toISOString().slice(0, 10),
               payerId: payer?.id || null,
-              splitType: 'equal',
+              splitType: billData.split_type,
             },
-            assignments: {},
+            assignments: Object.fromEntries(persons.map(p => [p.id, Object.fromEntries((billData.items || []).filter(item => item.assigned_person_ids?.includes(p.id)).map(item => [item.id, true]))])),
+            pendingSave: null,
           });
         } catch (err) {
           console.error('Failed to load bill draft:', err);
+          throw err;
         }
       },
 
       deleteCompletedBill: async (id) => {
-        try {
-          await api.deleteBill(id);
-          await get().fetchCompletedBills();
-        } catch (err) {
-          console.error('Failed to delete bill from server:', err);
-        }
+        const epoch = accountEpoch;
+        await api.deleteBill(id);
+        if (epoch !== accountEpoch) throw new Error('Account changed while deleting.');
+        await Promise.all([get().fetchCompletedBills(), get().fetchDebts()]);
       },
 
       assignments: {}, // { personId: { itemId: boolean } }
@@ -272,103 +320,14 @@ const useBillStore = create(
 
       // Selection Strategy: Calculate Shares
       calculateTotals: () => {
-        const { bill, assignments, settings } = get();
-        const lineTotal = (item) => (item.unitPrice ?? item.price) * (item.qty ?? item.quantity ?? 1);
-        const totalBillSubtotal = bill.items.reduce((sum, item) => sum + lineTotal(item), 0);
-
-        const totalTax = bill.taxMode === 'percent'
-          ? totalBillSubtotal * (bill.tax / 100)
-          : bill.tax;
-
-        const totalService = bill.serviceMode === 'percent'
-          ? totalBillSubtotal * (bill.serviceCharge / 100)
-          : bill.serviceCharge;
-
-        const grandTotal = totalBillSubtotal + totalTax + totalService;
-        const personCount = bill.persons.length || 1;
-
-        const taxAlloc = settings.taxAllocation || 'proportionate';
-        const svcAlloc = settings.serviceChargeHandling || 'proportionate';
-
-        const distributeTax = (shareRatio) =>
-          taxAlloc === 'even' ? totalTax / personCount : totalTax * shareRatio;
-
-        const distributeService = (shareRatio) =>
-          svcAlloc === 'even' ? totalService / personCount : totalService * shareRatio;
-
-        const round = (v) =>
-          settings.roundNumbers ? Math.round(v) : Number(v.toFixed(2));
-
-        // Percentage split
-        if (bill.splitType === 'percentage') {
-          return bill.persons.map((person) => {
-            const ratio = (person.percentage || 0) / 100;
-            const personShare = grandTotal * ratio;
-            const personTax = distributeTax(ratio);
-            const personService = distributeService(ratio);
-            const personSubtotal = Math.max(0, personShare - personTax - personService);
-
-            return {
-              ...person,
-              subtotal: round(personSubtotal),
-              tax: round(personTax),
-              service: round(personService),
-              total: round(personShare),
-            };
-          });
-        }
-
-        // Custom split
-        if (bill.splitType === 'custom') {
-          return bill.persons.map((person) => {
-            const customSubtotal = Math.max(0, person.customAmount || 0);
-            const shareRatio = totalBillSubtotal > 0 ? customSubtotal / totalBillSubtotal : 0;
-            const personTax = distributeTax(shareRatio);
-            const personService = distributeService(shareRatio);
-
-            return {
-              ...person,
-              subtotal: round(customSubtotal),
-              tax: round(personTax),
-              service: round(personService),
-              total: round(customSubtotal + personTax + personService),
-            };
-          });
-        }
-
-        // Equal / shared-items split
-        return bill.persons.map((person) => {
-          let subtotal = 0;
-          bill.items.forEach((item) => {
-            const assignedPersons = bill.persons.filter((p) => assignments[p.id]?.[item.id]);
-            const sharers = assignedPersons.length > 0 ? assignedPersons : bill.persons;
-            const isAssigned = assignedPersons.length > 0 ? (assignments[person.id]?.[item.id] || false) : true;
-            if (isAssigned && sharers.length > 0) {
-              subtotal += lineTotal(item) / sharers.length;
-            }
-          });
-
-          const shareRatio = totalBillSubtotal > 0 ? subtotal / totalBillSubtotal : 0;
-          const personTax = distributeTax(shareRatio);
-          const personService = distributeService(shareRatio);
-
-          return {
-            ...person,
-            subtotal: round(subtotal),
-            tax: round(personTax),
-            service: round(personService),
-            total: round(subtotal + personTax + personService),
-          };
-        });
+        const { bill, assignments } = get();
+        return calculatePersonTotals(bill, assignments);
       },
 
       settings: {
         darkMode: null,
         currency: 'IDR',
         autoScan: true,
-        roundNumbers: true,
-        taxAllocation: 'proportionate',
-        serviceChargeHandling: 'proportionate',
       },
 
       ui: {
@@ -377,7 +336,7 @@ const useBillStore = create(
       },
 
       updateSettings: (data) => set((state) => ({
-        settings: { ...state.settings, ...data }
+        settings: { ...state.settings, ...data, currency: 'IDR' }
       })),
 
       updateUI: (data) => set((state) => ({
@@ -391,10 +350,12 @@ const useBillStore = create(
         bill: state.bill,
         assignments: state.assignments,
         ui: state.ui,
+        pendingSave: state.pendingSave,
       }),
       merge: (persisted, current) => {
         const merged = { ...current, ...persisted };
         merged.bill = { ...current.bill, ...persisted.bill };
+        merged.settings = { ...current.settings, ...persisted.settings, currency: 'IDR' };
         if (merged.bill.persons) {
           merged.bill.persons = merged.bill.persons.map(p => ({
             ...p,

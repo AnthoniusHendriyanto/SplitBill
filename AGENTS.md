@@ -1,8 +1,20 @@
 # Project Context
 
+## Current reliability contract (October 2026)
+
+- Saves send a stable `request_key` for retries of the same payload, plus explicit participant `user_id` and `custom_amount`. Resumed drafts save as copies; no delete-before-create.
+- `src/utils/shares.js` mirrors backend final-cent allocation. Custom amounts include fees and discount; equal/percentage/item splits conserve the grand total. Saved views prefer `share_amount`, with payment-ID fallback for older bills.
+- Equal and By Item are free. Percentage and custom require an unexpired premium tier. Currency is IDR-only; local formatting preferences never change payable amounts.
+- Dashboard balances use `/api/v1/debts`, independently of paginated history. History exposes Load more and labels search as filtering loaded rows.
+- Account changes clear bill/balance/draft state. Session and request generations prevent stale responses from crossing accounts.
+- Settings has three tabs (Account, Security, Billing). Authentication uses routed pages; the unused AuthOverlay was removed.
+- Run `npm run lint`, `npm test`, and `npm run build`. Tests include save retry safety, draft restoration, allocation parity, account isolation, and pagination.
+
+Older inventory/status sections below retain historical context; this contract and current source take precedence.
+
 ## Repositories
 - **Frontend**: `/splitbill_frontend` (React 19 + Vite 8 + Zustand 5 + Tailwind 3.4 + Framer Motion 12)
-- **Backend**: `/splitbill_backend` (Go 1.26 + gorilla/mux + PostgreSQL + PaddleOCR + Groq)
+- **Backend**: `/splitbill_backend` (Go 1.26 + gorilla/mux + PostgreSQL + Groq)
 
 ---
 
@@ -17,16 +29,15 @@
 | `src/components/Step4Shares.jsx` | Split method + assignment grid + premium gating |
 | `src/components/Step5Settlement.jsx` | Summary + DebtMap + save |
 | `src/components/Dashboard.jsx` | KPI cards (receivable/payable/pending/spending), month selector for Spending, real month-over-month trend from `bill_date`, activity feed, charts, sidebar widgets |
-| `src/components/SettingsPage.jsx` | 7-tab settings (profile, tier, currency, subscription) |
+| `src/components/SettingsPage.jsx` | 3-tab settings (Account, Security, Billing) |
 | `src/components/HelpCenterModal.jsx` | Usage guide modal |
 | `src/components/BillDetailsModal.jsx` | Completed bill breakdown |
 | `src/components/SideNavBar.jsx` | Desktop nav with tier badge |
 | `src/components/BottomTabBar.jsx` | Mobile nav |
-| `src/components/AuthOverlay.jsx` | Login/register overlay |
 | `src/store/useBillStore.js` | Bill data, UI step (persisted), calculations, API sync |
 | `src/store/useAuthStore.js` | Auth state (uses centralized api.js) |
 | `src/lib/api.js` | Centralized API client (AbortController, 30s, auto-refresh) |
-| `src/utils/currency.js` | 9-currency formatting |
+| `src/utils/shares.js` | Final-cent allocation mirroring the backend |
 | `src/pages/LoginPage.jsx` | Login page |
 | `src/pages/RegisterPage.jsx` | Register page |
 | `src/pages/BillDetailPage.jsx` | Backend-bill detail view |
@@ -53,8 +64,7 @@
 | `internal/delivery/http/middleware/ratelimit.go` | IP rate limiter (10/min OCR) |
 | `internal/usecase/bill_usecase.go` | Business logic, 4 split types, OCR, shares |
 | `internal/usecase/auth_usecase.go` | Auth business logic |
-| `internal/repository/postgres/ocr_service.go` | Groq vision primary → PaddleOCR + Groq text fallback |
-| `internal/repository/postgres/paddle_ocr.py` | PaddleOCR Python wrapper |
+| `internal/repository/postgres/ocr_service.go` | Groq vision OCR (sole path; no local fallback); model from `GROQ_VISION_MODEL` |
 | `internal/domain/bill.go` | Data models (Bill, Item, Person with is_payer, Payment) |
 | `internal/domain/ocr_service.go` | OCRItem with Quantity, OCRResult |
 | `migrations/001-012` | Database schema (12 migrations) |
@@ -123,7 +133,7 @@
 - `runServer()` deduplicated (~50 lines)
 - TIMESTAMP → TIMESTAMPTZ, CHECK constraint on payments
 - OCR public endpoint with IP rate limiting
-- Groq vision primary → PaddleOCR + Groq text fallback
+- Groq vision is the only OCR path
 - Image resize to 1024px to control vision token cost
 - No regex fallback, no monthly scan limit
 

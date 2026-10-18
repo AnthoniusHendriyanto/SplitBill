@@ -40,7 +40,7 @@ function ReceiptViewer({ src, alt, className }) {
   useEffect(() => { window.addEventListener('mouseup', stopPan); return () => window.removeEventListener('mouseup', stopPan); }, [stopPan]);
 
   return (
-    <div ref={containerRef} className={cn('relative overflow-hidden rounded-xl bg-black/30 select-none group', className)}>
+    <div ref={containerRef} className={cn('relative overflow-hidden rounded-xl bg-surface-raised select-none group', className)}>
       <div onWheel={handleWheel} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onDoubleClick={handleDoubleClick}
         className="w-full h-full flex items-center justify-center"
         style={{ cursor: isPanning ? 'grabbing' : zoom > 1 ? 'grab' : 'default' }}
@@ -51,8 +51,8 @@ function ReceiptViewer({ src, alt, className }) {
         />
       </div>
       <div className={cn(
-        'absolute bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-black/70 backdrop-blur-md rounded-xl px-2 py-1 border border-white/[0.06] transition-opacity duration-200',
-        zoom !== 1 ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+        'absolute bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-surface-elevated rounded-xl px-2 py-1 border border-border transition-opacity duration-200',
+        zoom !== 1 ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100'
       )}>
         <button onClick={reset} className="w-6 h-6 flex items-center justify-center text-tertiary hover:text-primary transition-colors border-none bg-transparent cursor-pointer outline-none text-[10px]" title="Reset zoom">
           <Icon name="zoom_out_map" className="text-[10px]" />

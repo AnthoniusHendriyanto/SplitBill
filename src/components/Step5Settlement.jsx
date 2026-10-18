@@ -85,16 +85,7 @@ function Step5Settlement({
                     <span className="text-[8px] font-medium text-tertiary uppercase tracking-wider">Participant</span>
                   </div>
                 </div>
-                <div className="space-y-1 pt-3 border-t border-white/[0.04] text-[11px] text-secondary">
-                  <div className="flex justify-between">
-                    <span>Items</span>
-                    <span className="font-medium text-primary">Rp {p.subtotal.toLocaleString('id-ID')}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Tax & Service</span>
-                    <span className="font-medium text-primary">Rp {((p.tax || 0) + (p.service || 0)).toLocaleString('id-ID')}</span>
-                  </div>
-                </div>
+                <p className="text-xs text-secondary">Includes tax, service, and discount.</p>
                 <div className="mt-3 pt-3 border-t border-white/[0.04] flex justify-between items-center">
                   <span className="text-[9px] font-semibold text-brand-primary uppercase tracking-wider">Total due</span>
                   <span className="text-sm font-bold text-primary">Rp {p.total.toLocaleString('id-ID')}</span>
@@ -160,6 +151,7 @@ function Step5Settlement({
         </div>
 
         <div className="mt-6 space-y-3 pt-5 border-t border-white/[0.04]">
+          <p className="text-xs text-secondary">Saving a resumed draft creates a copy. The original stays in history.</p>
           <div className="grid grid-cols-2 gap-3">
               <button disabled={saving} onClick={() => handleSave('draft')}
               className="h-11 rounded-2xl bg-transparent border border-white/[0.06] hover:bg-white/[0.04] text-secondary hover:text-primary text-xs font-medium transition-all flex items-center justify-center gap-1.5 cursor-pointer outline-none"

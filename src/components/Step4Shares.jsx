@@ -4,6 +4,7 @@ import useAuthStore from '../store/useAuthStore';
 import CurrencyInput from './CurrencyInput';
 import Icon from './Icon';
 import { cn } from '../utils/cn';
+import { splitError, calculatePersonTotals } from '../utils/shares';
 
 function Step4Shares({ receiptGrandTotal, setStep }) {
   const bill = useBillStore((s) => s.bill);
@@ -12,14 +13,14 @@ function Step4Shares({ receiptGrandTotal, setStep }) {
   const toggleAssignment = useBillStore((s) => s.toggleAssignment);
   const updatePerson = useBillStore((s) => s.updatePerson);
   const user = useAuthStore((s) => s.user);
-  const isPremium = user?.tier === 'premium';
+  const isPremium = user?.tier === 'premium' && new Date(user.premium_expires_at) > new Date();
   const [splitTab, setSplitTab] = useState(() => ({ shared_items: 'item', percentage: 'percent', custom: 'custom' }[bill.splitType] || 'equal'));
   const [itemError, setItemError] = useState('');
   const persons = useMemo(() => bill.persons || [], [bill.persons]);
   const totalPercent = persons.reduce((s, p) => s + (p.percentage || 0), 0);
   const items = useMemo(() => bill.items || [], [bill.items]);
   const lineTotal = (item) => (item.unitPrice ?? item.price) * (item.qty ?? item.quantity ?? 1);
-  const totalBillSubtotal = items.reduce((sum, item) => sum + lineTotal(item), 0);
+  const previews = calculatePersonTotals(bill, assignments);
   const assignAllToAll = () => {
     persons.forEach(p => items.forEach(item => { if (!assignments[p.id]?.[item.id]) toggleAssignment(p.id, item.id); }));
   };
@@ -98,8 +99,9 @@ function Step4Shares({ receiptGrandTotal, setStep }) {
                 Divide the grand total of <span className="text-primary font-semibold tabular-nums">Rp {receiptGrandTotal.toLocaleString('id-ID')}</span> equally among <span className="text-primary font-semibold">{persons.length}</span> participants.
               </p>
               <div className="receipt-panel p-6 w-full mb-4 font-numeric">
-                <span className="text-[11px] font-medium text-tertiary uppercase tracking-wider block mb-1">Per Person</span>
-                <span className="text-4xl font-extrabold tracking-tighter text-primary tabular-nums">Rp {Math.round(receiptGrandTotal / (persons.length || 1)).toLocaleString('id-ID')}</span>
+                <span className="text-[11px] font-medium text-tertiary uppercase tracking-wider block mb-1">Per person, from</span>
+                <span className="text-4xl font-extrabold tracking-tighter text-primary tabular-nums">Rp {Math.min(...previews.map(p => p.total)).toLocaleString('id-ID')}</span>
+                <p className="text-xs text-secondary mt-2">Any remaining cents are assigned in participant order.</p>
               </div>
               <div className="flex flex-wrap justify-center gap-2">{persons.map(p => <span key={p.id} className="px-3 py-2 rounded-full bg-brand-subtle text-sm text-primary">{p.name}</span>)}</div>
             </div>
@@ -198,7 +200,7 @@ function Step4Shares({ receiptGrandTotal, setStep }) {
                   <div className="space-y-4 max-h-[280px] overflow-y-auto pr-1 hide-scrollbar">
                     {persons.map((p) => {
                       const currentPercent = p.percentage || 0;
-                      const allocatedAmount = Math.round(receiptGrandTotal * (currentPercent / 100));
+                      const allocatedAmount = previews.find(person => person.id === p.id)?.total || 0;
                       return (
                         <div key={p.id} className="bg-black/20 border border-white/[0.04] rounded-2xl p-4 flex flex-col gap-3 font-numeric shadow-[inset_0_1px_2px_rgba(0,0,0,0.4)]">
                           <div className="flex justify-between items-center">
@@ -256,8 +258,8 @@ function Step4Shares({ receiptGrandTotal, setStep }) {
               ) : (
                 <>
                   <div className="flex justify-between items-center mb-3">
-                    <span className="text-[10px] font-medium text-tertiary tracking-wide">Set custom amounts</span>
-                    <span className="text-[10px] font-medium text-brand-primary bg-brand-primary/5 border border-brand-primary/10 px-2.5 py-0.5 rounded-lg">Total: Rp {totalBillSubtotal.toLocaleString('id-ID')}</span>
+                    <span className="text-[10px] font-medium text-tertiary tracking-wide">Final amounts, including fees and discount</span>
+                    <span className="text-[10px] font-medium text-brand-primary bg-brand-primary/5 border border-brand-primary/10 px-2.5 py-0.5 rounded-lg">Total: Rp {receiptGrandTotal.toLocaleString('id-ID')}</span>
                   </div>
                   <div className="space-y-4 max-h-[280px] overflow-y-auto pr-1 hide-scrollbar">
                     {persons.map((p) => {
@@ -284,7 +286,10 @@ function Step4Shares({ receiptGrandTotal, setStep }) {
           </button>
           <div className="flex flex-wrap items-center gap-3">
             {itemError && <span role="alert" className="text-sm font-medium text-error max-w-sm">{itemError}</span>}
-            <button onClick={() => {
+             <button onClick={() => {
+              if (!isPremium && (splitTab === 'custom' || splitTab === 'percent')) { setItemError('This split method requires Premium.'); return; }
+              const error = splitError(bill);
+              if (error) { setItemError(error); return; }
               if (splitTab === 'equal') { updateBill({ splitType: 'equal' }); assignAllToAll(); }
               if (splitTab === 'percent' && totalPercent !== 100) {
                 setItemError(`Percentages must total 100% (currently ${totalPercent}%)`);

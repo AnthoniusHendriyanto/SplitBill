@@ -2,8 +2,6 @@ import { memo } from 'react';
 import { motion } from 'framer-motion';
 import useBillStore from '../store/useBillStore';
 import Icon from './Icon';
-import AuthOverlay from './AuthOverlay';
-import useAuthStore from '../store/useAuthStore';
 import OcrProgress from './OcrProgress';
 
 function ExtractionRow({ label, scanning, ocrStageIndex, minStage, revealed, value, prefix, valueClass }) {
@@ -45,8 +43,6 @@ function Step1Scan({
   const bill = useBillStore((s) => s.bill);
   const updateBill = useBillStore((s) => s.updateBill);
   const addItem = useBillStore((s) => s.addItem);
-  const accessToken = useAuthStore((state) => state.accessToken);
-  const isAuthenticated = !!accessToken;
   const { imageUrl, title } = bill;
   const isScanningOrImage = imageUrl || isScanning;
 
@@ -187,7 +183,7 @@ function Step1Scan({
         </div>
       )}
       {uploadError && (
-        <div className="flex items-start gap-3 p-4 bg-red-900/15 backdrop-blur-sm border border-red-500/20 rounded-2xl shadow-xl max-w-lg mx-auto">
+        <div role="alert" className="flex items-start gap-3 p-4 bg-toast-error border border-error rounded-2xl max-w-lg mx-auto">
           <Icon name="error" className="text-red-500 text-lg flex-shrink-0 mt-0.5" />
           <p className="text-xs text-red-400 font-medium leading-relaxed">{uploadError}</p>
         </div>
@@ -195,7 +191,7 @@ function Step1Scan({
     </motion.div>
   );
 
-  return !isAuthenticated ? <AuthOverlay>{stepView}</AuthOverlay> : stepView;
+  return stepView;
 }
 
 export default memo(Step1Scan);

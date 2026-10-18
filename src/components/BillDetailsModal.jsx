@@ -6,6 +6,7 @@ import ConfirmDialog from './ConfirmDialog';
 import { cn } from '../utils/cn';
 import { api } from '../lib/api';
 import ModalFrame from './ModalFrame';
+import { savedShares } from '../utils/shares';
 
 function BillDetailsModal({ billId, onClose }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -13,16 +14,20 @@ function BillDetailsModal({ billId, onClose }) {
   const deleteCompletedBill = useBillStore((s) => s.deleteCompletedBill);
   const loadBillDraft = useBillStore((s) => s.loadBillDraft);
   const fetchCompletedBills = useBillStore((s) => s.fetchCompletedBills);
+  const fetchDebts = useBillStore((s) => s.fetchDebts);
   const updateUI = useBillStore((s) => s.updateUI);
   const isAuthenticated = useAuthStore((s) => !!s.accessToken);
+  const userId = useAuthStore(s => s.user?.id);
   const [bill, setBill] = useState(null);
   const [loading, setLoading] = useState(() => isAuthenticated && !!billId);
   const [error, setError] = useState('');
 
   useEffect(() => {
+    let cancelled = false;
     if (isAuthenticated && billId) {
       api.getBill(billId)
         .then(data => {
+          if (cancelled) return;
           const billData = data.bill || data;
           const persons = billData.persons || [];
           const items = billData.items || [];
@@ -37,6 +42,7 @@ function BillDetailsModal({ billId, onClose }) {
 
           setBill({
             id: billData.id,
+            ownerId: billData.user_id,
             title: billData.title,
             merchant: billData.merchant || '',
             billDate: billData.bill_date || '',
@@ -48,51 +54,20 @@ function BillDetailsModal({ billId, onClose }) {
             personPaid,
             payerId: payer?.id || null,
             serviceCharge: billData.service_charge,
+            subtotal: billData.total_amount,
+            fees: (billData.service_mode === 'percent' ? billData.total_amount * billData.service_charge / 100 : billData.service_charge) + (billData.tax_mode === 'percent' ? billData.total_amount * billData.tax / 100 : billData.tax),
             tax: billData.tax,
             discount: billData.discount || 0,
             status: billData.status || 'pending',
             assignments: {},
-            totals: (() => {
-              const lineTotal = (item) => item.price * (item.quantity || 1);
-              const totalAmount = items.reduce((sum, item) => sum + lineTotal(item), 0);
-
-              const svcAmount = billData.service_mode === 'percent'
-                ? totalAmount * (billData.service_charge || 0) / 100
-                : (billData.service_charge || 0);
-              const taxAmount = billData.tax_mode === 'percent'
-                ? totalAmount * (billData.tax || 0) / 100
-                : (billData.tax || 0);
-
-              return persons.map(p => {
-                let subtotal = 0;
-                items.forEach(item => {
-                  const assigned = item.assigned_to || [];
-                  if (assigned.length === 0) {
-                    subtotal += lineTotal(item) / persons.length;
-                  } else if (assigned.includes(p.name)) {
-                    subtotal += lineTotal(item) / assigned.length;
-                  }
-                });
-
-                const ratio = totalAmount > 0 ? subtotal / totalAmount : 0;
-                const serviceShare = svcAmount * ratio;
-                const taxShare = taxAmount * ratio;
-
-                return {
-                  id: p.id, name: p.name,
-                  subtotal,
-                  tax: taxShare,
-                  service: serviceShare,
-                  total: subtotal + serviceShare + taxShare,
-                };
-              });
-            })(),
+            totals: savedShares(billData),
           });
         })
-        .catch(err => setError(err.message || 'Could not load this bill. Please try again.'))
-        .finally(() => setLoading(false));
+        .catch(err => { if (!cancelled) setError(err.message || 'Could not load this bill. Please try again.'); })
+        .finally(() => { if (!cancelled) setLoading(false); });
     }
-  }, [billId, isAuthenticated]);
+    return () => { cancelled = true; };
+  }, [billId, isAuthenticated, userId]);
 
   if (loading || !bill) return <ModalFrame onClose={onClose} label="Bill details"><div className="panel p-8 w-full max-w-xl"><h2 className="text-xl font-bold mb-5">Bill details</h2>{loading ? <div aria-busy="true" aria-label="Loading bill" className="space-y-4"><div className="h-24 bg-surface-raised rounded-xl animate-pulse" /><div className="h-32 bg-surface-raised rounded-xl animate-pulse" /></div> : <p role="alert" className="text-error">{error || 'This bill is unavailable.'}</p>}<button className="btn-secondary mt-6" onClick={onClose}>Close</button></div></ModalFrame>;
 
@@ -146,11 +121,11 @@ function BillDetailsModal({ billId, onClose }) {
             <div className="flex flex-wrap gap-6 mt-5 pt-5 receipt-divider text-sm">
               <div>
                 <p className="text-[9px] font-bold text-secondary uppercase tracking-widest">Subtotal</p>
-                <p className="font-semibold text-primary mt-0.5">Rp {(bill.totals?.length ? bill.totals.reduce((s, t) => s + t.subtotal, 0) : 0).toLocaleString('id-ID')}</p>
+                <p className="font-semibold text-primary mt-0.5">Rp {bill.subtotal.toLocaleString('id-ID')}</p>
               </div>
               <div>
                 <p className="text-[9px] font-bold text-secondary uppercase tracking-widest">Tax & Service</p>
-                <p className="font-semibold text-primary mt-0.5">Rp {(bill.totals?.length ? bill.totals.reduce((s, t) => s + (t.tax || 0) + (t.service || 0), 0) : 0).toLocaleString('id-ID')}</p>
+                <p className="font-semibold text-primary mt-0.5">Rp {bill.fees.toLocaleString('id-ID')}</p>
               </div>
             </div>
             {bill.discount > 0 && (
@@ -167,7 +142,7 @@ function BillDetailsModal({ billId, onClose }) {
               {bill.persons?.length > 0 ? (
                 bill.persons.map((person) => {
                   const pt = bill.totals?.find(t => t.id === person.id);
-                  const total = pt?.total || 0;
+                  const total = pt?.total;
                   const isPayer = person.id === bill.payerId;
                   return (
                     <div
@@ -184,20 +159,11 @@ function BillDetailsModal({ billId, onClose }) {
                             {isPayer && <span className="text-[10px] font-bold text-[--brand-primary] ml-2 uppercase tracking-wider">Payer</span>}
                           </p>
                           <p className="text-xs text-tertiary mt-0.5">
-                            Rp {total.toLocaleString('id-ID')}
+                            {total == null ? 'Not finalized' : `Rp ${total.toLocaleString('id-ID')}`}
                           </p>
-                          {(() => {
-                            if (!pt) return null;
-                            const parts = [];
-                            if (pt.subtotal > 0) parts.push(`Subtotal Rp${pt.subtotal.toLocaleString('id-ID')}`);
-                            if (pt.service > 0) parts.push(`Service Charge Rp${pt.service.toLocaleString('id-ID')}`);
-                            if (pt.tax > 0) parts.push(`Tax Rp${pt.tax.toLocaleString('id-ID')}`);
-                            if (parts.length === 0) return null;
-                            return <p className="text-xs text-secondary mt-0.5">{parts.join(' · ')}</p>;
-                          })()}
                         </div>
                       </div>
-                      {bill.status === 'pending' && !isPayer && (
+                      {bill.ownerId === userId && bill.status === 'pending' && !isPayer && total > 0 && (
                         bill.personPaid?.[person.id]
                           ? <span className="text-xs font-bold text-[--brand-primary] flex items-center gap-1"><span className="material-symbols-outlined text-sm">check_circle</span> Paid</span>
                           : <button
@@ -211,7 +177,8 @@ function BillDetailsModal({ billId, onClose }) {
                                     personPaid: { ...prev.personPaid, [person.id]: true },
                                     status: resp.completed ? 'completed' : prev.status,
                                   } : prev);
-                                  fetchCompletedBills();
+                                   fetchCompletedBills();
+                                   fetchDebts();
                                 } catch (e) {
                                   setError(e.message || 'Could not mark this payment as paid. Try again.');
                                 } finally {
@@ -234,32 +201,38 @@ function BillDetailsModal({ billId, onClose }) {
           </div>
         </div>
         <div className="p-4 sm:p-6 receipt-divider bg-surface-base flex flex-wrap justify-between gap-3">
-          <button
+          {bill.ownerId === userId && <button
             onClick={() => setShowDeleteConfirm(true)}
             className="px-6 py-2.5 rounded-xl border border-red-500/20 text-red-400 font-bold text-sm hover:bg-red-500/10 transition-all cursor-pointer"
           >
             Delete Bill
-          </button>
+          </button>}
           <ConfirmDialog
             open={showDeleteConfirm}
             title="Delete Bill History"
             message="Are you absolutely sure you want to delete this bill history?"
             confirmLabel="Delete"
             variant="danger"
-            onConfirm={() => { deleteCompletedBill(bill.id); onClose(); }}
+            onConfirm={async () => {
+              setShowDeleteConfirm(false);
+              try { await deleteCompletedBill(bill.id); onClose(); }
+              catch (err) { setError(err.message); }
+            }}
             onCancel={() => setShowDeleteConfirm(false)}
           />
-          {bill.status === 'draft' ? (
+          {bill.status === 'draft' && bill.ownerId === userId ? (
             <button
-                onClick={() => {
-                loadBillDraft(bill.id);
-                updateUI({ step: 4, activeTab: 'bills' });
-                onClose();
+                onClick={async () => {
+                try {
+                  await loadBillDraft(bill.id);
+                  updateUI({ step: 4, activeTab: 'bills' });
+                  onClose();
+                } catch (err) { setError(err.message); }
               }}
               className="px-6 py-2.5 rounded-xl bg-[--brand-primary] hover:bg-[--brand-primary-hover] text-[--text-inverse] font-bold text-sm transition-all cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-[0.98]"
             >
               <span className="material-symbols-outlined text-sm">edit</span>
-              Edit Draft & Resume
+              Resume as Copy
             </button>
           ) : (
             <button

@@ -10,11 +10,15 @@ export default memo(function Dashboard({ setActiveTab, setStep, setSelectedBillI
   const bills = useBillStore(s => s.completedBills);
   const isLoading = useBillStore(s => s.isLoadingBills);
   const error = useBillStore(s => s.billsError);
+  const debts = useBillStore(s => s.debts);
+  const balanceLoading = useBillStore(s => s.isLoadingDebts);
+  const balanceError = useBillStore(s => s.debtsError);
+  const fetchDebts = useBillStore(s => s.fetchDebts);
   const user = useAuthStore(s => s.user);
-  const metrics = useMemo(() => bills.reduce((sum, bill) => ({
-    receivable: sum.receivable + (bill.receivable || 0),
-    payable: sum.payable + (bill.payable || 0),
-  }), { receivable: 0, payable: 0 }), [bills]);
+  const metrics = useMemo(() => debts.reduce((sum, debt) => ({
+    receivable: sum.receivable + (debt.direction === 'receivable' ? debt.amount : 0),
+    payable: sum.payable + (debt.direction === 'payable' ? debt.amount : 0),
+  }), { receivable: 0, payable: 0 }), [debts]);
   const recent = useMemo(() => [...bills].sort((a, b) => new Date(b.completedAt || 0) - new Date(a.completedAt || 0)).slice(0, 5), [bills]);
   const newBill = () => { setActiveTab('bills'); setStep(1); };
   const net = metrics.receivable - metrics.payable;
@@ -28,11 +32,12 @@ export default memo(function Dashboard({ setActiveTab, setStep, setSelectedBillI
         <div className="grid grid-cols-1 lg:grid-cols-[1.45fr_1fr] gap-5">
           <section className="rounded-2xl bg-brand-primary text-[#151714] p-6 sm:p-8 relative overflow-hidden" aria-label="Balance summary">
             <div className="flex items-center justify-between gap-4"><p className="font-semibold text-sm">Your net balance</p><Icon name="call_split" className="text-3xl" /></div>
-            {isLoading ? <div role="status" className="h-14 w-2/3 my-7 rounded-lg bg-[#151714]/10 animate-pulse" aria-label="Loading balance" /> : <p className="text-[clamp(2rem,4vw,3.8rem)] leading-tight tracking-tighter font-extrabold font-numeric my-7 break-words">{error ? 'Unavailable' : `${net < 0 ? '− ' : ''}${money(net)}`}</p>}
+            {balanceLoading ? <div role="status" className="h-14 w-2/3 my-7 rounded-lg bg-[#151714]/10 animate-pulse" aria-label="Loading balance" /> : <p className="text-[clamp(2rem,4vw,3.8rem)] leading-tight tracking-tighter font-extrabold font-numeric my-7 break-words">{balanceError ? 'Unavailable' : `${net < 0 ? '− ' : ''}${money(net)}`}</p>}
             <div className="border-t-2 border-dashed border-[#151714]/25 pt-5 grid grid-cols-2 gap-5">
-              <div><p className="text-sm flex items-center gap-1"><Icon name="south_west" className="text-base" />Owed to you</p><p className="text-lg font-bold mt-1 font-numeric break-words">{error || isLoading ? '—' : money(metrics.receivable)}</p></div>
-              <div><p className="text-sm flex items-center gap-1"><Icon name="north_east" className="text-base" />You owe</p><p className="text-lg font-bold mt-1 font-numeric break-words">{error || isLoading ? '—' : money(metrics.payable)}</p></div>
+              <div><p className="text-sm flex items-center gap-1"><Icon name="south_west" className="text-base" />Owed to you</p><p className="text-lg font-bold mt-1 font-numeric break-words">{balanceError || balanceLoading ? '—' : money(metrics.receivable)}</p></div>
+              <div><p className="text-sm flex items-center gap-1"><Icon name="north_east" className="text-base" />You owe</p><p className="text-lg font-bold mt-1 font-numeric break-words">{balanceError || balanceLoading ? '—' : money(metrics.payable)}</p></div>
             </div>
+            {balanceError && <div role="alert" className="mt-4 text-sm"><p>{balanceError}</p><button className="underline min-h-11" onClick={fetchDebts}>Retry balances</button></div>}
           </section>
           <aside className="receipt-panel p-6 sm:p-8 flex flex-col justify-between">
             <span className="w-12 h-12 rounded-full border border-border-strong flex items-center justify-center"><Icon name="receipt_long" className="text-2xl" /></span>

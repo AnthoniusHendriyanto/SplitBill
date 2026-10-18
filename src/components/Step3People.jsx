@@ -43,7 +43,7 @@ function Step3People({ receiptGrandTotal, setStep }) {
     if (!currentUser || store.bill.persons.length > 0) return;
     const timer = setTimeout(() => {
       const alreadyAdded = store.bill.persons.some(
-        p => p.userId === currentUser.id || p.name.toLowerCase() === (currentUser.name || '').toLowerCase()
+        p => p.userId === currentUser.id
       );
       if (!alreadyAdded) {
         store.updateBill({
@@ -180,7 +180,7 @@ function Step3People({ receiptGrandTotal, setStep }) {
                 <p className="text-[9px] font-medium text-tertiary uppercase tracking-wider mb-2">Contacts</p>
                 <div className="flex flex-wrap gap-2">
                   {contacts.map(c => {
-                    const inBill = bill.persons.some(p => p.name.toLowerCase() === c.name.toLowerCase());
+                    const inBill = bill.persons.some(p => c.connected_user_id ? p.userId === c.connected_user_id : !p.userId && p.name.toLowerCase() === c.name.toLowerCase());
                     return (
                       <div
                         key={c.id}
@@ -201,7 +201,7 @@ function Step3People({ receiptGrandTotal, setStep }) {
                           </span>
                         ) : (
                           <button
-                            onClick={() => { addPerson(c.name); }}
+                            onClick={() => { addPerson(c.name, c.email || '', c.connected_user_id || null); }}
                             className="icon-button"
                             aria-label={`Add ${c.name}`}
                           >
@@ -272,7 +272,7 @@ function Step3People({ receiptGrandTotal, setStep }) {
               <Icon name="arrow_back" className="text-xs" /> Back
             </button>
             <button
-              disabled={bill.persons.length === 0 || !bill.title.trim()}
+              disabled={bill.persons.length < 2 || !bill.title.trim()}
               onClick={() => {
                 if (!bill.payerId) {
                   setPayerError('Select who paid the bill to continue.');

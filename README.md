@@ -2,6 +2,19 @@
 
 Premium bill-splitting PWA built with React 19, Vite 8, Zustand 5, and Tailwind CSS 3.4 — featuring a "Scan-First" wizard flow and accessible fintech-luxury UI.
 
+## Current behavior (October 2026)
+
+- Ink + citron light/dark UI, local Plus Jakarta Sans, native dialogs, three-tab settings.
+- IDR only. Equal and By Item are free; percentage and custom require active Premium. Custom values are final amounts including fees and discount.
+- Preview allocations match the backend's deterministic cent allocation. Saved bills display server-recorded shares.
+- Drafts retain split settings, linked identities, and assignments. **Resume as Copy** preserves the original draft. Failed/retried saves use idempotency keys.
+- Dashboard balances include all unpaid debts through `/api/v1/debts`; history is paginated with Load more. Search filters loaded history.
+- Sign-in is required. Logout clears account-specific state immediately and stale responses are discarded. Guest mode and multi-currency are not supported.
+
+Checks: `npm run lint && npm test && npm run build`.
+
+The sections below describe earlier iterations and may mention removed features; current behavior above and `AGENTS.md` take precedence.
+
 ## Tech Stack
 
 - **Framework**: React 19.2
@@ -16,7 +29,7 @@ Premium bill-splitting PWA built with React 19, Vite 8, Zustand 5, and Tailwind 
 ## Key Features
 
 - **Scan-First Wizard**: 5-step sequential flow (Scan → Ledger → People → Shares → Settlement) with validation locks.
-- **AI Receipt Scanning**: Upload photo → backend PaddleOCR + Groq vision parsing. Extracts items, tax, service, discount.
+- **AI Receipt Scanning**: Upload photo → backend Groq vision parsing. Extracts items, tax, service, discount.
 - **4 Split Types**: Equal, Custom (per-item), Percentage, Shared Items — with premium gating.
 - **Payment Intelligence**: Real-time `useMemo`-driven totals (subtotal, tax, service charge, grand total, per-person).
 - **Discount Handling**: "You saved Rp X" badge shows total discounts. Monthly spending shows pre-discount amount.
@@ -38,12 +51,11 @@ src/
 │   ├── Step4Shares.jsx     # Split method + assignment grid
 │   ├── Step5Settlement.jsx # Summary, DebtMap, save
 │   ├── Dashboard.jsx       # Bill list with skeleton loading, KPI cards
-│   ├── SettingsPage.jsx    # 7-tab settings (profile, tier, currency, etc.)
+│   ├── SettingsPage.jsx    # 3-tab settings (Account, Security, Billing)
 │   ├── HelpCenterModal.jsx # Usage guide
 │   ├── BillDetailsModal.jsx# Completed bill breakdown
 │   ├── SideNavBar.jsx      # Desktop nav (with tier badge)
 │   ├── BottomTabBar.jsx    # Mobile nav
-│   ├── AuthOverlay.jsx     # Login/register overlay
 │   ├── DebtMap.jsx         # Debt visualization
 │   ├── FormattedPrice.jsx  # Currency-aware price
 │   └── ...                 # StepHeader, PremiumModal, etc.
@@ -52,11 +64,8 @@ src/
 │   └── useAuthStore.js     # Auth state (uses centralized api.js)
 ├── lib/
 │   └── api.js              # Centralized API client (AbortController, 30s timeout, auto-refresh)
-├── hooks/
-│   └── useIsMobile.js      # Responsive breakpoint hook
 ├── utils/
-│   ├── currency.js         # 9-currency formatting
-│   └── ...                 # Calculations, formatters
+│   └── ...                 # shares.js allocation, formatters
 ├── pages/
 │   ├── LoginPage.jsx
 │   ├── RegisterPage.jsx

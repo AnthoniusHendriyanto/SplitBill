@@ -6,9 +6,12 @@ const authBase = `${API.base}/api/v1/auth`;
 const ocrBase = `${API.base}/api/v1/ocr`;
 
 let refreshPromise = null;
+let refreshVersion = null;
 
 async function refreshAccessToken() {
-  if (refreshPromise) return refreshPromise;
+  const version = useAuthStore.getState().sessionVersion;
+  if (refreshPromise && refreshVersion === version) return refreshPromise;
+  refreshVersion = version;
 
   refreshPromise = (async () => {
     try {
@@ -21,12 +24,13 @@ async function refreshAccessToken() {
 
       const body = await res.json();
       const data = body.data || body;
+      if (useAuthStore.getState().sessionVersion !== version) return false;
       useAuthStore.getState().setTokens(data.access_token);
       return true;
     } catch {
       return false;
     } finally {
-      refreshPromise = null;
+      if (refreshVersion === version) refreshPromise = null;
     }
   })();
 
@@ -35,6 +39,10 @@ async function refreshAccessToken() {
 
 async function request(path, options = {}) {
   const accessToken = useAuthStore.getState().accessToken;
+  const version = useAuthStore.getState().sessionVersion;
+  const checkSession = () => {
+    if (version !== useAuthStore.getState().sessionVersion) throw new Error('Account changed. Please try again.');
+  };
 
   const headers = {
     'Content-Type': 'application/json',
@@ -59,13 +67,16 @@ async function request(path, options = {}) {
       credentials: 'include',
     });
     clearTimeout(timeoutId);
+    checkSession();
 
     if (res.status === 204) return null;
 
     const body = await res.json().catch(() => ({}));
+    checkSession();
 
     if (res.status === 401 && body.error?.code !== 'INVALID_CREDENTIALS') {
       const refreshed = await refreshAccessToken();
+      checkSession();
       if (refreshed) {
         const newToken = useAuthStore.getState().accessToken;
         const retryController = new AbortController();
@@ -77,8 +88,10 @@ async function request(path, options = {}) {
           credentials: 'include',
         });
         clearTimeout(retryTimeout);
+        checkSession();
         if (retryRes.status === 204) return null;
         const retryBody = await retryRes.json().catch(() => ({}));
+        checkSession();
         if (retryBody.success) return retryBody.data;
         throw new Error(getErrorMessage({
           code: retryBody.error?.code,
@@ -132,6 +145,7 @@ export const api = {
   },
 
   // Bills
+  getDebts: () => request('/api/v1/debts'),
   getBills: (page = 1, limit = 20, fromDate = '', toDate = '') => {
     const params = new URLSearchParams({ page, limit });
     if (fromDate) params.append('from_date', fromDate);

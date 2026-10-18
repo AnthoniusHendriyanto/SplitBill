@@ -5,6 +5,7 @@ import useBillStore from './store/useBillStore';
 import useAuthStore from './store/useAuthStore';
 import { api } from './lib/api';
 import { cn } from './utils/cn';
+import { billAmounts } from './utils/shares';
 import './index.css';
 
 import SideNavBar from './components/SideNavBar';
@@ -35,10 +36,11 @@ export default function App() {
   const ui = useBillStore((s) => s.ui);
   const updateUI = useBillStore((s) => s.updateUI);
   const fetchCompletedBills = useBillStore((s) => s.fetchCompletedBills);
+  const fetchDebts = useBillStore((s) => s.fetchDebts);
+  const pagination = useBillStore((s) => s.pagination);
   const completedBills = useBillStore((s) => s.completedBills);
   const isLoadingBills = useBillStore((s) => s.isLoadingBills);
   const billsError = useBillStore((s) => s.billsError);
-  const completeBill = useBillStore((s) => s.completeBill);
   const accessToken = useAuthStore((state) => state.accessToken);
   const isAuthenticated = !!accessToken;
   const step = ui?.step ?? 1;
@@ -83,17 +85,15 @@ export default function App() {
   const [ocrProgress, setOcrProgress] = useState(0);
   const handleSelectBill = useCallback((id) => setSelectedBillId(id), []);
   const handleNewBill = useCallback(() => { updateUI({ activeTab: 'bills', step: 1 }); }, [updateUI]);
-  const handleNext = useCallback(async () => {
-    if (step === 4) {
-      try { await completeBill('draft'); } catch (err) { console.error('Failed to auto-save draft:', err); }
-    }
+  const handleNext = useCallback(() => {
     setStep(s => Math.min(s + 1, 5));
-  }, [step, completeBill, setStep]);
+  }, [setStep]);
   const handleBack = useCallback(() => setStep(s => Math.max(s - 1, 1)), [setStep]);
   const [ocrStageIndex, setOcrStageIndex] = useState(0);
   const uploadedFileRef = useRef(null);
 
   useEffect(() => { if (!isValidating) fetchCompletedBills(); }, [isValidating, isAuthenticated, fetchCompletedBills]);
+  useEffect(() => { if (!isValidating) fetchDebts(); }, [isValidating, isAuthenticated, fetchDebts]);
 
   useEffect(() => {
     if (!isValidating && !accessToken) {
@@ -186,35 +186,7 @@ export default function App() {
     }
   }, [handleUpload]);
 
-  const computedSubtotal = useMemo(
-    () => bill.items.reduce((sum, item) => sum + (item.unitPrice ?? item.price) * (item.qty ?? item.quantity ?? 1), 0),
-    [bill.items]
-  );
-
-  const receiptSubtotal = useMemo(
-    () => bill.ocrSubtotal || computedSubtotal,
-    [bill.ocrSubtotal, computedSubtotal]
-  );
-
-  const receiptService = useMemo(() =>
-    bill.serviceMode === 'percent' ? receiptSubtotal * (bill.serviceCharge / 100) : (bill.serviceCharge || 0),
-    [receiptSubtotal, bill.serviceMode, bill.serviceCharge]
-  );
-
-  const receiptTax = useMemo(() =>
-    bill.taxMode === 'percent' ? receiptSubtotal * (bill.tax / 100) : (bill.tax || 0),
-    [receiptSubtotal, bill.taxMode, bill.tax]
-  );
-
-  const receiptDiscount = useMemo(() =>
-    bill.discountMode === 'percent' ? Math.round(receiptSubtotal * (bill.discount || 0) / 100) : (bill.discount || 0),
-    [receiptSubtotal, bill.discount, bill.discountMode]
-  );
-
-  const receiptGrandTotal = useMemo(() =>
-    receiptSubtotal + receiptService + receiptTax - receiptDiscount,
-    [receiptSubtotal, receiptService, receiptTax, receiptDiscount]
-  );
+  const { subtotal: receiptSubtotal, service: receiptService, tax: receiptTax, discount: receiptDiscount, total: receiptGrandTotal } = useMemo(() => billAmounts(bill), [bill]);
 
   // ponytail: small receipt lists do not need a memo cache; store subscriptions keep totals current.
   const personTotals = calculateTotals();
@@ -348,6 +320,9 @@ export default function App() {
             onSelectBill={handleSelectBill}
             onNewBill={handleNewBill}
           />
+          {pagination && <p className="text-sm text-secondary">Showing {completedBills.length} of {pagination.total_items} bills. Search filters loaded bills.</p>}
+          {pagination?.page < pagination?.total_pages && <button className="btn-secondary self-start" disabled={isLoadingBills} onClick={() => fetchCompletedBills(pagination.page + 1)}>{isLoadingBills ? 'Loading…' : 'Load more'}</button>}
+          {billsError && <button className="btn-secondary self-start" onClick={() => fetchCompletedBills()}>Retry history</button>}
         </div>
       );
     }
