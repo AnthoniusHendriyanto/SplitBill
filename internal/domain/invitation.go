@@ -11,10 +11,10 @@ type Invitation struct {
 }
 
 type InvitationResponse struct {
-	ID        string       `json:"id"`
-	FromUser  UserResponse `json:"from_user"`
-	ToEmail   string       `json:"to_email"`
+	ID        string        `json:"id"`
+	FromUser  UserResponse  `json:"from_user"`
+	ToEmail   string        `json:"to_email"`
 	ToUser    *UserResponse `json:"to_user,omitempty"`
-	Status    string       `json:"status"`
-	CreatedAt string       `json:"created_at"`
+	Status    string        `json:"status"`
+	CreatedAt string        `json:"created_at"`
 }

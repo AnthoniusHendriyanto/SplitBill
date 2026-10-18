@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/user/split-mate/internal/delivery/http/middleware"
 	"errors"
+	"github.com/user/split-mate/internal/delivery/http/middleware"
 
 	"github.com/user/split-mate/internal/domain"
 	"github.com/user/split-mate/internal/usecase"

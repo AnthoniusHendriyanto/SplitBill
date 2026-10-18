@@ -11,8 +11,8 @@ import (
 )
 
 type PremiumHandler struct {
-	premiumUsecase      usecase.PremiumUsecase
-	callbackSecret      string
+	premiumUsecase usecase.PremiumUsecase
+	callbackSecret string
 }
 
 func NewPremiumHandler(pu usecase.PremiumUsecase, callbackSecret string) *PremiumHandler {

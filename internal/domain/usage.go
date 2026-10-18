@@ -12,14 +12,13 @@ type UsageTracking struct {
 }
 
 type UsageResponse struct {
-	Current  int        `json:"current"`
-	Limit    int        `json:"limit"`
-	ResetAt  time.Time  `json:"reset_at"`
+	Current int       `json:"current"`
+	Limit   int       `json:"limit"`
+	ResetAt time.Time `json:"reset_at"`
 }
 
 type TierLimit struct {
-	Tier            string `json:"tier"`
-	MonthlyBillLimit int   `json:"monthly_bill_limit"`
-	MonthlyOCRLimit  int   `json:"monthly_ocr_limit"`
+	Tier             string `json:"tier"`
+	MonthlyBillLimit int    `json:"monthly_bill_limit"`
+	MonthlyOCRLimit  int    `json:"monthly_ocr_limit"`
 }
-
