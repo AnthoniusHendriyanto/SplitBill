@@ -2,6 +2,7 @@ package http
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 
 	"github.com/user/split-mate/internal/domain"
@@ -30,5 +31,8 @@ func writeErrorWithDetails(w http.ResponseWriter, statusCode int, code, message 
 }
 
 func writeInternalError(w http.ResponseWriter, err error) {
+	// The client gets a generic message so internals never leak, but the cause must reach the
+	// server log: without this, every 5xx is an unexplained dead end at all 25 call sites.
+	log.Printf("internal error: %v", err)
 	writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "An unexpected error occurred")
 }
