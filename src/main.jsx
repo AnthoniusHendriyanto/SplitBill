@@ -11,6 +11,7 @@ import ErrorBoundary from './components/ErrorBoundary.jsx'
 const LoginPage = lazy(() => import('./pages/LoginPage.jsx'))
 const RegisterPage = lazy(() => import('./pages/RegisterPage.jsx'))
 const BillDetailPage = lazy(() => import('./pages/BillDetailPage.jsx'))
+const SharedBillPage = lazy(() => import('./pages/SharedBillPage.jsx'))
 
 function Application() {
   const darkMode = useBillStore(s => s.settings.darkMode)
@@ -39,6 +40,7 @@ function Application() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/bill/:id" element={<BillDetailPage />} />
+          <Route path="/shared/:token" element={<SharedBillPage />} />
         </Routes>
       </Suspense>
     </ErrorBoundary>

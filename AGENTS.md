@@ -8,6 +8,7 @@
 - Dashboard balances use `/api/v1/debts`, independently of paginated history. History exposes Load more and labels search as filtering loaded rows.
 - Account changes clear bill/balance/draft state. Session and request generations prevent stale responses from crossing accounts.
 - Settings has three tabs (Account, Security, Billing). Authentication uses routed pages; the unused AuthOverlay was removed.
+- Groups are available as a persistent shared-bill container. Public bill links are read-only and use `/shared/:token`; receipt images are retained with saved bills when supplied.
 - Run `npm run lint`, `npm test`, and `npm run build`. Tests include save retry safety, draft restoration and source-draft cleanup, allocation parity, account isolation, and pagination.
 
 Older inventory/status sections below retain historical context; this contract and current source take precedence.
@@ -79,7 +80,7 @@ Older inventory/status sections below retain historical context; this contract a
 - Step3 links self or existing friends by validated user ID; names/unmatched emails stay unlinked.
 - Atomic backend save persists accounts, shares, payments, recipient events, usage, and retry snapshot.
 - Home AssignmentInbox and debts refresh every 30 seconds while visible. Reading is not paying.
-- ShareSummary uses saved totals, Web Share/WhatsApp/copy. No public links or direct IG guarantee.
+- ShareSummary uses saved totals, Web Share/WhatsApp/copy, CSV/JSON export, print, and expiring public bill links. Group guest invite/join links and direct IG delivery remain unsupported.
 - SMTP is not used: Resend key/sender configure delivery; absent keys leave jobs queued. Registration
   lacks mailbox verification, so emails contain generic authenticated links, not financial details.
 - Only creators can mutate bills. Identity is never inferred from name or payer status.

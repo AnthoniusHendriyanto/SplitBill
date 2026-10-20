@@ -174,6 +174,12 @@ function Step2Ledger({
                     className="w-full h-11 px-3 bg-surface-base border border-border-strong rounded-xl text-sm text-primary"
                   />
                 </div>
+                <div>
+                  <label htmlFor="ledger-category" className="text-sm font-medium text-secondary block mb-2">Category</label>
+                  <select id="ledger-category" value={bill.category || 'Other'} onChange={(e) => updateBill({ category: e.target.value })} className="w-full h-11 px-3 bg-surface-base border border-border-strong rounded-xl text-sm text-primary">
+                    {['Other', 'Food & drinks', 'Travel', 'Household', 'Entertainment', 'Utilities', 'Shopping', 'Work'].map(category => <option key={category} value={category}>{category}</option>)}
+                  </select>
+                </div>
               </div>
             </>
           )}

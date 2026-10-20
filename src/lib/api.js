@@ -123,6 +123,7 @@ export const api = {
   getNotifications: (page = 1) => request(`/api/v1/notifications?page=${page}`),
   readNotification: id => request(`/api/v1/notifications/${id}/read`, { method: 'PATCH' }),
   getDebts: () => request('/api/v1/debts'),
+  getSettlements: () => request('/api/v1/settlements'),
   // Auth
   login: (email, password) =>
     request('/api/v1/auth/login', {
@@ -163,6 +164,11 @@ export const api = {
       body: JSON.stringify(billData),
     }),
 
+  updateBill: (id, billData) => request(`/api/v1/bills/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(billData),
+  }),
+
   updateBillStatus: (id, status) =>
     request(`/api/v1/bills/${id}/status`, {
       method: 'PATCH',
@@ -176,6 +182,54 @@ export const api = {
 
   deleteBill: (id) =>
     request(`/api/v1/bills/${id}`, { method: 'DELETE' }),
+
+  createShare: (id, days = 7) => request(`/api/v1/bills/${id}/share`, {
+    method: 'POST',
+    body: JSON.stringify({ days }),
+  }),
+
+  revokeShare: (id) => request(`/api/v1/bills/${id}/share`, { method: 'DELETE' }),
+
+  getSharedBill: async (token) => {
+    const res = await fetch(`${API.base}/api/v1/shared/${encodeURIComponent(token)}`);
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok || !body.success) throw new Error(body.error?.message || body.message || 'Shared bill not found');
+    return body.data;
+  },
+
+  getReceiptUrl: (id) => `${API.base}/api/v1/bills/${id}/receipt`,
+
+  getReceiptDataUrl: async (id) => {
+    const token = useAuthStore.getState().accessToken;
+    const res = await fetch(`${API.base}/api/v1/bills/${id}/receipt`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      credentials: 'include',
+    });
+    if (!res.ok) throw new Error('Receipt unavailable');
+    const blob = await res.blob();
+    return await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  },
+
+  // Groups
+  getGroups: () => request('/api/v1/groups'),
+  createGroup: (name) => request('/api/v1/groups', { method: 'POST', body: JSON.stringify({ name }) }),
+  getGroup: (id) => request(`/api/v1/groups/${id}`),
+  deleteGroup: (id) => request(`/api/v1/groups/${id}`, { method: 'DELETE' }),
+  addGroupMember: (groupId, data) => request(`/api/v1/groups/${groupId}/members`, { method: 'POST', body: JSON.stringify(data) }),
+  removeGroupMember: (groupId, memberId) => request(`/api/v1/groups/${groupId}/members/${memberId}`, { method: 'DELETE' }),
+  attachBillToGroup: (groupId, billId, members = []) => request(`/api/v1/groups/${groupId}/bills/${billId}`, { method: 'POST', body: JSON.stringify({ members }) }),
+  getGroupDefaultSplit: (groupId) => request(`/api/v1/groups/${groupId}/default-split`),
+  setGroupDefaultSplit: (groupId, split) => request(`/api/v1/groups/${groupId}/default-split`, { method: 'PUT', body: JSON.stringify(split) }),
+
+  getRecurrences: () => request('/api/v1/recurrences'),
+  createRecurrence: (data) => request('/api/v1/recurrences', { method: 'POST', body: JSON.stringify(data) }),
+  setRecurrenceStatus: (id, status) => request(`/api/v1/recurrences/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+  importSplitwise: (file) => { const form = new FormData(); form.append('file', file); return request('/api/v1/imports/splitwise', { method: 'POST', body: form }); },
 
   // OCR (public endpoint, no auth required)
   processOCR: async (file) => {

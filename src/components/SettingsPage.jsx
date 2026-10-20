@@ -7,6 +7,7 @@ import { cn } from '../utils/cn';
 import AccountTab from './settings/AccountTab';
 import SecurityTab from './settings/SecurityTab';
 import BillingTab from './settings/BillingTab';
+import PageHeader from './ui/PageHeader';
 
 const tabs = [
   { id: 'account', label: 'Account', icon: 'person_outline' },
@@ -131,23 +132,21 @@ function SettingsPage() {
         )}
       </AnimatePresence>
 
-      <div className="page-content max-w-[1000px] space-y-7">
-        <div>
-          <h1 className="page-title">Your corner.</h1>
-          <p className="text-sm text-secondary mt-3">Account, security, and the plan that fits.</p>
-        </div>
+      <div className="page-content page-stack max-w-[1000px]">
+        <PageHeader
+          eyebrow="Your account"
+          title="Your corner."
+          description="Account, security, and the plan that fits."
+        />
 
         {/* Tab nav */}
-        <div className="flex gap-2 border-b border-border pb-4" role="group" aria-label="Settings sections">
+        <div className="segmented" role="group" aria-label="Settings sections">
           {tabs.map((tab) => {
             const isActive = settingsTab === tab.id;
             return (
-              <button key={tab.id} onClick={() => setSettingsTab(tab.id)}
+              <button key={tab.id} type="button" onClick={() => setSettingsTab(tab.id)}
                 aria-pressed={isActive}
-                className={cn(
-                  "flex-1 sm:flex-none px-4 py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer border-none",
-                  isActive ? "bg-brand-primary text-[#151714]" : "text-secondary hover:bg-surface-raised"
-                )}
+                className="flex items-center justify-center gap-2"
               >
                 <Icon name={tab.icon} className="text-lg" />
                 {tab.label}

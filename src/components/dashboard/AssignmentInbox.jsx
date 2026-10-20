@@ -24,14 +24,19 @@ export default function AssignmentInbox({ onSelectBill }) {
     try { await api.readNotification(row.id); setRows(previous => previous.map(n => n.id === row.id ? { ...n, read_at: new Date().toISOString() } : n)); onSelectBill(row.bill_id); }
     catch (err) { setError(err.message); }
   };
-  return <section className="panel p-6 space-y-4" aria-label="Assignment notifications">
-    <h2 className="text-xl font-bold">Notifications <span className="text-sm text-secondary">{rows.filter(n => !n.read_at).length} unread on this page</span></h2>
-    {loading && <p role="status">Loading assignments…</p>}
-    {error && <p role="alert" className="text-error">{error}</p>}
-    {!loading && !error && !rows.length && <p className="text-secondary">No assignments yet.</p>}
-    {rows.map(n => <button key={n.id} onClick={() => open(n)} className={`block w-full text-left border-b border-border py-3 ${n.read_at ? 'text-secondary' : 'text-primary font-semibold'}`}>
-      {n.actor} assigned you a share in {n.title}<span className="block text-sm">Rp {n.amount.toLocaleString('id-ID')} · {new Date(n.created_at).toLocaleDateString()}</span>
+  const unread = rows.filter(n => !n.read_at).length;
+  return <section className="panel p-5 sm:p-6" aria-label="Assignment notifications">
+    <div className="section-heading">
+      <div><h2>Notifications</h2><p>Shares assigned to you by linked friends.</p></div>
+      <span className="chip">{unread} unread</span>
+    </div>
+    {loading && <div role="status" className="space-y-3" aria-label="Loading assignments">{[1, 2].map(item => <div key={item} className="h-12 animate-pulse rounded-xl bg-surface-raised" />)}</div>}
+    {error && <p role="alert" className="inline-error">{error}</p>}
+    {!loading && !error && !rows.length && <p className="py-4 text-sm text-secondary">No assignments yet. When someone adds you to a bill, it will appear here.</p>}
+    {rows.map(n => <button type="button" key={n.id} onClick={() => open(n)} className={`data-row w-full text-left ${n.read_at ? 'text-secondary' : 'text-primary'}`}>
+      <span className={`text-sm ${n.read_at ? '' : 'font-semibold'}`}>{n.actor} assigned you a share in {n.title}<span className="mt-1 block text-xs text-secondary">Rp {n.amount.toLocaleString('id-ID')} · {new Date(n.created_at).toLocaleDateString()}</span></span>
+      {!n.read_at && <span className="h-2 w-2 rounded-full bg-brand-primary" aria-label="Unread" />}
     </button>)}
-    <div className="flex gap-3"><button className="btn-secondary" disabled={page === 1 || loading} onClick={() => { setLoading(true); setPage(p => p - 1); }}>Previous</button><span className="self-center">Page {page}</span><button className="btn-secondary" disabled={rows.length < 20 || loading} onClick={() => { setLoading(true); setPage(p => p + 1); }}>Next</button></div>
+    <div className="mt-4 flex items-center justify-between gap-3"><button type="button" className="btn-secondary" disabled={page === 1 || loading} onClick={() => { setLoading(true); setPage(p => p - 1); }}>Previous</button><span className="text-sm text-secondary">Page {page}</span><button type="button" className="btn-secondary" disabled={rows.length < 20 || loading} onClick={() => { setLoading(true); setPage(p => p + 1); }}>Next</button></div>
   </section>;
 }

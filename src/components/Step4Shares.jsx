@@ -1,10 +1,11 @@
-import { memo, useState, useMemo } from 'react';
+import { memo, useState, useMemo, useEffect, useRef } from 'react';
 import useBillStore from '../store/useBillStore';
 import useAuthStore from '../store/useAuthStore';
 import CurrencyInput from './CurrencyInput';
 import Icon from './Icon';
 import { cn } from '../utils/cn';
 import { splitError, calculateShares, isPremiumSplit, splitTypeForTab } from '../utils/shares';
+import { api } from '../lib/api';
 
 function Step4Shares({ receiptGrandTotal, setStep }) {
   const bill = useBillStore((s) => s.bill);
@@ -16,6 +17,17 @@ function Step4Shares({ receiptGrandTotal, setStep }) {
   const isPremium = user?.tier === 'premium' && new Date(user.premium_expires_at) > new Date();
   const [splitTab, setSplitTab] = useState(() => ({ shared_items: 'item', percentage: 'percent', custom: 'custom' }[bill.splitType] || 'equal'));
   const [itemError, setItemError] = useState('');
+  const defaultApplied = useRef(false);
+  useEffect(() => {
+    if (!bill.groupId || defaultApplied.current) return;
+    defaultApplied.current = true;
+    api.getGroupDefaultSplit(bill.groupId).then(defaultSplit => {
+      const type = defaultSplit?.split_type;
+      if (!type || (isPremiumSplit(type) && !isPremium)) return;
+      updateBill({ splitType: type });
+      setSplitTab({ shared_items: 'item', percentage: 'percent', custom: 'custom' }[type] || 'equal');
+    }).catch(() => {});
+  }, [bill.groupId, isPremium, updateBill]);
   const persons = useMemo(() => bill.persons || [], [bill.persons]);
   const totalPercent = persons.reduce((s, p) => s + (p.percentage || 0), 0);
   const items = useMemo(() => bill.items || [], [bill.items]);

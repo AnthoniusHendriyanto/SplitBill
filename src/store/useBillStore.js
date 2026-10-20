@@ -16,6 +16,7 @@ const useBillStore = create(
         id: createId(),
         title: '',
         merchant: '',
+        category: 'Other',
         imageUrl: '',
         items: [],
         persons: [],
@@ -106,6 +107,7 @@ const useBillStore = create(
           id: createId(),
           title: '',
           merchant: '',
+          category: 'Other',
           imageUrl: '',
           items: [],
           persons: [],
@@ -163,6 +165,7 @@ const useBillStore = create(
               id: bill.id,
               title: bill.title,
               merchant: bill.merchant || '',
+              category: bill.category || 'Other',
               completedAt: bill.created_at,
               grandTotal: bill.grand_total,
               user_share: bill.user_share || 0,
@@ -219,6 +222,7 @@ const useBillStore = create(
         const billData = {
           title: state.bill.title || 'Untitled Bill',
           merchant: state.bill.merchant || '',
+          category: state.bill.category || 'Other',
           items: state.bill.items.map(item => ({ id: item.id, name: item.name, price: item.unitPrice ?? item.price, quantity: item.qty ?? item.quantity ?? 1 })),
           persons: state.bill.persons.map(p => ({
             id: p.id,
@@ -243,6 +247,8 @@ const useBillStore = create(
           discount: billAmounts(state.bill).discount,
           bill_date: state.bill.date || new Date().toISOString().slice(0, 10),
           status,
+          receipt_image: state.bill.imageUrl || '',
+          receipt_mime: state.bill.imageUrl?.match(/^data:([^;,]+)/)?.[1] || 'image/jpeg',
         };
         const payload = JSON.stringify(billData);
         const userId = useAuthStore.getState().user?.id;
@@ -257,6 +263,14 @@ const useBillStore = create(
           const saved = await api.createBill({ ...billData, request_key: pendingSave.key });
           if (epoch !== accountEpoch) throw new Error('Account changed while saving.');
           set({ pendingSave: null, savedBill: status === 'draft' ? null : saved });
+          if (state.bill.groupId && status !== 'draft' && saved?.id) {
+            const group = await api.getGroup(state.bill.groupId);
+            const members = (saved.persons || []).flatMap(person => {
+              const member = (group.group?.members || group.members || []).find(item => item.user_id && item.user_id === person.user_id);
+              return member ? [{ group_member_id: member.id, person_id: person.id }] : [];
+            });
+            try { await api.attachBillToGroup(state.bill.groupId, saved.id, members); } catch (groupError) { console.warn('Bill saved but group attachment failed:', groupError); }
+          }
           // Finalising a resumed draft supersedes it. Delete only after the new bill exists, so a
           // failed create can never lose the user's work. Deliberately BEFORE the refetches below so
           // History is already clean when fetchCompletedBills resolves.
@@ -285,18 +299,25 @@ const useBillStore = create(
         const epoch = accountEpoch;
         try {
           const data = await api.getBill(id);
-          const billData = data.bill || data;
-          const persons = billData.persons || [];
+           const billData = data.bill || data;
+           const persons = billData.persons || [];
           const payer = persons.find(p => p.is_payer);
           if (epoch !== accountEpoch) throw new Error('Account changed while loading.');
           if (billData.status !== 'draft') throw new Error('Only drafts can be resumed.');
 
-          set({
+           let receiptImage = '';
+           if (billData.receipt_mime) {
+             try { receiptImage = await api.getReceiptDataUrl(billData.id); } catch { /* old/deleted receipt */ }
+           }
+           if (epoch !== accountEpoch) throw new Error('Account changed while loading.');
+           set({
             bill: {
               id: billData.id,
-              title: billData.title || '',
-              merchant: billData.merchant || '',
-              imageUrl: '',
+               title: billData.title || '',
+               merchant: billData.merchant || '',
+               category: billData.category || 'Other',
+               groupId: billData.group_id || null,
+               imageUrl: receiptImage,
               items: (billData.items || []).map(item => ({ id: item.id, name: item.name, price: item.price, qty: item.quantity || 1, quantity: item.quantity || 1 })),
               persons: persons.map(p => ({
                 id: p.id,

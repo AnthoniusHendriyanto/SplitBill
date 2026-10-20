@@ -60,25 +60,16 @@ function StepHeader({ currentStep, setStep, nextLabel, onNext, onBack, showActio
         </div>
 
         {showActions && (
-          <div className="flex items-center gap-2 w-full sm:w-auto">
+          <div className="flex w-full items-center gap-2 sm:w-auto">
             {currentStep > 1 && (
-              <button onClick={onBack}
-                className="h-9 px-3.5 rounded-lg text-xs font-bold text-[--text-secondary] bg-white/[0.04] hover:bg-white/[0.08] border border-[--border] transition-all flex items-center gap-1.5 cursor-pointer"
-              >
-                <Icon name="arrow_back" className="text-sm" /> Back
+              <button type="button" onClick={onBack} className="btn-secondary">
+                <Icon name="arrow_back" className="text-base" />Back
               </button>
             )}
             {onNext && (
-              <button onClick={onNext} disabled={nextDisabled}
-                className={cn(
-                  "h-9 px-4 rounded-lg text-xs font-bold tracking-wide transition-all flex items-center gap-1.5 cursor-pointer border-none",
-                  nextDisabled
-                    ? "bg-[--surface-raised] text-[--text-tertiary] cursor-not-allowed opacity-50"
-                    : "bg-[--brand-primary] text-[--text-inverse] hover:bg-[--brand-primary-hover] active:scale-95 shadow-sm"
-                )}
-              >
+              <button type="button" onClick={onNext} disabled={nextDisabled} className={cn('btn-primary', nextDisabled && 'opacity-50')}>
                 {nextLabel || 'Continue'}
-                <Icon name="arrow_forward" className="text-sm" />
+                <Icon name="arrow_forward" className="text-base" />
               </button>
             )}
           </div>

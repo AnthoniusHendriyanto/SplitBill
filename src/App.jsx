@@ -13,8 +13,10 @@ import TopNavBar from './components/TopNavBar';
 import StepHeader from './components/StepHeader';
 import BottomTabBar from './components/BottomTabBar';
 import MobileHeader from './components/MobileHeader';
+import MobileDrawer from './components/MobileDrawer';
 import HelpCenterModal from './components/HelpCenterModal';
 import BillDetailsModal from './components/BillDetailsModal';
+import PageHeader from './components/ui/PageHeader';
 
 import Step1Scan from './components/Step1Scan';
 import Step2Ledger from './components/Step2Ledger';
@@ -24,6 +26,36 @@ import Step5Settlement from './components/Step5Settlement';
 import Dashboard from './components/Dashboard';
 import ActivityFeed from './components/dashboard/ActivityFeed';
 import SettingsPage from './components/SettingsPage';
+import GroupsPage from './pages/GroupsPage';
+import RecurringPage from './pages/RecurringPage';
+import ImportsPage from './pages/ImportsPage';
+
+async function prepareReceiptImage(file) {
+  const dataUrl = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+  if (!file.type.startsWith('image/') || file.type === 'image/gif') return dataUrl;
+  try {
+    const image = await new Promise((resolve, reject) => {
+      const element = new Image();
+      element.onload = () => resolve(element);
+      element.onerror = reject;
+      element.src = dataUrl;
+    });
+    const longestSide = Math.max(image.naturalWidth, image.naturalHeight);
+    const scale = Math.min(1, 1280 / longestSide);
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+    canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+    canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/jpeg', 0.82);
+  } catch {
+    return dataUrl;
+  }
+}
 
 export default function App() {
   const navigate = useNavigate();
@@ -44,7 +76,7 @@ export default function App() {
   const accessToken = useAuthStore((state) => state.accessToken);
   const isAuthenticated = !!accessToken;
   const step = ui?.step ?? 1;
-  const activeTab = ui?.activeTab ?? 'bills';
+  const activeTab = ui?.activeTab ?? 'dashboard';
   const [isValidating, setIsValidating] = useState(true);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [historySearch, setHistorySearch] = useState('');
@@ -80,6 +112,7 @@ export default function App() {
 
   const [isScanning, setIsScanning] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [selectedBillId, setSelectedBillId] = useState(null);
   const [uploadError, setUploadError] = useState(null);
   const [ocrProgress, setOcrProgress] = useState(0);
@@ -131,12 +164,7 @@ export default function App() {
 
     let base64Url = '';
     try {
-      base64Url = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
+      base64Url = await prepareReceiptImage(file);
     } catch (e) {
       console.error('Failed to read image file', e);
     }
@@ -289,6 +317,18 @@ export default function App() {
       return <SettingsPage />;
     }
 
+    if (activeTab === 'groups') {
+      return <GroupsPage />;
+    }
+
+    if (activeTab === 'recurring') {
+      return <RecurringPage />;
+    }
+
+    if (activeTab === 'imports') {
+      return <ImportsPage />;
+    }
+
     if (activeTab === 'history') {
       const q = historySearch.toLowerCase();
       const filtered = q
@@ -299,18 +339,17 @@ export default function App() {
           )
         : completedBills;
       return (
-        <div className="page-content flex-1 overflow-y-auto flex flex-col gap-6">
-          <div>
-            <h1 className="page-title">
-              History
-            </h1>
-            <p className="text-sm text-secondary mt-3">Every hangout, accounted for.</p>
-          </div>
-          <div className="relative">
-            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-sm text-tertiary pointer-events-none">search</span>
+        <div className="page-content page-stack flex-1 overflow-y-auto">
+          <PageHeader
+            eyebrow="Your record"
+            title="History"
+            description="Every hangout, accounted for. Search what you’ve already split."
+          />
+          <div className="relative max-w-xl">
+            <span className="material-symbols-outlined pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-tertiary">search</span>
             <input type="search" aria-label="Search bills" placeholder="Search merchant, title or date…"
               value={historySearch} onChange={e => setHistorySearch(e.target.value)}
-              className="w-full bg-black/20 border border-white/[0.06] rounded-xl pl-9 pr-3 py-2.5 text-sm text-primary placeholder:text-tertiary/50 focus:outline-none focus:border-brand-primary/50 transition-colors"
+              className="field-input pl-10 text-sm"
             />
           </div>
           <ActivityFeed
@@ -360,7 +399,7 @@ export default function App() {
   }
 
   return (
-    <div className="bg-page text-primary antialiased overflow-hidden h-[100dvh] flex">
+    <div className="app-shell bg-page text-primary antialiased overflow-hidden h-[100dvh] flex">
       <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-[--brand-primary] focus:text-[--text-inverse] focus:rounded-lg focus:text-sm focus:font-bold">
         Skip to main content
       </a>
@@ -373,7 +412,7 @@ export default function App() {
         <SideNavBar onHelpOpen={() => setIsHelpOpen(true)} />
       </div>
       <main id="main-content" className={cn(
-        "min-w-0 flex-1 flex flex-col h-[100dvh] overflow-hidden bg-page pb-[calc(76px+env(safe-area-inset-bottom))] md:pb-0 transition-all duration-300",
+        "min-w-0 flex-1 flex flex-col h-[100dvh] overflow-hidden bg-page pb-[calc(68px+env(safe-area-inset-bottom))] md:pb-0 transition-[margin] duration-300",
         isOffline ? "mt-5" : "",
         ui?.sidebarCollapsed ? "md:ml-[72px] ml-0" : "md:ml-[240px] ml-0"
       )}>
@@ -381,16 +420,17 @@ export default function App() {
           <TopNavBar />
         </div>
         <div className="md:hidden block">
-          <MobileHeader onHelpOpen={() => setIsHelpOpen(true)} />
+          <MobileHeader onMenuOpen={() => setIsMobileMenuOpen(true)} />
         </div>
         <div className="min-h-0 flex-1 overflow-hidden flex flex-col">
           {renderContent()}
         </div>
         <div className="md:hidden block">
-          <BottomTabBar />
+          <BottomTabBar onMoreOpen={() => setIsMobileMenuOpen(true)} moreOpen={isMobileMenuOpen} />
         </div>
       </main>
       <HelpCenterModal open={isHelpOpen} onClose={() => setIsHelpOpen(false)} />
+      <MobileDrawer open={isMobileMenuOpen} onClose={() => setIsMobileMenuOpen(false)} onHelpOpen={() => setIsHelpOpen(true)} />
       {selectedBillId && (
         <BillDetailsModal billId={selectedBillId} onClose={() => setSelectedBillId(null)} />
       )}

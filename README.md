@@ -27,6 +27,10 @@ There is no supplied Dockerfile or required `.env.example` copy step.
 4. **Shares:** Equal; By Item, Percentage, and Custom require premium, matching the backend.
 5. **Summary:** finalize, queue assignments for linked friends, then share the saved summary.
 
+Primary navigation is **Home · Split · Groups · History · More** on mobile; Recurring, Import,
+Settings, Help, and sign-out live under More. Desktop keeps the same hierarchy in the sidebar, with
+Recurring and Import grouped under Tools.
+
 Custom amounts are final payable shares (fees/discount included). Calculations use cents with
 deterministic remainder allocation, not independent whole-rupiah rounding. Backend saved totals
 are authoritative. IDR formatting is implemented; multi-currency is not.
@@ -38,6 +42,11 @@ Notification/debt data refreshes on Home and every 30 seconds while visible.
 
 Saved summaries support device sharing, WhatsApp text, and copy-text fallback. Instagram availability
 depends on the device share sheet. These are text shares, not public bill URLs. Bill links require login.
+
+Groups are available for authenticated users and can contain multiple explicitly attached bills. A
+finalized bill can also create a time-limited public read-only link at `/shared/:token`; public
+projections do not expose account or contact identifiers. Receipt images are resized before save and
+retained with the bill when supplied.
 
 ## Main files
 
@@ -60,13 +69,15 @@ Access tokens are not persisted; the refresh token is an httpOnly cookie. After 
 retry identical values before editing or starting another bill to avoid duplicates. Resuming a saved
 draft makes a copy; the original remains until explicitly deleted.
 
-Premium is manual bank transfer on the backend; frontend checkout is not wired. Public share-link
-routes remain 501 stubs. There is no implemented PDF export, Stripe, or guaranteed direct IG send.
+Premium is manual bank transfer on the backend; frontend checkout is not wired. Public bill share
+links, finalized-bill editing, CSV/JSON export, print output, and recurring definitions are wired.
+There is no direct PDF file generator, Stripe checkout, or guaranteed direct IG send.
 See [business flow](../business-flow.md), [security](../SECURITY.md), and [API](../splitbill_backend/docs/API.md).
 
 ## Current behavior (October 2026)
 
 - Ink + citron light/dark UI, local Plus Jakarta Sans, native dialogs, three-tab settings.
+- Mobile-first page headers, cards, inputs, status badges, empty/error states, and 44–48px touch targets; mobile form controls render at 16px to avoid browser zoom. Print output hides app navigation and controls.
 - IDR only. Equal and By Item are free; percentage and custom require active Premium. Custom values are final amounts including fees and discount.
 - Preview allocations match the backend's deterministic cent allocation. Saved bills display server-recorded shares.
 - Drafts retain split settings, linked identities, and assignments. **Resume as Copy** preserves the original draft. Failed/retried saves use idempotency keys.
@@ -97,10 +108,10 @@ The sections below describe earlier iterations and may mention removed features;
 - **Discount Handling**: "You saved Rp X" badge shows total discounts. Monthly spending shows pre-discount amount.
 - **Authentication**: JWT-based login/register with auto-refresh.
 - **Premium Tier**: Freemium ($2.99/month) with feature gating and upgrade modals.
-- **Multi-Currency**: 9 currencies (IDR, USD, EUR, etc.) with formatting.
-- **Accessibility**: `focus-visible` rings, `aria-current`/`aria-label` on nav, `prefers-reduced-motion` support, typography hierarchy.
+- **IDR formatting**: Indonesian rupiah display with no multi-currency conversion.
+- **Accessibility**: `focus-visible` rings, `aria-current`/`aria-label` on nav, native dialog focus handling, `prefers-reduced-motion` support, responsive typography hierarchy.
 - **PWA-Ready**: Manifest, theme-color, apple-mobile-web-app meta tags.
-- **Offline-First**: Guest mode works fully offline; authenticated mode syncs to backend.
+- **Online authenticated use**: no offline mode and no guest mode; drafts persist locally while authenticated data syncs to the backend.
 
 ## Architecture
 

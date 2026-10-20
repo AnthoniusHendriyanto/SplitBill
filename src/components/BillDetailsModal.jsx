@@ -3,11 +3,12 @@ import { motion } from 'framer-motion';
 import useBillStore from '../store/useBillStore';
 import useAuthStore from '../store/useAuthStore';
 import ConfirmDialog from './ConfirmDialog';
-import { cn } from '../utils/cn';
+import Icon from './Icon';
 import { api } from '../lib/api';
 import ModalFrame from './ModalFrame';
 import { savedShares } from '../utils/shares';
 import ShareSummary from './ShareSummary';
+import StatusBadge from './ui/StatusBadge';
 
 function BillDetailsModal({ billId, onClose }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -22,6 +23,9 @@ function BillDetailsModal({ billId, onClose }) {
   const [bill, setBill] = useState(null);
   const [loading, setLoading] = useState(() => isAuthenticated && !!billId);
   const [error, setError] = useState('');
+  const [editing, setEditing] = useState(false);
+  const [editForm, setEditForm] = useState(null);
+  const [savingEdit, setSavingEdit] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -71,7 +75,40 @@ function BillDetailsModal({ billId, onClose }) {
     return () => { cancelled = true; };
   }, [billId, isAuthenticated, userId]);
 
+  const beginEdit = () => {
+    setEditForm({
+      title: bill.title,
+      merchant: bill.merchant,
+      bill_date: bill.billDate,
+      items: bill.items.map(item => ({ id: item.id, name: item.name, price: item.price, quantity: item.quantity || 1 })),
+    });
+    setEditing(true);
+  };
+
+  const saveEdit = async (event) => {
+    event.preventDefault();
+    setSavingEdit(true);
+    try {
+      const source = bill.serverData;
+      const payload = {
+        request_key: crypto.randomUUID(), title: editForm.title, merchant: editForm.merchant, category: source.category || 'Other', bill_date: editForm.bill_date,
+        items: editForm.items, persons: (source.persons || []).map(person => ({ id: person.id, name: person.name, email: person.email || '', user_id: person.user_id || undefined, custom_amount: person.custom_amount || 0, is_payer: person.is_payer, percentage: person.percentage || 0, payment_info: person.payment_info || {} })),
+        split_type: source.split_type, assignments: (source.items || []).flatMap(item => (item.assigned_person_ids || []).map(person_id => ({ item_id: item.id, person_id }))),
+        service_charge: source.service_charge || 0, service_mode: source.service_mode || 'amount', tax: source.tax || 0, tax_mode: source.tax_mode || 'amount', discount: source.discount || 0, status: source.status,
+      };
+      const updated = await api.updateBill(bill.id, payload);
+      const next = updated.bill || updated;
+      setBill(prev => prev ? { ...prev, serverData: next, title: next.title, merchant: next.merchant || '', billDate: next.bill_date || '', items: next.items || [], persons: next.persons || [], payments: next.payments || [], grandTotal: next.grand_total, status: next.status, totals: savedShares(next) } : prev);
+      setEditing(false);
+      fetchCompletedBills();
+      fetchDebts();
+    } catch (err) { setError(err.message || 'Could not update this bill.'); }
+    finally { setSavingEdit(false); }
+  };
+
   if (loading || !bill) return <ModalFrame onClose={onClose} label="Bill details"><div className="panel p-8 w-full max-w-xl"><h2 className="text-xl font-bold mb-5">Bill details</h2>{loading ? <div aria-busy="true" aria-label="Loading bill" className="space-y-4"><div className="h-24 bg-surface-raised rounded-xl animate-pulse" /><div className="h-32 bg-surface-raised rounded-xl animate-pulse" /></div> : <p role="alert" className="text-error">{error || 'This bill is unavailable.'}</p>}<button className="btn-secondary mt-6" onClick={onClose}>Close</button></div></ModalFrame>;
+
+  const editLocked = Object.values(bill.personPaid || {}).some(Boolean);
 
   return (
     <ModalFrame onClose={onClose} label={bill.title || 'Bill details'}>
@@ -79,27 +116,30 @@ function BillDetailsModal({ billId, onClose }) {
         initial={{ scale: 0.97, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         onClick={(e) => e.stopPropagation()}
-        className="receipt-panel w-full max-w-2xl shadow-xl overflow-hidden flex flex-col max-h-[90dvh] text-primary"
+        className="print-area receipt-panel w-full max-w-2xl shadow-xl overflow-hidden flex flex-col max-h-[90dvh] text-primary"
       >
-        <div className="p-6 border-b border-white/[0.04] flex justify-between items-center">
-          <div>
+        <div className="flex items-start justify-between gap-4 border-b border-border bg-surface-base p-5 sm:p-6">
+          <div className="min-w-0">
+            <p className="eyebrow mb-1">Bill details</p>
             <h2 className="text-2xl font-extrabold tracking-tight text-primary break-words">{bill.title}</h2>
-            {bill.merchant && <p className="text-xs text-tertiary font-medium mt-0.5">{bill.merchant}</p>}
-            <div className="flex flex-wrap gap-2 mt-2 text-xs text-secondary font-medium">
-              {bill.billDate && <span>Bill Date: {new Date(bill.billDate + 'T00:00:00').toLocaleDateString(undefined, { dateStyle: 'medium' })}</span>}
+            {bill.merchant && <p className="mt-0.5 text-xs font-medium text-tertiary">{bill.merchant}</p>}
+            <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs font-medium text-secondary">
+              {bill.billDate && <span>Bill date: {new Date(bill.billDate + 'T00:00:00').toLocaleDateString(undefined, { dateStyle: 'medium' })}</span>}
               <span>Created: {new Date(bill.completedAt).toLocaleDateString(undefined, { dateStyle: 'medium' })}</span>
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
             aria-label="Close bill details"
-            className="icon-button"
+            className="icon-button print-hide"
           >
             <span className="material-symbols-outlined text-xl">close</span>
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          {error && <p role="alert" className="text-error text-sm">{error}</p>}
+         <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6">
+           {error && <p role="alert" className="inline-error print-hide">{error}</p>}
+           {editing && <form onSubmit={saveEdit} className="print-hide bg-surface-base border border-border rounded-xl p-5 space-y-4"><div className="flex justify-between items-center"><h3 className="font-bold">Edit bill</h3><button type="button" className="btn-ghost" onClick={() => setEditing(false)}>Cancel</button></div><label className="field-label">Title<input className="field-input mt-1" value={editForm.title} onChange={e => setEditForm(p => ({ ...p, title: e.target.value }))} required /></label><label className="field-label">Merchant<input className="field-input mt-1" value={editForm.merchant} onChange={e => setEditForm(p => ({ ...p, merchant: e.target.value }))} /></label><label className="field-label">Bill date<input type="date" className="field-input mt-1" value={editForm.bill_date} onChange={e => setEditForm(p => ({ ...p, bill_date: e.target.value }))} required /></label><div><p className="field-label">Items</p>{editForm.items.map((item, index) => <div key={item.id} className="mb-2 grid grid-cols-[1fr_7rem_4rem] gap-2"><input aria-label={`Item ${index + 1} name`} className="field-input" value={item.name} onChange={e => setEditForm(p => ({ ...p, items: p.items.map((row, i) => i === index ? { ...row, name: e.target.value } : row) }))} required /><input aria-label={`Item ${index + 1} price`} type="number" min="0" className="field-input font-numeric" value={item.price} onChange={e => setEditForm(p => ({ ...p, items: p.items.map((row, i) => i === index ? { ...row, price: Number(e.target.value) } : row) }))} required /><input aria-label={`Item ${index + 1} quantity`} type="number" min="1" className="field-input font-numeric" value={item.quantity} onChange={e => setEditForm(p => ({ ...p, items: p.items.map((row, i) => i === index ? { ...row, quantity: Number(e.target.value) } : row) }))} required /></div>)}</div><button className="btn-primary" type="submit" disabled={savingEdit}>{savingEdit ? 'Saving…' : 'Save changes'}</button></form>}
           <div className="bg-surface-base border border-border rounded-xl p-5 sm:p-6">
             <div className="flex flex-wrap gap-4 justify-between items-start">
               <div>
@@ -108,16 +148,9 @@ function BillDetailsModal({ billId, onClose }) {
               </div>
               <div className="text-right">
                 <p className="text-[10px] font-bold text-secondary uppercase tracking-widest">Status</p>
-                <span className={cn(
-                  "inline-block text-[10px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider mt-2",
-                  bill.status === 'completed'
-                    ? "bg-[--brand-primary-subtle] text-[--brand-primary]"
-                    : bill.status === 'draft'
-                      ? "bg-surface-raised text-secondary"
-                      : "bg-[--semantic-warning-bg] text-warning"
-                )}>
+                <StatusBadge tone={bill.status === 'completed' ? 'success' : bill.status === 'draft' ? 'neutral' : 'warning'} className="mt-2">
                   {bill.status}
-                </span>
+                </StatusBadge>
               </div>
             </div>
             <div className="flex flex-wrap gap-6 mt-5 pt-5 receipt-divider text-sm">
@@ -187,7 +220,7 @@ function BillDetailsModal({ billId, onClose }) {
                                   setMarkingPaid(prev => ({ ...prev, [person.id]: false }));
                                 }
                               }}
-                              className="px-4 py-2 rounded-xl bg-[--brand-primary] hover:bg-[--brand-primary-hover] text-[--text-inverse] font-bold text-xs transition-all cursor-pointer flex items-center gap-1.5 shadow-sm disabled:opacity-50 active:scale-[0.98]"
+                              className="print-hide px-4 py-2 rounded-xl bg-[--brand-primary] hover:bg-[--brand-primary-hover] text-[--text-inverse] font-bold text-xs transition-all cursor-pointer flex items-center gap-1.5 shadow-sm disabled:opacity-50 active:scale-[0.98]"
                             >
                               <span className="material-symbols-outlined text-sm">check_circle</span>
                               {markingPaid[person.id] ? 'Marking...' : 'Mark Paid'}
@@ -201,43 +234,53 @@ function BillDetailsModal({ billId, onClose }) {
               )}
             </div>
           </div>
+          {bill.ownerId === userId && editLocked && bill.status !== 'draft' && (
+            <p className="print-hide rounded-xl border border-border bg-surface-base p-3 text-xs leading-relaxed text-secondary">
+              Editing is locked because a payment has already been marked paid. Delete the bill only if you need to rebuild it.
+            </p>
+          )}
           {bill.status !== 'draft' && <ShareSummary bill={bill.serverData} />}
         </div>
-        <div className="p-4 sm:p-6 receipt-divider bg-surface-base flex flex-wrap justify-between gap-3">
-          {bill.ownerId === userId && <button
-            onClick={() => setShowDeleteConfirm(true)}
-            className="px-6 py-2.5 rounded-xl border border-red-500/20 text-red-400 font-bold text-sm hover:bg-red-500/10 transition-all cursor-pointer"
-          >
-            Delete Bill
-          </button>}
+        <div className="print-hide flex flex-wrap items-center justify-between gap-3 border-t border-border bg-surface-base p-4 sm:p-6">
+          <div>
+            {bill.ownerId === userId && (
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirm(true)}
+                className="btn-danger"
+              >
+                <Icon name="delete" className="text-base" />Delete bill
+              </button>
+            )}
+          </div>
+          <div className="flex flex-wrap justify-end gap-2">
+            {bill.ownerId === userId && bill.status !== 'draft' && !editLocked && (
+              <button type="button" className="btn-secondary" onClick={beginEdit}><Icon name="edit" className="text-base" />Edit bill</button>
+            )}
+            {bill.status === 'draft' && bill.ownerId === userId ? (
+              <button
+                type="button"
+                onClick={async () => {
+                  try { await loadBillDraft(bill.id); updateUI({ step: 4, activeTab: 'bills' }); onClose(); }
+                  catch (err) { setError(err.message); }
+                }}
+                className="btn-primary"
+              >
+                <Icon name="edit" className="text-base" />Resume as copy
+              </button>
+            ) : (
+              <button type="button" onClick={onClose} className="btn-secondary">Close</button>
+            )}
+          </div>
           <ConfirmDialog
             open={showDeleteConfirm}
-            title="Delete Bill History"
-            message="Are you absolutely sure you want to delete this bill history?"
+            title="Delete bill history"
+            message="Are you absolutely sure you want to delete this bill history? This cannot be undone."
             confirmLabel="Delete"
             variant="danger"
             onConfirm={async () => { try { await deleteCompletedBill(bill.id); onClose(); } catch (err) { setError(err.message); } }}
             onCancel={() => setShowDeleteConfirm(false)}
           />
-          {bill.status === 'draft' && bill.ownerId === userId ? (
-            <button
-                onClick={async () => {
-                try { await loadBillDraft(bill.id); updateUI({ step: 4, activeTab: 'bills' }); onClose(); }
-                catch (err) { setError(err.message); }
-              }}
-              className="px-6 py-2.5 rounded-xl bg-[--brand-primary] hover:bg-[--brand-primary-hover] text-[--text-inverse] font-bold text-sm transition-all cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-[0.98]"
-            >
-              <span className="material-symbols-outlined text-sm">edit</span>
-              Resume as Copy
-            </button>
-          ) : (
-            <button
-              onClick={onClose}
-              className="px-6 py-2.5 rounded-xl bg-white/[0.04] text-secondary font-bold text-sm hover:text-primary hover:bg-white/[0.08] transition-all cursor-pointer"
-            >
-              Close
-            </button>
-          )}
         </div>
       </motion.div>
     </ModalFrame>
