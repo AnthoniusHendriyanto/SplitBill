@@ -1,0 +1,295 @@
+import { API } from '../config/api';
+import useAuthStore from '../store/useAuthStore';
+import { getErrorMessage } from '../utils/errors';
+
+const authBase = `${API.base}/api/v1/auth`;
+const ocrBase = `${API.base}/api/v1/ocr`;
+
+let refreshPromise = null;
+let refreshVersion = null;
+
+async function refreshAccessToken() {
+  const version = useAuthStore.getState().sessionVersion;
+  if (refreshPromise && refreshVersion === version) return refreshPromise;
+  refreshVersion = version;
+
+  refreshPromise = (async () => {
+    try {
+      const res = await fetch(`${authBase}/refresh`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+
+      if (!res.ok) return false;
+
+      const body = await res.json();
+      const data = body.data || body;
+      if (useAuthStore.getState().sessionVersion !== version) return false;
+      useAuthStore.getState().setTokens(data.access_token);
+      return true;
+    } catch {
+      return false;
+    } finally {
+      if (refreshVersion === version) refreshPromise = null;
+    }
+  })();
+
+  return refreshPromise;
+}
+
+async function request(path, options = {}) {
+  const accessToken = useAuthStore.getState().accessToken;
+  const version = useAuthStore.getState().sessionVersion;
+  const checkSession = () => {
+    if (version !== useAuthStore.getState().sessionVersion) throw new Error('Account changed. Please try again.');
+  };
+
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+    ...options.headers,
+  };
+
+  const isFormData = options.body instanceof FormData;
+  if (isFormData) {
+    delete headers['Content-Type'];
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000);
+  const signal = options.signal || controller.signal;
+
+  try {
+    const res = await fetch(`${API.base}${path}`, {
+      ...options,
+      headers,
+      signal,
+      credentials: 'include',
+    });
+    clearTimeout(timeoutId);
+    checkSession();
+
+    if (res.status === 204) return null;
+
+    const body = await res.json().catch(() => ({}));
+    checkSession();
+
+    if (res.status === 401 && body.error?.code !== 'INVALID_CREDENTIALS') {
+      const refreshed = await refreshAccessToken();
+      checkSession();
+      if (refreshed) {
+        const newToken = useAuthStore.getState().accessToken;
+        const retryController = new AbortController();
+        const retryTimeout = setTimeout(() => retryController.abort(), 30000);
+        const retryRes = await fetch(`${API.base}${path}`, {
+          ...options,
+          headers: { ...headers, Authorization: `Bearer ${newToken}` },
+          signal: retryController.signal,
+          credentials: 'include',
+        });
+        clearTimeout(retryTimeout);
+        checkSession();
+        if (retryRes.status === 204) return null;
+        const retryBody = await retryRes.json().catch(() => ({}));
+        checkSession();
+        if (retryBody.success) return retryBody.data;
+        throw Object.assign(new Error(getErrorMessage({
+          code: retryBody.error?.code,
+          message: retryBody.error?.message || retryBody.message,
+        })), { status: retryRes.status });
+      }
+      useAuthStore.getState().logout();
+      throw new Error('Session expired. Please login again.');
+    }
+
+    if (!body.success) {
+      throw Object.assign(new Error(getErrorMessage({
+        code: body.error?.code,
+        message: body.error?.message || body.message,
+      })), { status: res.status });
+    }
+
+    return body.data;
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (err.name === 'AbortError') {
+      throw new Error('Request timed out. Please try again.', { cause: err });
+    }
+    throw err;
+  }
+}
+
+export const api = {
+  getNotifications: (page = 1) => request(`/api/v1/notifications?page=${page}`),
+  readNotification: id => request(`/api/v1/notifications/${id}/read`, { method: 'PATCH' }),
+  getDebts: () => request('/api/v1/debts'),
+  getSettlements: () => request('/api/v1/settlements'),
+  // Auth
+  login: (email, password) =>
+    request('/api/v1/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    }),
+
+  register: (name, email, password) =>
+    request('/api/v1/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ name, email, password }),
+    }),
+
+  logout: async () => {
+    try {
+      await fetch(`${authBase}/logout`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+    } catch {
+      // Ignore logout errors
+    }
+  },
+
+  // Bills
+  getBills: (page = 1, limit = 20, fromDate = '', toDate = '') => {
+    const params = new URLSearchParams({ page, limit });
+    if (fromDate) params.append('from_date', fromDate);
+    if (toDate) params.append('to_date', toDate);
+    return request(`/api/v1/bills?${params}`);
+  },
+
+  getBill: (id) => request(`/api/v1/bills/${id}`),
+
+  createBill: (billData) =>
+    request('/api/v1/bills', {
+      method: 'POST',
+      body: JSON.stringify(billData),
+    }),
+
+  updateBill: (id, billData) => request(`/api/v1/bills/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(billData),
+  }),
+
+  updateBillStatus: (id, status) =>
+    request(`/api/v1/bills/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    }),
+
+  markPersonPaid: (billId, personId) =>
+    request(`/api/v1/bills/${billId}/payments/${personId}`, {
+      method: 'PATCH',
+    }),
+
+  deleteBill: (id) =>
+    request(`/api/v1/bills/${id}`, { method: 'DELETE' }),
+
+  createShare: (id, days = 7) => request(`/api/v1/bills/${id}/share`, {
+    method: 'POST',
+    body: JSON.stringify({ days }),
+  }),
+
+  revokeShare: (id) => request(`/api/v1/bills/${id}/share`, { method: 'DELETE' }),
+
+  getSharedBill: async (token) => {
+    const res = await fetch(`${API.base}/api/v1/shared/${encodeURIComponent(token)}`);
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok || !body.success) throw new Error(body.error?.message || body.message || 'Shared bill not found');
+    return body.data;
+  },
+
+  getReceiptUrl: (id) => `${API.base}/api/v1/bills/${id}/receipt`,
+
+  getReceiptDataUrl: async (id) => {
+    const token = useAuthStore.getState().accessToken;
+    const res = await fetch(`${API.base}/api/v1/bills/${id}/receipt`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      credentials: 'include',
+    });
+    if (!res.ok) throw new Error('Receipt unavailable');
+    const blob = await res.blob();
+    return await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  },
+
+  // Groups
+  getGroups: () => request('/api/v1/groups'),
+  createGroup: (name) => request('/api/v1/groups', { method: 'POST', body: JSON.stringify({ name }) }),
+  getGroup: (id) => request(`/api/v1/groups/${id}`),
+  deleteGroup: (id) => request(`/api/v1/groups/${id}`, { method: 'DELETE' }),
+  addGroupMember: (groupId, data) => request(`/api/v1/groups/${groupId}/members`, { method: 'POST', body: JSON.stringify(data) }),
+  removeGroupMember: (groupId, memberId) => request(`/api/v1/groups/${groupId}/members/${memberId}`, { method: 'DELETE' }),
+  attachBillToGroup: (groupId, billId, members = []) => request(`/api/v1/groups/${groupId}/bills/${billId}`, { method: 'POST', body: JSON.stringify({ members }) }),
+  getGroupDefaultSplit: (groupId) => request(`/api/v1/groups/${groupId}/default-split`),
+  setGroupDefaultSplit: (groupId, split) => request(`/api/v1/groups/${groupId}/default-split`, { method: 'PUT', body: JSON.stringify(split) }),
+
+  getRecurrences: () => request('/api/v1/recurrences'),
+  createRecurrence: (data) => request('/api/v1/recurrences', { method: 'POST', body: JSON.stringify(data) }),
+  setRecurrenceStatus: (id, status) => request(`/api/v1/recurrences/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+  importSplitwise: (file) => { const form = new FormData(); form.append('file', file); return request('/api/v1/imports/splitwise', { method: 'POST', body: form }); },
+
+  // OCR (public endpoint, no auth required)
+  processOCR: async (file) => {
+    const formData = new FormData();
+    formData.append('image', file);
+
+    const res = await fetch(ocrBase, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (res.status === 204) return null;
+
+    const body = await res.json().catch(() => ({}));
+
+    if (!body.success) {
+      throw new Error(getErrorMessage({
+        code: body.error?.code,
+        message: body.message,
+      }));
+    }
+
+    return body.data;
+  },
+
+  // User
+  getMe: () => request('/api/v1/users/me'),
+
+  updateMe: (data) => request('/api/v1/users/me', {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  }),
+
+  // Contacts
+  getContacts: () => request('/api/v1/contacts'),
+
+  createContact: (name) =>
+    request('/api/v1/contacts', {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    }),
+
+  deleteContact: (id) =>
+    request(`/api/v1/contacts/${id}`, { method: 'DELETE' }),
+
+  // Invitations
+  sendInvitation: (email) =>
+    request('/api/v1/invitations', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
+
+  getInvitations: () => request('/api/v1/invitations'),
+
+  acceptInvitation: (id) =>
+    request(`/api/v1/invitations/${id}/accept`, { method: 'POST' }),
+
+  rejectInvitation: (id) =>
+    request(`/api/v1/invitations/${id}/reject`, { method: 'POST' }),
+
+  // Usage
+  getUsage: () => request('/api/v1/usage'),
+};
