@@ -38,6 +38,25 @@ instance, never a production database.
 - Financial error states are preserved end to end; never replace a server error with a generic
   success or silent fallback.
 
+## Security audit
+
+The Cloudflare `security-audit` skill is vendored at `.agents/skills/security-audit/` and pinned by
+hash in `skills-lock.json`. Any agent working in this repository can use it: ask for a security
+audit, a vulnerability review, or a focused security question.
+
+- `node tools/verify-skill-lock.mjs .agents/skills skills-lock.json` proves the vendored files still
+  match the pin. CI runs it, so editing the skill requires refreshing the lock file and shows up in
+  the diff.
+- `node .agents/skills/security-audit/validate-findings.cjs <findings.json>` and
+  `node .agents/skills/security-audit/validate-coverage-ledger.cjs <coverage-ledger.json>` validate
+  audit artifacts against `report-schema.json`.
+- The required CI job runs the skill's own validator test suites; it needs no secret and no model.
+- The agent-driven audit lives in `.github/workflows/security-audit.yml`. It runs on demand or
+  weekly, needs `ANTHROPIC_API_KEY`, and writes to the git-ignored `security-audit-output/`.
+
+Never let an audit probe deployed endpoints, production identities, or shared infrastructure. Audit
+the source; the repository's own tests and builds already run in CI.
+
 ## Documentation rules
 
 Update the relevant file in the same change as the code. Never delete earlier entries; append.

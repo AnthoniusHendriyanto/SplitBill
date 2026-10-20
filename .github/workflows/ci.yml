@@ -68,3 +68,25 @@ jobs:
       # unit and HTTP contract tests only. See backend/CONTRIBUTING.md for the disposable-instance run.
       - name: Test
         run: go test ./... -count=1
+
+  security-audit:
+    name: Security audit skill integrity and validators
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      # The vendored skill is the instruction set every agent follows, so it is pinned by hash.
+      # A pull request that edits it must refresh skills-lock.json, which puts the change in the diff.
+      - name: Verify the vendored skill matches skills-lock.json
+        run: node tools/verify-skill-lock.mjs .agents/skills skills-lock.json
+
+      - name: Run the security-audit validator suites
+        run: >-
+          node --test
+          .agents/skills/security-audit/validate-findings.test.cjs
+          .agents/skills/security-audit/validate-coverage-ledger.test.cjs

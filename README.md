@@ -72,6 +72,31 @@ CI runs both suites on every push and pull request against `main`.
 - Groups use explicit member identities; names never establish cross-bill identity.
 - Payment integrations and multi-currency are intentionally out of scope for now.
 
+## Security audit
+
+The [Cloudflare security-audit skill](https://github.com/cloudflare/security-audit-skill) is
+vendored at `.agents/skills/security-audit/` and pinned by hash in `skills-lock.json`. Any coding
+agent pointed at this repository can use it for a security audit or a focused vulnerability review.
+
+```sh
+# Prove the vendored skill still matches the pinned hash
+node tools/verify-skill-lock.mjs .agents/skills skills-lock.json
+
+# Validate audit artifacts against the skill's schema
+node .agents/skills/security-audit/validate-findings.cjs security-audit-output/findings.json
+node .agents/skills/security-audit/validate-coverage-ledger.cjs security-audit-output/coverage-ledger.json
+```
+
+CI runs the lock check and the skill's validator test suites on every push; both are deterministic
+and need no secret. The agent-driven audit is a separate workflow:
+
+- `.github/workflows/security-audit.yml` runs on demand and weekly, needs the `ANTHROPIC_API_KEY`
+  repository secret, and writes its report to the git-ignored `security-audit-output/`.
+- Set the `OPENCODE_MODEL` repository variable to change the model, for example
+  `anthropic/claude-sonnet-4-5`.
+- The audit is source-first. It never probes deployed endpoints or production identities, and the
+  repository's own test and build commands stay in the required CI pipeline.
+
 ## Deployment notes
 
 The client and API are separate deployable units inside one repository.

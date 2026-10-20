@@ -1,0 +1,100 @@
+name: Security Audit
+
+# The full audit runs a coding agent through the Cloudflare security-audit skill.
+# It needs a model provider key, so it is kept out of the required CI pipeline and
+# runs on demand or on a schedule. The deterministic parts of the skill (lock
+# integrity and the validator suites) run in the required `security-audit` job of
+# ci.yml and need no secret.
+#
+# Required repository secret:
+#   ANTHROPIC_API_KEY  — provider key for the agent (or set another provider key
+#                         the same way and point the model at that provider)
+# Optional repository variable:
+#   OPENCODE_MODEL     — provider/model to use, e.g. anthropic/claude-sonnet-4-5
+
+on:
+  workflow_dispatch:
+    inputs:
+      scope:
+        description: 'Scope passed to the audit'
+        required: false
+        default: 'the whole repository'
+      model:
+        description: 'provider/model override'
+        required: false
+        default: ''
+  schedule:
+    # Weekly, Monday 06:17 UTC. Off the hour so it does not pile onto the same
+    # minute as every other scheduled workflow.
+    - cron: '17 6 * * 1'
+
+permissions:
+  # Read-only on purpose. The audit must not push, open pull requests, or change
+  # repository source. Widen these only if the agent needs to post a result.
+  contents: read
+  pull-requests: read
+  issues: read
+
+concurrency:
+  group: security-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    name: Agent-driven security audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Run the security-audit skill
+        uses: anomalyco/opencode/github@latest
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          model: ${{ inputs.model || vars.OPENCODE_MODEL || 'anthropic/claude-sonnet-4-5' }}
+          use_github_token: true
+          prompt: |
+            Perform a full security audit of this repository using the security-audit skill
+            installed at .agents/skills/security-audit.
+
+            Scope: ${{ inputs.scope || 'the whole repository' }}
+
+            Rules for this run:
+            - Write every artifact to security-audit-output/ in the repository root. That
+              directory is git-ignored, so nothing is committed.
+            - Audit in source-first mode. The repository's own test and build commands
+              already run in the required CI pipeline, so do not execute target-controlled
+              builds, processes, browsers, or fuzzers here.
+            - Do not probe deployed endpoints, external services, production identities,
+              shared infrastructure, or any live control plane. This repository's data is
+              local; the API runs on localhost only.
+            - Never read, copy, or print credential values, tokens, cookies, or the
+              ambient environment. Use dummy principals and fixtures only.
+            - Do not open pull requests, push commits, or modify repository source. The
+              only permitted writes are into security-audit-output/.
+            - Validate the artifacts with the skill's own validators before finishing:
+              node .agents/skills/security-audit/validate-findings.cjs
+              security-audit-output/findings.json
+              and
+              node .agents/skills/security-audit/validate-coverage-ledger.cjs
+              security-audit-output/coverage-ledger.json
+
+            Finish with a short summary of confirmed findings, the coverage you actually
+            achieved, and what you could not verify. Report gaps as needs-validation
+            leads rather than confirmed issues.
+
+      - name: Upload the audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-audit-report
+          path: security-audit-output/
+          if-no-files-found: ignore
+          retention-days: 30
