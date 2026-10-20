@@ -3,6 +3,7 @@ package http
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
 	"errors"
@@ -14,25 +15,25 @@ import (
 
 const refreshTokenCookieName = "refresh_token"
 
-func setRefreshCookie(w http.ResponseWriter, token string, maxAge int) {
+func setRefreshCookie(w http.ResponseWriter, token string, maxAge int, secure bool) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     refreshTokenCookieName,
 		Value:    token,
 		Path:     "/api/v1/auth",
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   secure,
 		SameSite: http.SameSiteStrictMode,
 		MaxAge:   maxAge,
 	})
 }
 
-func clearRefreshCookie(w http.ResponseWriter) {
+func clearRefreshCookie(w http.ResponseWriter, secure bool) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     refreshTokenCookieName,
 		Value:    "",
 		Path:     "/api/v1/auth",
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   secure,
 		SameSite: http.SameSiteStrictMode,
 		MaxAge:   -1,
 		Expires:  time.Unix(0, 0),
@@ -48,11 +49,12 @@ func readRefreshCookie(r *http.Request) string {
 }
 
 type AuthHandler struct {
-	authUsecase usecase.AuthUsecase
+	authUsecase  usecase.AuthUsecase
+	secureCookie bool
 }
 
-func NewAuthHandler(authUsecase usecase.AuthUsecase) *AuthHandler {
-	return &AuthHandler{authUsecase: authUsecase}
+func NewAuthHandler(authUsecase usecase.AuthUsecase, frontendURL string) *AuthHandler {
+	return &AuthHandler{authUsecase: authUsecase, secureCookie: strings.HasPrefix(strings.ToLower(strings.TrimSpace(frontendURL)), "https://")}
 }
 
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
@@ -77,7 +79,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	setRefreshCookie(w, resp.RefreshToken, 7*24*3600)
+	setRefreshCookie(w, resp.RefreshToken, 7*24*3600, h.secureCookie)
 	resp.RefreshToken = ""
 	writeSuccess(w, http.StatusCreated, resp)
 }
@@ -104,7 +106,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	setRefreshCookie(w, resp.RefreshToken, 7*24*3600)
+	setRefreshCookie(w, resp.RefreshToken, 7*24*3600, h.secureCookie)
 	resp.RefreshToken = ""
 	writeSuccess(w, http.StatusOK, resp)
 }
@@ -118,12 +120,12 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := h.authUsecase.RefreshToken(r.Context(), refreshToken)
 	if err != nil {
-		clearRefreshCookie(w)
+		clearRefreshCookie(w, h.secureCookie)
 		writeError(w, http.StatusUnauthorized, "TOKEN_EXPIRED", "Invalid or expired refresh token")
 		return
 	}
 
-	setRefreshCookie(w, resp.RefreshToken, 7*24*3600)
+	setRefreshCookie(w, resp.RefreshToken, 7*24*3600, h.secureCookie)
 	resp.RefreshToken = ""
 	writeSuccess(w, http.StatusOK, resp)
 }
@@ -137,7 +139,7 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	clearRefreshCookie(w)
+	clearRefreshCookie(w, h.secureCookie)
 	writeSuccess(w, http.StatusNoContent, nil)
 }
 

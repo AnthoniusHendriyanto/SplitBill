@@ -41,6 +41,9 @@ func main() {
 	usageRepo := postgres.NewUsageRepository(pool)
 	contactRepo := postgres.NewContactRepository(pool)
 	invitationRepo := postgres.NewInvitationRepository(pool)
+	groupRepo := postgres.NewGroupRepository(pool)
+	shareRepo := postgres.NewShareRepository(pool)
+	recurrenceRepo := postgres.NewRecurrenceRepository(pool)
 	notifications := &postgres.NotificationRepository{Pool: pool}
 	emailCtx, stopEmail := context.WithCancel(context.Background())
 	emailDone := make(chan struct{})
@@ -50,7 +53,7 @@ func main() {
 	}()
 	defer func() { stopEmail(); <-emailDone }()
 
-	runServer(cfg, userRepo, billRepo, itemRepo, personRepo, assignmentRepo, paymentRepo, usageRepo, contactRepo, invitationRepo, notifications, postgres.NewOCRService(cfg.GroqAPIKey, cfg.GroqVisionModel), timeoutContext)
+	runServer(cfg, userRepo, billRepo, itemRepo, personRepo, assignmentRepo, paymentRepo, usageRepo, contactRepo, invitationRepo, groupRepo, shareRepo, recurrenceRepo, notifications, postgres.NewOCRService(cfg.GroqAPIKey, cfg.GroqVisionModel), timeoutContext)
 }
 
 func runServer(
@@ -64,15 +67,35 @@ func runServer(
 	usageRepo domain.UsageRepository,
 	contactRepo domain.ContactRepository,
 	invitationRepo domain.InvitationRepository,
+	groupRepo domain.GroupRepository,
+	shareRepo domain.ShareRepository,
+	recurrenceRepo domain.RecurrenceRepository,
 	notifications domain.NotificationRepository,
 	ocrSvc domain.OCRService,
 	timeout time.Duration,
 ) {
 	authUsecase := usecase.NewAuthUsecase(userRepo, cfg)
-	billUsecase := usecase.NewBillUsecase(billRepo, itemRepo, personRepo, assignmentRepo, paymentRepo, usageRepo, userRepo, contactRepo, ocrSvc, timeout)
+	billUsecase := usecase.NewBillUsecaseWithShare(billRepo, itemRepo, personRepo, assignmentRepo, paymentRepo, usageRepo, userRepo, contactRepo, ocrSvc, shareRepo, timeout)
+	recurrenceUsecase := usecase.NewRecurrenceUsecase(recurrenceRepo, billUsecase, timeout)
+	recurrenceCtx, stopRecurrence := context.WithCancel(context.Background())
+	defer stopRecurrence()
+	go func() {
+		ticker := time.NewTicker(time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				if err := recurrenceUsecase.GenerateDue(recurrenceCtx, time.Now()); err != nil {
+					log.Printf("recurrence generation failed: %v", err)
+				}
+			case <-recurrenceCtx.Done():
+				return
+			}
+		}
+	}()
 	premiumUsecase := usecase.NewPremiumUsecase(userRepo, cfg)
 
-	authHandler := delivery.NewAuthHandler(authUsecase)
+	authHandler := delivery.NewAuthHandler(authUsecase, cfg.FrontendURL)
 	billHandler := delivery.NewBillHandler(billUsecase)
 	premiumHandler := delivery.NewPremiumHandler(premiumUsecase, cfg.PremiumCallbackSecret)
 	usageHandler := delivery.NewUsageHandler(billUsecase)
@@ -80,10 +103,14 @@ func runServer(
 	contactHandler := delivery.NewContactHandler(contactUsecase)
 	invitationUsecase := usecase.NewInvitationUsecase(invitationRepo, userRepo, contactRepo)
 	invitationHandler := delivery.NewInvitationHandler(invitationUsecase)
+	groupHandler := delivery.NewGroupHandler(usecase.NewGroupUsecase(groupRepo, timeout))
+	recurrenceHandler := delivery.NewRecurrenceHandler(recurrenceUsecase)
+	importHandler := delivery.NewImportHandler()
 	authMiddleware := middleware.NewAuthMiddleware(authUsecase)
 	ocrRateLimiter := middleware.NewRateLimiter(10, time.Minute)
+	shareRateLimiter := middleware.NewRateLimiter(30, time.Minute)
 	authRateLimiter := middleware.NewRateLimiter(5, time.Minute)
-	router := delivery.NewRouter(authHandler, billHandler, premiumHandler, usageHandler, contactHandler, invitationHandler, &delivery.NotificationHandler{Repo: notifications}, authMiddleware, ocrRateLimiter, authRateLimiter, cfg.FrontendURL)
+	router := delivery.NewRouter(authHandler, billHandler, premiumHandler, usageHandler, contactHandler, invitationHandler, groupHandler, recurrenceHandler, importHandler, &delivery.NotificationHandler{Repo: notifications}, authMiddleware, ocrRateLimiter, shareRateLimiter, authRateLimiter, cfg.FrontendURL)
 
 	server := &http.Server{
 		Addr:         ":" + cfg.Port,
@@ -111,6 +138,7 @@ func runServer(
 	log.Println("Shutting down server...")
 
 	ocrRateLimiter.Stop()
+	shareRateLimiter.Stop()
 	authRateLimiter.Stop()
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

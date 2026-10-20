@@ -53,8 +53,9 @@ After EVERY code change, update relevant `.md` files in the workspace root (the 
 - Domain `shares.go` is authoritative for payable allocation: Custom means final amounts,
   discount reduces total, cent remainders are deterministic.
 - CreateFull atomically saves linked user IDs, payments, notification/email jobs, usage, and an
-  idempotent response snapshot. Migration 020 is required; migration 021 locks the Data API
-  (18 migration files total).
+  idempotent response snapshot. Migration 020 is required; migration 021 locks the Data API and
+  migration 022 adds groups, public share tokens, and receipt persistence; migrations 023–024 add
+  bill updates, recurring definitions, categories, and default split configurations (22 migration files total).
 
 ## Database hosting (October 2026)
 

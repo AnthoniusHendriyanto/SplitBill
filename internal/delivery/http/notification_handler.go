@@ -52,3 +52,12 @@ func (h *NotificationHandler) Debts(w http.ResponseWriter, r *http.Request) {
 	}
 	writeSuccess(w, 200, result)
 }
+
+func (h *NotificationHandler) Settlements(w http.ResponseWriter, r *http.Request) {
+	items, err := h.Repo.Settlements(r.Context(), middleware.GetUserID(r.Context()))
+	if err != nil {
+		writeInternalError(w, err)
+		return
+	}
+	writeSuccess(w, http.StatusOK, items)
+}

@@ -56,3 +56,45 @@ func (r *NotificationRepository) Debts(ctx context.Context, userID string) ([]do
 	}
 	return result, rows.Err()
 }
+
+func (r *NotificationRepository) Settlements(ctx context.Context, userID string) ([]domain.Settlement, error) {
+	debts, err := r.Debts(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	type aggregate struct {
+		id   *string
+		name string
+		net  float64
+	}
+	byKey := map[string]*aggregate{}
+	for _, debt := range debts {
+		key := debt.BillID + ":" + debt.PersonID
+		if debt.UserID != nil {
+			key = *debt.UserID
+		}
+		item := byKey[key]
+		if item == nil {
+			item = &aggregate{id: debt.UserID, name: debt.Name}
+			byKey[key] = item
+		}
+		if debt.Direction == "receivable" {
+			item.net += debt.Amount
+		} else {
+			item.net -= debt.Amount
+		}
+	}
+	result := make([]domain.Settlement, 0, len(byKey))
+	for _, item := range byKey {
+		if item.net == 0 {
+			continue
+		}
+		direction := "receivable"
+		amount := item.net
+		if amount < 0 {
+			direction, amount = "payable", -amount
+		}
+		result = append(result, domain.Settlement{CounterpartyID: item.id, Counterparty: item.name, Direction: direction, Amount: amount})
+	}
+	return result, nil
+}

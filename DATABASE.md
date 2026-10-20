@@ -8,7 +8,11 @@
 
 ## Schema state
 
-- 18 migration files exist (`001`–`021`, with gaps at 009, 010, 012). `020` adds request-key idempotency and notifications; `021` is the Data API lockdown and is required on any hosted database.
+- 19 migration files exist (`001`–`022`, with gaps at 009, 010, 012). `020` adds request-key idempotency and notifications; `021` is the Data API lockdown and `022` adds the P0 group/share/receipt foundations.
+- Migration `022_groups_sharing_receipts.sql` adds nullable bill grouping, explicit group membership and bill-person mappings, hashed share tokens, and receipt bytes/MIME metadata. It is additive; standalone bills remain supported.
+- Because `022` is newer than the original Data API lockdown, it explicitly enables RLS and revokes `anon`/`authenticated` on each new table with a plain-PostgreSQL role guard.
+- Migrations `023` and `024` add update idempotency snapshots and recurring definitions/occurrence claims. `024` applies the same RLS/revoke boundary to its new tables.
+- Migration `025` adds bill categories and group default split configurations with the same closed Data API boundary.
 - `021` enables RLS on all tables and revokes `anon`/`authenticated`. It guards the `REVOKE` behind a `pg_roles` check so it still applies on plain PostgreSQL where those roles do not exist — the `TEST_DATABASE_URL` integration tests rely on that.
 - On the hosted Supabase project the same statements were applied as recorded migration `m021_data_api_lockdown`. The repo file is the canonical version; the hosted copy lacks the role guard, which is inert on Supabase.
-- `run_migrations.sh` honours `DATABASE_URL` (passes it to `psql` as a single URI) and falls back to the `DB_*` flags when it is unset. It still tracks applied files in its own `_migrations` table, independent of Supabase's `supabase_migrations` history, so both paths can target the same database without conflict. Verified on plain PostgreSQL: 18 files applied, 13 relations in `public` (12 tables with RLS plus the runner's own `_migrations`), re-run skipped all 18.
+- `run_migrations.sh` honours `DATABASE_URL` (passes it to `psql` as a single URI) and falls back to the `DB_*` flags when it is unset. It still tracks applied files in its own `_migrations` table, independent of Supabase's `supabase_migrations` history, so both paths can target the same database without conflict. The full 22-file chain, including 022–025, is applied on the hosted Supabase project and the local `splitmate` database.

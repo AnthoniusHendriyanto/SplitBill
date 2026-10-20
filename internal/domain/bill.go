@@ -6,27 +6,34 @@ import (
 )
 
 type Bill struct {
-	RequestKey    string    `json:"-"`
-	RequestHash   string    `json:"-"`
-	ID            string    `json:"id"`
-	UserID        string    `json:"user_id"`
-	Title         string    `json:"title"`
-	Merchant      string    `json:"merchant"`
-	TotalAmount   float64   `json:"total_amount"`
-	ServiceCharge float64   `json:"service_charge"`
-	ServiceMode   string    `json:"service_mode"`
-	Tax           float64   `json:"tax"`
-	TaxMode       string    `json:"tax_mode"`
-	Discount      float64   `json:"discount"`
-	GrandTotal    float64   `json:"grand_total"`
-	Status        string    `json:"status"`
-	SplitType     string    `json:"split_type"`
-	BillDate      string    `json:"bill_date"`
-	Items         []Item    `json:"items"`
-	Persons       []Person  `json:"persons"`
-	Payments      []Payment `json:"payments"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	RequestKey        string    `json:"-"`
+	RequestHash       string    `json:"-"`
+	ID                string    `json:"id"`
+	UserID            string    `json:"user_id"`
+	Title             string    `json:"title"`
+	Merchant          string    `json:"merchant"`
+	Category          string    `json:"category,omitempty"`
+	TotalAmount       float64   `json:"total_amount"`
+	ServiceCharge     float64   `json:"service_charge"`
+	ServiceMode       string    `json:"service_mode"`
+	Tax               float64   `json:"tax"`
+	TaxMode           string    `json:"tax_mode"`
+	Discount          float64   `json:"discount"`
+	GrandTotal        float64   `json:"grand_total"`
+	Status            string    `json:"status"`
+	SplitType         string    `json:"split_type"`
+	BillDate          string    `json:"bill_date"`
+	Items             []Item    `json:"items"`
+	Persons           []Person  `json:"persons"`
+	Payments          []Payment `json:"payments"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
+	GroupID           *string   `json:"group_id,omitempty"`
+	ReceiptMime       string    `json:"receipt_mime,omitempty"`
+	ReceiptImage      []byte    `json:"-"`
+	UpdateRequestKey  string    `json:"-"`
+	UpdateRequestHash string    `json:"-"`
+	UpdatedResponse   []byte    `json:"-"`
 }
 
 func (b Bill) CalculateGrandTotal() float64 {
@@ -99,6 +106,7 @@ type CreateBillRequest struct {
 	RequestKey    string              `json:"request_key" validate:"required,uuid"`
 	Title         string              `json:"title" validate:"required,max=255"`
 	Merchant      string              `json:"merchant"`
+	Category      string              `json:"category,omitempty"`
 	Items         []ItemRequest       `json:"items" validate:"required,min=1,max=500,dive"`
 	Persons       []PersonRequest     `json:"persons" validate:"required,min=2,max=100,dive"`
 	SplitType     string              `json:"split_type" validate:"required"`
@@ -110,7 +118,14 @@ type CreateBillRequest struct {
 	Discount      float64             `json:"discount"`
 	Status        string              `json:"status"`
 	BillDate      string              `json:"bill_date"`
+	GroupID       string              `json:"group_id,omitempty"`
+	ReceiptImage  string              `json:"receipt_image,omitempty"`
+	ReceiptMime   string              `json:"receipt_mime,omitempty"`
 }
+
+// UpdateBillRequest intentionally mirrors create. Keeping the same payload shape
+// lets the client edit a saved bill without introducing a second allocation contract.
+type UpdateBillRequest = CreateBillRequest
 
 type ItemRequest struct {
 	ID       string  `json:"id,omitempty"`
@@ -144,6 +159,7 @@ type BillSummary struct {
 	ID          string    `json:"id"`
 	Title       string    `json:"title"`
 	Merchant    string    `json:"merchant,omitempty"`
+	Category    string    `json:"category,omitempty"`
 	GrandTotal  float64   `json:"grand_total"`
 	UserShare   float64   `json:"user_share"`
 	Receivable  float64   `json:"receivable"`

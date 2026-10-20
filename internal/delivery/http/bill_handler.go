@@ -64,6 +64,104 @@ func (h *BillHandler) Create(w http.ResponseWriter, r *http.Request) {
 	writeSuccess(w, http.StatusCreated, bill)
 }
 
+func (h *BillHandler) Update(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	var req domain.UpdateBillRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_INPUT", "Invalid request body")
+		return
+	}
+	if err := validate.Struct(req); err != nil {
+		writeValidationError(w, err)
+		return
+	}
+	bill, err := h.BillUsecase.Update(r.Context(), userID, mux.Vars(r)["id"], &req)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "BILL_NOT_FOUND", "Bill not found")
+			return
+		}
+		if errors.Is(err, domain.ErrPremiumRequired) {
+			writeError(w, http.StatusForbidden, "PREMIUM_REQUIRED", "Custom and percentage split are premium features")
+			return
+		}
+		if errors.Is(err, domain.ErrInvalidInput) {
+			writeError(w, http.StatusBadRequest, "INVALID_INPUT", err.Error())
+			return
+		}
+		writeInternalError(w, err)
+		return
+	}
+	writeSuccess(w, http.StatusOK, bill)
+}
+
+func (h *BillHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	billID := mux.Vars(r)["id"]
+	var req struct {
+		Days int `json:"days"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&req)
+	link, err := h.BillUsecase.CreateShare(r.Context(), userID, billID, req.Days)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "BILL_NOT_FOUND", "Bill not found")
+			return
+		}
+		if errors.Is(err, domain.ErrInvalidInput) {
+			writeError(w, http.StatusBadRequest, "INVALID_INPUT", err.Error())
+			return
+		}
+		writeInternalError(w, err)
+		return
+	}
+	writeSuccess(w, http.StatusCreated, link)
+}
+
+func (h *BillHandler) RevokeShare(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	billID := mux.Vars(r)["id"]
+	if err := h.BillUsecase.RevokeShare(r.Context(), userID, billID); err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "SHARE_NOT_FOUND", "Share link not found")
+			return
+		}
+		writeInternalError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *BillHandler) Shared(w http.ResponseWriter, r *http.Request) {
+	publicBill, err := h.BillUsecase.GetShared(r.Context(), mux.Vars(r)["token"])
+	if err != nil {
+		writeError(w, http.StatusNotFound, "SHARE_NOT_FOUND", "Shared bill not found")
+		return
+	}
+	writeSuccess(w, http.StatusOK, publicBill)
+}
+
+func (h *BillHandler) Receipt(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	data, mime, err := h.BillUsecase.GetReceipt(r.Context(), userID, mux.Vars(r)["id"])
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "RECEIPT_NOT_FOUND", "Receipt not found")
+			return
+		}
+		writeInternalError(w, err)
+		return
+	}
+	if len(data) == 0 {
+		writeError(w, http.StatusNotFound, "RECEIPT_NOT_FOUND", "Receipt not found")
+		return
+	}
+	w.Header().Set("Content-Type", mime)
+	w.Header().Set("Cache-Control", "private, max-age=300")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(data)
+}
+
 func (h *BillHandler) Fetch(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	if userID == "" {

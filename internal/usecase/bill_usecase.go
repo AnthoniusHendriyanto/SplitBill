@@ -2,10 +2,13 @@ package usecase
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/user/split-mate/internal/domain"
@@ -21,6 +24,7 @@ type billUsecase struct {
 	userRepo       domain.UserRepository
 	contactRepo    domain.ContactRepository
 	ocrService     domain.OCRService
+	shareRepo      domain.ShareRepository
 	contextTimeout time.Duration
 }
 
@@ -36,6 +40,38 @@ func NewBillUsecase(
 	ocrService domain.OCRService,
 	timeout time.Duration,
 ) BillUsecase {
+	return newBillUsecase(billRepo, itemRepo, personRepo, assignmentRepo, paymentRepo, usageRepo, userRepo, contactRepo, ocrService, timeout, nil)
+}
+
+func NewBillUsecaseWithShare(
+	billRepo domain.BillRepository,
+	itemRepo domain.ItemRepository,
+	personRepo domain.PersonRepository,
+	assignmentRepo domain.AssignmentRepository,
+	paymentRepo domain.PaymentRepository,
+	usageRepo domain.UsageRepository,
+	userRepo domain.UserRepository,
+	contactRepo domain.ContactRepository,
+	ocrService domain.OCRService,
+	shareRepo domain.ShareRepository,
+	timeout time.Duration,
+) BillUsecase {
+	return newBillUsecase(billRepo, itemRepo, personRepo, assignmentRepo, paymentRepo, usageRepo, userRepo, contactRepo, ocrService, timeout, shareRepo)
+}
+
+func newBillUsecase(
+	billRepo domain.BillRepository,
+	itemRepo domain.ItemRepository,
+	personRepo domain.PersonRepository,
+	assignmentRepo domain.AssignmentRepository,
+	paymentRepo domain.PaymentRepository,
+	usageRepo domain.UsageRepository,
+	userRepo domain.UserRepository,
+	contactRepo domain.ContactRepository,
+	ocrService domain.OCRService,
+	timeout time.Duration,
+	shareRepo domain.ShareRepository,
+) BillUsecase {
 	return &billUsecase{
 		billRepo:       billRepo,
 		itemRepo:       itemRepo,
@@ -46,6 +82,7 @@ func NewBillUsecase(
 		userRepo:       userRepo,
 		contactRepo:    contactRepo,
 		ocrService:     ocrService,
+		shareRepo:      shareRepo,
 		contextTimeout: timeout,
 	}
 }
@@ -138,6 +175,7 @@ func (bu *billUsecase) Create(ctx context.Context, userID string, req *domain.Cr
 		UserID:        userID,
 		Title:         req.Title,
 		Merchant:      req.Merchant,
+		Category:      normalizedCategory(req.Category),
 		TotalAmount:   0,
 		ServiceCharge: req.ServiceCharge,
 		ServiceMode:   serviceMode,
@@ -149,6 +187,14 @@ func (bu *billUsecase) Create(ctx context.Context, userID string, req *domain.Cr
 		BillDate:      req.BillDate,
 		CreatedAt:     now,
 		UpdatedAt:     now,
+	}
+	if req.ReceiptImage != "" {
+		image, mime, err := decodeReceiptImage(req.ReceiptImage, req.ReceiptMime)
+		if err != nil {
+			return nil, err
+		}
+		bill.ReceiptImage = image
+		bill.ReceiptMime = mime
 	}
 
 	items := make([]domain.Item, len(req.Items))
@@ -250,6 +296,143 @@ func (bu *billUsecase) Create(ctx context.Context, userID string, req *domain.Cr
 		return nil, err
 	}
 
+	return bill, nil
+}
+
+func (bu *billUsecase) Update(ctx context.Context, userID, billID string, req *domain.UpdateBillRequest) (*domain.Bill, error) {
+	ctx, cancel := context.WithTimeout(ctx, bu.contextTimeout)
+	defer cancel()
+	existing, err := bu.billRepo.GetByUserIDAndID(ctx, userID, billID)
+	if err != nil {
+		return nil, err
+	}
+	if existing.UserID != userID || existing.Status == "draft" {
+		return nil, domain.ErrNotFound
+	}
+	if req.RequestKey == "" {
+		return nil, fmt.Errorf("%w: request_key is required", domain.ErrInvalidInput)
+	}
+	hashBytes, _ := json.Marshal(req)
+	hash := fmt.Sprintf("%x", sha256.Sum256(hashBytes))
+	if existing.UpdateRequestKey == req.RequestKey {
+		if existing.UpdateRequestHash != hash {
+			return nil, fmt.Errorf("%w: update request key already used for another payload", domain.ErrInvalidInput)
+		}
+		if existing.UpdatedResponse != nil {
+			var saved domain.Bill
+			if err := json.Unmarshal(existing.UpdatedResponse, &saved); err == nil {
+				return &saved, nil
+			}
+		}
+	}
+	if req.Status == "" {
+		req.Status = existing.Status
+	}
+	if req.Status != "pending" && req.Status != "completed" {
+		return nil, fmt.Errorf("%w: finalized bills must remain pending or completed", domain.ErrInvalidInput)
+	}
+	if _, err := time.Parse("2006-01-02", req.BillDate); err != nil {
+		return nil, fmt.Errorf("%w: invalid bill date", domain.ErrInvalidInput)
+	}
+	contacts, err := bu.contactRepo.GetByUserID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	user, err := bu.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	isPremium := user.Tier == "premium" && user.PremiumExpiresAt != nil && user.PremiumExpiresAt.After(time.Now())
+	if (req.SplitType == string(domain.SplitTypeCustom) || req.SplitType == string(domain.SplitTypePercentage)) && !isPremium {
+		return nil, domain.ErrPremiumRequired
+	}
+	if req.SplitType == string(domain.SplitTypePercentage) {
+		total := 0.0
+		for _, person := range req.Persons {
+			total += person.Percentage
+		}
+		if total < 99.9 || total > 100.1 {
+			return nil, fmt.Errorf("%w: percentages must sum to 100 (got %.1f%%)", domain.ErrInvalidInput, total)
+		}
+	}
+	now := time.Now()
+	serviceMode, taxMode := req.ServiceMode, req.TaxMode
+	if serviceMode == "" {
+		serviceMode = existing.ServiceMode
+	}
+	if taxMode == "" {
+		taxMode = existing.TaxMode
+	}
+	bill := &domain.Bill{ID: billID, UserID: userID, Title: req.Title, Merchant: req.Merchant, Category: normalizedCategory(req.Category), ServiceCharge: req.ServiceCharge, ServiceMode: serviceMode, Tax: req.Tax, TaxMode: taxMode, Discount: req.Discount, Status: req.Status, SplitType: req.SplitType, BillDate: req.BillDate, CreatedAt: existing.CreatedAt, UpdatedAt: now, RequestKey: existing.RequestKey, RequestHash: existing.RequestHash, GroupID: existing.GroupID}
+	if req.ReceiptImage != "" {
+		image, mime, err := decodeReceiptImage(req.ReceiptImage, req.ReceiptMime)
+		if err != nil {
+			return nil, err
+		}
+		bill.ReceiptImage, bill.ReceiptMime = image, mime
+	} else {
+		bill.ReceiptMime = existing.ReceiptMime
+	}
+	items := make([]domain.Item, len(req.Items))
+	for i, item := range req.Items {
+		qty := item.Quantity
+		if qty < 1 {
+			qty = 1
+		}
+		items[i] = domain.Item{ID: item.ID, BillID: billID, Name: item.Name, Price: item.Price, Quantity: qty, CreatedAt: now}
+		bill.TotalAmount += item.Price * float64(qty)
+	}
+	persons := make([]domain.Person, len(req.Persons))
+	linked := map[string]bool{}
+	for i, person := range req.Persons {
+		persons[i] = domain.Person{ID: person.ID, BillID: billID, Name: person.Name, Email: person.Email, IsPayer: person.IsPayer, Percentage: person.Percentage, CustomAmount: person.CustomAmount, PaymentInfo: person.PaymentInfo, CreatedAt: now}
+		if persons[i].PaymentInfo == nil {
+			persons[i].PaymentInfo = map[string]interface{}{}
+		}
+		if person.UserID == "" {
+			continue
+		}
+		allowed := person.UserID == userID
+		for _, contact := range contacts {
+			if contact.ConnectedUserID == person.UserID {
+				allowed = true
+			}
+		}
+		if !allowed || linked[person.UserID] {
+			return nil, fmt.Errorf("%w: invalid or duplicate linked friend", domain.ErrInvalidInput)
+		}
+		account, err := bu.userRepo.GetByID(ctx, person.UserID)
+		if err != nil {
+			return nil, err
+		}
+		persons[i].UserID, persons[i].Name, persons[i].Email = &account.ID, account.Name, account.Email
+		linked[person.UserID] = true
+	}
+	assignments := make([]domain.ItemAssignment, 0, len(req.Assignments))
+	for _, assignment := range req.Assignments {
+		assignments = append(assignments, domain.ItemAssignment{ItemID: assignment.ItemID, PersonID: assignment.PersonID, CreatedAt: now})
+	}
+	bill.GrandTotal = bill.CalculateGrandTotal()
+	shares, err := domain.CalculateShares(*bill, items, persons, assignments)
+	if err != nil {
+		return nil, err
+	}
+	payer := findPayer(persons)
+	for i := range persons {
+		persons[i].ShareAmount = &shares[i]
+		if persons[i].ID != payer.ID && shares[i] > 0 {
+			bill.Payments = append(bill.Payments, domain.Payment{FromPersonID: persons[i].ID, ToPersonID: payer.ID, FromPerson: persons[i].Name, ToPerson: payer.Name, Amount: shares[i], CreatedAt: now})
+		}
+	}
+	if len(bill.Payments) == 0 {
+		bill.Status = "completed"
+	} else if req.Status == "completed" {
+		bill.Status = "pending"
+	}
+	bill.UpdateRequestKey, bill.UpdateRequestHash = req.RequestKey, hash
+	if err := bu.billRepo.UpdateFull(ctx, bill, items, persons, assignments); err != nil {
+		return nil, err
+	}
 	return bill, nil
 }
 
@@ -394,6 +577,7 @@ func (bu *billUsecase) Fetch(ctx context.Context, userID string, page, limit int
 			ID:          bill.ID,
 			Title:       bill.Title,
 			Merchant:    bill.Merchant,
+			Category:    bill.Category,
 			GrandTotal:  bill.GrandTotal,
 			UserShare:   userShare,
 			Receivable:  ps.Receivable,
@@ -539,6 +723,120 @@ func (bu *billUsecase) GetUsage(ctx context.Context, userID string) (*domain.Usa
 	}, nil
 }
 
+func decodeReceiptImage(value, requestedMime string) ([]byte, string, error) {
+	parts := strings.SplitN(value, ",", 2)
+	encoded := value
+	mime := requestedMime
+	if len(parts) == 2 {
+		encoded = parts[1]
+		if strings.HasPrefix(parts[0], "data:") {
+			meta := strings.TrimPrefix(parts[0], "data:")
+			if semi := strings.IndexByte(meta, ';'); semi >= 0 {
+				if mime == "" {
+					mime = meta[:semi]
+				}
+			} else if mime == "" {
+				mime = meta
+			}
+		}
+	}
+	allowedMime := map[string]bool{"image/jpeg": true, "image/png": true, "image/webp": true, "image/gif": true}
+	if !allowedMime[strings.ToLower(mime)] {
+		return nil, "", fmt.Errorf("%w: receipt must be an image", domain.ErrInvalidInput)
+	}
+	image, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil || len(image) == 0 || len(image) > 10<<20 {
+		return nil, "", fmt.Errorf("%w: invalid or oversized receipt image", domain.ErrInvalidInput)
+	}
+	return image, mime, nil
+}
+
+func (bu *billUsecase) GetReceipt(ctx context.Context, userID, billID string) ([]byte, string, error) {
+	ctx, cancel := context.WithTimeout(ctx, bu.contextTimeout)
+	defer cancel()
+	return bu.billRepo.GetReceipt(ctx, userID, billID)
+}
+
+func (bu *billUsecase) CreateShare(ctx context.Context, userID, billID string, days int) (*domain.ShareLink, error) {
+	if bu.shareRepo == nil {
+		return nil, domain.ErrInvalidInput
+	}
+	if days < 1 || days > 30 {
+		days = 7
+	}
+	ctx, cancel := context.WithTimeout(ctx, bu.contextTimeout)
+	defer cancel()
+	bill, err := bu.billRepo.GetByUserIDAndID(ctx, userID, billID)
+	if err != nil || bill.UserID != userID {
+		return nil, domain.ErrNotFound
+	}
+	if bill.Status == "draft" {
+		return nil, fmt.Errorf("%w: drafts cannot be shared", domain.ErrInvalidInput)
+	}
+	bytes := make([]byte, 32)
+	if _, err := rand.Read(bytes); err != nil {
+		return nil, err
+	}
+	token := base64.RawURLEncoding.EncodeToString(bytes)
+	hash := fmt.Sprintf("%x", sha256.Sum256([]byte(token)))
+	expires := time.Now().Add(time.Duration(days) * 24 * time.Hour)
+	if err := bu.shareRepo.Create(ctx, billID, userID, hash, expires); err != nil {
+		return nil, err
+	}
+	return &domain.ShareLink{Token: token, BillID: billID, ExpiresAt: expires}, nil
+}
+
+func (bu *billUsecase) RevokeShare(ctx context.Context, userID, billID string) error {
+	if bu.shareRepo == nil {
+		return domain.ErrInvalidInput
+	}
+	ctx, cancel := context.WithTimeout(ctx, bu.contextTimeout)
+	defer cancel()
+	return bu.shareRepo.RevokeByBillID(ctx, billID, userID)
+}
+
+func (bu *billUsecase) GetShared(ctx context.Context, token string) (*domain.PublicBill, error) {
+	if bu.shareRepo == nil || token == "" {
+		return nil, domain.ErrNotFound
+	}
+	ctx, cancel := context.WithTimeout(ctx, bu.contextTimeout)
+	defer cancel()
+	hash := fmt.Sprintf("%x", sha256.Sum256([]byte(token)))
+	billID, err := bu.shareRepo.GetByTokenHash(ctx, hash)
+	if err != nil {
+		return nil, err
+	}
+	bill, err := bu.billRepo.GetByID(ctx, billID)
+	if err != nil || bill.Status == "draft" {
+		return nil, domain.ErrNotFound
+	}
+	items, err := bu.itemRepo.GetByBillID(ctx, billID)
+	if err != nil {
+		return nil, err
+	}
+	persons, err := bu.personRepo.GetByBillID(ctx, billID)
+	if err != nil {
+		return nil, err
+	}
+	publicPersons := make([]domain.PublicPerson, 0, len(persons))
+	publicItems := make([]domain.PublicItem, 0, len(items))
+	for _, item := range items {
+		publicItems = append(publicItems, domain.PublicItem{Name: item.Name, Price: item.Price, Quantity: item.Quantity})
+	}
+	payer := ""
+	for _, person := range persons {
+		share := 0.0
+		if person.ShareAmount != nil {
+			share = *person.ShareAmount
+		}
+		publicPersons = append(publicPersons, domain.PublicPerson{Name: person.Name, ShareAmount: share, IsPayer: person.IsPayer})
+		if person.IsPayer {
+			payer = person.Name
+		}
+	}
+	return &domain.PublicBill{ID: bill.ID, Title: bill.Title, Merchant: bill.Merchant, BillDate: bill.BillDate, GrandTotal: bill.GrandTotal, Status: bill.Status, Items: publicItems, Persons: publicPersons, PayerName: payer}, nil
+}
+
 func findPayer(persons []domain.Person) domain.Person {
 	for _, p := range persons {
 		if p.IsPayer {
@@ -549,4 +847,15 @@ func findPayer(persons []domain.Person) domain.Person {
 		return persons[0]
 	}
 	return domain.Person{}
+}
+
+func normalizedCategory(category string) string {
+	category = strings.TrimSpace(category)
+	if category == "" {
+		return "Other"
+	}
+	if len(category) > 80 {
+		return category[:80]
+	}
+	return category
 }

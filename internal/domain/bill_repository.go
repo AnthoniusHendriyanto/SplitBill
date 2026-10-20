@@ -11,7 +11,21 @@ type BillRepository interface {
 	Delete(ctx context.Context, id string) error
 	GetByUserIDAndID(ctx context.Context, userID, billID string) (Bill, error)
 	CreateFull(ctx context.Context, bill *Bill, items []Item, persons []Person, assignments []ItemAssignment) error
+	UpdateFull(ctx context.Context, bill *Bill, items []Item, persons []Person, assignments []ItemAssignment) error
 	CreatePayments(ctx context.Context, billID string, payments []Payment) error
+	GetReceipt(ctx context.Context, userID, billID string) ([]byte, string, error)
+}
+
+type GroupRepository interface {
+	Create(ctx context.Context, group *Group) error
+	ListByUserID(ctx context.Context, userID string) ([]Group, error)
+	GetDetail(ctx context.Context, userID, groupID string) (*GroupDetail, error)
+	Delete(ctx context.Context, userID, groupID string) error
+	AddMember(ctx context.Context, groupID string, member *GroupMember) error
+	RemoveMember(ctx context.Context, userID, groupID, memberID string) error
+	AttachBill(ctx context.Context, userID, groupID, billID string, members []GroupBillMemberRequest) error
+	GetDefaultSplit(ctx context.Context, userID, groupID string) (*GroupDefaultSplit, error)
+	SetDefaultSplit(ctx context.Context, userID, groupID string, split *GroupDefaultSplit) error
 }
 
 type ItemRepository interface {

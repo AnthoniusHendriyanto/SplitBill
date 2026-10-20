@@ -24,8 +24,15 @@ type Debt struct {
 	Direction string  `json:"direction"`
 	Amount    float64 `json:"amount"`
 }
+type Settlement struct {
+	CounterpartyID *string `json:"counterparty_id,omitempty"`
+	Counterparty   string  `json:"counterparty"`
+	Direction      string  `json:"direction"`
+	Amount         float64 `json:"amount"`
+}
 type NotificationRepository interface {
 	List(context.Context, string, int) ([]Notification, error)
 	Read(context.Context, string, string) error
 	Debts(context.Context, string) ([]Debt, error)
+	Settlements(context.Context, string) ([]Settlement, error)
 }

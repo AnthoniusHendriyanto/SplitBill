@@ -11,3 +11,4 @@
 - Migration `021` enables RLS on all 12 tables with zero policies and revokes table/sequence grants from `anon` and `authenticated`. Deny-all is intentional: there is no client-side or Data API access path to policy.
 - Verified empirically against the hosted project: the anon key returns `permission denied for table users` on `SELECT` and `INSERT`. Do not add policies or re-grant to `anon`/`authenticated` without adding an equivalent authorization surface.
 - Adopting Supabase Auth or exposing tables via `supabase-js` would require replacing this section — RLS policies would then become a live authorization boundary, not a deny-all lock.
+- Refresh cookies are `HttpOnly` and `SameSite=Strict`. Their `Secure` attribute follows the configured `FRONTEND_URL` scheme: HTTPS deployments use secure cookies; local HTTP development does not, otherwise browsers cannot refresh sessions on `localhost`.

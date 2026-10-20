@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"time"
 
 	"github.com/user/split-mate/internal/domain"
 )
@@ -18,6 +19,7 @@ type AuthUsecase interface {
 
 type BillUsecase interface {
 	Create(ctx context.Context, userID string, req *domain.CreateBillRequest) (*domain.Bill, error)
+	Update(ctx context.Context, userID, billID string, req *domain.UpdateBillRequest) (*domain.Bill, error)
 	Fetch(ctx context.Context, userID string, page, limit int, fromDate, toDate string) (*domain.BillListResponse, error)
 	GetByID(ctx context.Context, userID, billID string) (*domain.BillDetailResponse, error)
 	Delete(ctx context.Context, userID, billID string) error
@@ -25,6 +27,29 @@ type BillUsecase interface {
 	UpdateStatus(ctx context.Context, userID, billID, status string) error
 	MarkPersonPaid(ctx context.Context, userID, billID, personID string) (*domain.Bill, error)
 	GetUsage(ctx context.Context, userID string) (*domain.UsageResponse, error)
+	CreateShare(ctx context.Context, userID, billID string, days int) (*domain.ShareLink, error)
+	RevokeShare(ctx context.Context, userID, billID string) error
+	GetShared(ctx context.Context, token string) (*domain.PublicBill, error)
+	GetReceipt(ctx context.Context, userID, billID string) ([]byte, string, error)
+}
+
+type GroupUsecase interface {
+	Create(ctx context.Context, userID string, req *domain.CreateGroupRequest) (*domain.Group, error)
+	List(ctx context.Context, userID string) ([]domain.Group, error)
+	GetDetail(ctx context.Context, userID, groupID string) (*domain.GroupDetail, error)
+	Delete(ctx context.Context, userID, groupID string) error
+	AddMember(ctx context.Context, userID, groupID string, req *domain.AddGroupMemberRequest) (*domain.GroupMember, error)
+	RemoveMember(ctx context.Context, userID, groupID, memberID string) error
+	AttachBill(ctx context.Context, userID, groupID, billID string, req *domain.AttachBillRequest) error
+	GetDefaultSplit(ctx context.Context, userID, groupID string) (*domain.GroupDefaultSplit, error)
+	SetDefaultSplit(ctx context.Context, userID, groupID string, split *domain.GroupDefaultSplit) error
+}
+
+type RecurrenceUsecase interface {
+	Create(ctx context.Context, userID string, req *domain.CreateRecurrenceRequest) (*domain.Recurrence, error)
+	List(ctx context.Context, userID string) ([]domain.Recurrence, error)
+	SetStatus(ctx context.Context, userID, id, status string) error
+	GenerateDue(ctx context.Context, now time.Time) error
 }
 
 type PremiumUsecase interface {

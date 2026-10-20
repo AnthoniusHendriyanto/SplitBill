@@ -287,6 +287,9 @@ func (u *authUsecase) validateToken(tokenString string, secret string, expectedT
 	})
 
 	if err != nil || !token.Valid {
+		if errors.Is(err, jwt.ErrTokenExpired) {
+			return nil, domain.ErrTokenExpired
+		}
 		return nil, domain.ErrTokenInvalid
 	}
 

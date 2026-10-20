@@ -3,6 +3,7 @@ package middleware
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -46,7 +47,11 @@ func (m *AuthMiddleware) Authenticate(next http.Handler) http.Handler {
 		if err != nil {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusUnauthorized)
-			json.NewEncoder(w).Encode(domain.NewError("TOKEN_EXPIRED", "Invalid or expired token", nil))
+			code, message := "TOKEN_INVALID", "Invalid token"
+			if errors.Is(err, domain.ErrTokenExpired) {
+				code, message = "TOKEN_EXPIRED", "Access token expired"
+			}
+			json.NewEncoder(w).Encode(domain.NewError(code, message, nil))
 			return
 		}
 

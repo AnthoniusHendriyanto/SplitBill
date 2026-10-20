@@ -15,8 +15,8 @@ go run ./cmd/api
 
 The API defaults to `http://localhost:8080`; routes use `/api/v1`. A PostgreSQL database
 must already exist.
-The migration runner tracks files in `_migrations`. There are 17 migrations:
-001–008, 011, 013–020. Do not renumber the gaps or alter applied migration files.
+The migration runner tracks files in `_migrations`. There are 22 migration files:
+001–008, 011, 013–025. Do not renumber the gaps or alter applied migration files.
 
 ## Implemented behavior
 
@@ -68,9 +68,10 @@ by design. Verified: the anon key receives `permission denied` on read and write
 
 ## API and checks
 
-See [docs/API.md](docs/API.md), [workspace business flow](../business-flow.md), and
-[database notes](../DATABASE.md). Public share-link and bill-update routes return 501; no PDF or
-Stripe endpoints are implemented. Social text sharing happens in the frontend.
+See [docs/API.md](docs/API.md), [workspace business flow](../../splitbill_frontend/business-flow.md), and
+[database notes](../DATABASE.md). Public bill share links are implemented as expiring read-only
+tokens; bill-update, PDF, and Stripe endpoints remain unimplemented. Social text sharing also
+happens in the frontend.
 
 ```sh
 go test ./...
