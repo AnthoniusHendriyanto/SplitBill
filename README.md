@@ -51,6 +51,18 @@ The client is served at <http://localhost:5173> and the API at <http://localhost
 `backend/.env.example` to `backend/.env` and `frontend/.env.example` to `frontend/.env` to change
 ports, database credentials, or the JWT secrets.
 
+### Running on a different port
+
+If port 8080 is already taken by another project, run the API on a free port and point the dev
+proxy at it. The API reads its listen port from `PORT`; the Vite proxy target is overridable:
+
+```sh
+cd backend  && PORT=8081 go run ./cmd/api
+cd frontend && VITE_DEV_API_TARGET=http://localhost:8081 npm run dev
+```
+
+The default stays `http://localhost:8080`, so this only affects the machine that sets it.
+
 ## Checks
 
 ```sh

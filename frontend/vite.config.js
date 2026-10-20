@@ -17,7 +17,11 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:8080',
+        // Override with VITE_DEV_API_TARGET when port 8080 is taken by another
+        // project on this machine, for example:
+        //   VITE_DEV_API_TARGET=http://localhost:8081 npm run dev
+        // The API reads its own listen port from PORT.
+        target: process.env.VITE_DEV_API_TARGET || 'http://localhost:8080',
       },
     },
   },
