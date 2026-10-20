@@ -3,7 +3,7 @@
 - Frontend logout clears account-specific drafts, bill lists, balances, pending save keys, errors, and loading state immediately.
 - Session versions prevent requests and refresh responses from an earlier login/logout lifecycle from updating or retrying against a newer account. Store request generations discard stale list/balance responses.
 - Backend authorization remains authoritative: only the creator mutates a bill; linked participant IDs grant read access. Names never grant access.
-- `splitbill_frontend/src/components/BillDetailsModal.jsx` hides owner-only mutations for participants; this complements server checks.
+- `frontend/src/components/BillDetailsModal.jsx` hides owner-only mutations for participants; this complements server checks.
 
 ## Database access surface (October 2026)
 

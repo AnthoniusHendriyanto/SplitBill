@@ -13,9 +13,11 @@
 
 Older inventory/status sections below retain historical context; this contract and current source take precedence.
 
-## Repositories
-- **Frontend**: `/splitbill_frontend` (React 19 + Vite 8 + Zustand 5 + Tailwind 3.4 + Framer Motion 12)
-- **Backend**: `/splitbill_backend` (Go 1.26 + gorilla/mux + PostgreSQL + Groq)
+## Repository
+This directory is the `frontend/` project of the SplitBill monorepo. The API lives in `backend/`
+and both are released from the same `main` branch.
+- **Frontend**: `frontend/` (React 19 + Vite 8 + Zustand 5 + Tailwind 3.4 + Framer Motion 12)
+- **Backend**: `backend/` (Go 1.26 + gorilla/mux + PostgreSQL + Groq)
 
 ---
 
@@ -161,12 +163,14 @@ descriptions are not current implementation guidance. See README and workspace b
 ## Commands
 
 ```bash
-# Frontend
+# Frontend (from the repository root)
+cd frontend
 npm run dev       # Dev server (:5173)
 npm run build     # Production build
 npm run preview   # Preview production build
 
-# Backend
+# Backend (from the repository root)
+cd ../backend
 go run ./cmd/api/main.go    # Dev server (:8080)
 go build ./...              # Compile check
 go vet ./...                # Static analysis

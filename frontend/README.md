@@ -72,7 +72,7 @@ draft makes a copy; the original remains until explicitly deleted.
 Premium is manual bank transfer on the backend; frontend checkout is not wired. Public bill share
 links, finalized-bill editing, CSV/JSON export, print output, and recurring definitions are wired.
 There is no direct PDF file generator, Stripe checkout, or guaranteed direct IG send.
-See [business flow](../business-flow.md), [security](../SECURITY.md), and [API](../splitbill_backend/docs/API.md).
+See [business flow](business-flow.md), [security](../backend/SECURITY.md), and [API](../backend/docs/API.md).
 
 ## Current behavior (October 2026)
 
@@ -179,8 +179,8 @@ src/
 ## Getting Started
 
 ```bash
-git clone <repo-url> splitbill_frontend
-cd splitbill_frontend
+git clone <repo-url> splitbill
+cd splitbill/frontend
 npm install
 cp .env.example .env   # VITE_API_BASE_URL=http://localhost:8080/api/v1
 npm run dev             # → http://localhost:5173

@@ -12,10 +12,10 @@ CI runs all three on every push and pull request to `main`.
 
 ## Cross-repo contract
 
-Allocation cases are deliberately duplicated between
-`splitbill_frontend/src/test/bills.test.js` and
-`splitbill_backend/internal/domain/shares_test.go`. The frontend mirrors the backend's
+Paths below are relative to the repository root. Allocation cases are deliberately duplicated between
+`frontend/src/test/bills.test.js` and
+`backend/internal/domain/shares_test.go`. The frontend mirrors the backend's
 final-cent rules so the wizard preview matches what is actually persisted. **If you change one,
 change both** — a divergence here means the amount a user sees differs from the amount charged.
 
-See `splitbill_backend/CONTRIBUTING.md` for the database connection and test-database notes.
+See `backend/CONTRIBUTING.md` for the database connection and test-database notes.

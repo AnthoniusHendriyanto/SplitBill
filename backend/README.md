@@ -68,8 +68,8 @@ by design. Verified: the anon key receives `permission denied` on read and write
 
 ## API and checks
 
-See [docs/API.md](docs/API.md), [workspace business flow](../../splitbill_frontend/business-flow.md), and
-[database notes](../DATABASE.md). Public bill share links are implemented as expiring read-only
+See [docs/API.md](docs/API.md), [business flow](../frontend/business-flow.md), and
+[database notes](DATABASE.md). Public bill share links are implemented as expiring read-only
 tokens; bill-update, PDF, and Stripe endpoints remain unimplemented. Social text sharing also
 happens in the frontend.
 

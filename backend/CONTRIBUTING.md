@@ -37,8 +37,8 @@ holds transactions across multiple statements. Hosted projects also cap total co
 
 ## Cross-repo contract
 
-Allocation cases are deliberately duplicated between
-`splitbill_backend/internal/domain/shares_test.go` and
-`splitbill_frontend/src/test/bills.test.js`. **If you change one, change both.**
+Paths below are relative to the repository root. Allocation cases are deliberately duplicated between
+`backend/internal/domain/shares_test.go` and
+`frontend/src/test/bills.test.js`. **If you change one, change both.**
 
-See `splitbill_frontend/CONTRIBUTING.md` for the frontend checks.
+See `frontend/CONTRIBUTING.md` for the frontend checks.

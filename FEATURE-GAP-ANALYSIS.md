@@ -59,8 +59,8 @@ Local analysis artifacts (ephemeral, not required for planning): `/tmp/opencode/
 
 | Capability | Status | Anchor |
 |---|---|---|
-| Receipt OCR (Groq vision, sole path) | ✅ | `splitbill_backend/internal/repository/postgres/ocr_service.go` |
-| Four split types: equal, shared_items, percentage, custom | ✅ | `splitbill_backend/internal/domain/shares.go`, `splitbill_frontend/src/utils/shares.js` |
+| Receipt OCR (Groq vision, sole path) | ✅ | `backend/internal/repository/postgres/ocr_service.go` |
+| Four split types: equal, shared_items, percentage, custom | ✅ | `backend/internal/domain/shares.go`, `frontend/src/utils/shares.js` |
 | Fees, tax, discount, deterministic cent allocation | ✅ | `domain/shares.go` |
 | Contacts + linked participants + invitations | ✅ | `migrations/015_contacts.sql`, `019_invitations.sql`, `invitation_usecase.go` |
 | Assignment notifications + email job queue | ✅ | `migrations/020_assignment_notifications.sql` |
@@ -265,7 +265,7 @@ Outcome: the core retention container exists.
 
 ## 5a. Parallel execution tracks
 
-If multiple agents/models execute at the same time, freeze the contracts first, then run tracks that do not share files. The main collision points are `migrations/`, `internal/delivery/http/router.go`, `internal/usecase/bill_usecase.go`, `splitbill_frontend/src/store/useBillStore.js`, and `docs/API.md`.
+If multiple agents/models execute at the same time, freeze the contracts first, then run tracks that do not share files. The main collision points are `migrations/`, `internal/delivery/http/router.go`, `internal/usecase/bill_usecase.go`, `frontend/src/store/useBillStore.js`, and `docs/API.md`.
 
 | Track | Items | Can start | Must not run concurrently with |
 |---|---|---|---|
@@ -344,7 +344,7 @@ Security rules for guest/share links:
 
 ## 7. Constraints and non-goals
 
-- **IDR only** is an explicit current product contract (`splitbill_frontend/business-flow.md`). Do not plan multi-currency unless that contract is intentionally reopened.
+- **IDR only** is an explicit current product contract (`frontend/business-flow.md`). Do not plan multi-currency unless that contract is intentionally reopened.
 - **No public mutation links.** Guest access is read-only.
 - **Backend is the authorization boundary.** Migration 021 locks the Supabase Data API; do not add RLS policies/grants without an equivalent Go-side check.
 - **Keep the existing bill contract.** `group_id` and attachments should be additive; `POST /bills` request-key/idempotency semantics must not regress.

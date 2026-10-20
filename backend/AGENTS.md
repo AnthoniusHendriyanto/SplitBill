@@ -2,21 +2,23 @@
 
 ## Mandatory: Document Updates
 
-After EVERY code change, update relevant `.md` files in the workspace root (the parent of this repository). Use workspace-relative paths, never another machine's absolute paths.
+After EVERY code change, update the relevant `.md` files in this monorepo. Use repository-root-relative
+paths, never another machine's absolute paths.
 
 ### Which files to update
 
 | File | Update when... |
 |------|----------------|
-| `progress-trackers.md` | ANY bug fix, feature, or audit item resolved |
-| `ocr-tests.md` | OCR prompt changes, new test cases added, test results |
-| `ai-workflows.md` | OCR pipeline, prompt, or model changes |
-| `code-standards.md` | Conventions, patterns, or tooling changes |
-| `ui-context.md` | New components, state changes, layout changes |
-| `business-flow.md` | Business logic, split algorithms, or payment flow changes |
-| `SECURITY.md` | Auth, rate limiting, or security boundary changes |
-| `DATABASE.md` | Schema, migration, or query changes |
-| `CONTRIBUTING.md` | Build commands, setup, or dep changes |
+| `backend/progress-trackers.md` | ANY bug fix, feature, or audit item resolved |
+| `frontend/progress-trackers.md` | ANY frontend bug fix, feature, or audit item resolved |
+| `backend/docs/API.md` | Route, request, or response contract changes |
+| `frontend/business-flow.md` | Business logic, split algorithms, or payment flow changes |
+| `frontend/ui-context.md` | New components, state changes, layout changes |
+| `backend/SECURITY.md` | Auth, rate limiting, or security boundary changes |
+| `backend/DATABASE.md` | Schema, migration, or query changes |
+| `backend/CONTRIBUTING.md` | Build commands, setup, or dep changes |
+| `frontend/CONTRIBUTING.md` | Frontend build commands, setup, or dep changes |
+| `FEATURE-GAP-ANALYSIS.md` | Feature status or release-gate progress |
 
 ### How to update
 
@@ -28,20 +30,25 @@ After EVERY code change, update relevant `.md` files in the workspace root (the 
 
 ## Project Structure
 
-### Repos
-- Backend: `splitbill_backend/` (Go)
-- Frontend: `splitbill_frontend/` (React + Vite)
+### Monorepo
+- Repository root: `SplitBill/` — one repository, one `main` branch, one push.
+- Backend: `backend/` (Go)
+- Frontend: `frontend/` (React + Vite)
 
-### Docs (workspace root)
-- `progress-trackers.md` — all fixes, pending items, known issues
-- `ocr-tests.md` — test cases, iterations, lessons learned for OCR
-- `ai-workflows.md` — OCR pipeline architecture and prompt details
-- `code-standards.md` — Go + React conventions, naming, patterns
-- `ui-context.md` — component tree, store shape, themes
-- `business-flow.md` — split algorithms, premium, payment flow
-- `SECURITY.md` — JWT design, rate limits, CSP, OWASP
-- `DATABASE.md` — schema, indexes, migrations
-- `CONTRIBUTING.md` — setup guide
+### Docs
+Backend:
+- `backend/progress-trackers.md` — all backend fixes, pending items, known issues
+- `backend/docs/API.md` — HTTP routes, payloads, and status codes
+- `backend/DATABASE.md` — schema, indexes, migrations
+- `backend/SECURITY.md` — JWT design, rate limits, CSP, OWASP
+- `backend/CONTRIBUTING.md` — setup, database notes, test harness
+
+Frontend and shared:
+- `frontend/progress-trackers.md` — frontend fixes, pending items, known issues
+- `frontend/business-flow.md` — split algorithms, premium, payment flow
+- `frontend/ui-context.md` — component tree, store shape, themes
+- `frontend/CONTRIBUTING.md` — frontend checks
+- `FEATURE-GAP-ANALYSIS.md` — feature status and release gate (repository root)
 
 ## Current assignment flow (October 2026)
 
