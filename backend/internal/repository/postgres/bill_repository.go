@@ -1,0 +1,477 @@
+package postgres
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/user/split-mate/internal/domain"
+)
+
+type billRepository struct {
+	Pool *pgxpool.Pool
+}
+
+func NewBillRepository(pool *pgxpool.Pool) domain.BillRepository {
+	return &billRepository{Pool: pool}
+}
+
+func (r *billRepository) Create(ctx context.Context, bill *domain.Bill) error {
+	if bill.ID == "" {
+		bill.ID = uuid.New().String()
+	}
+	query := `
+		INSERT INTO bills (id, user_id, title, merchant, category, total_amount, service_charge, service_mode, tax, tax_mode, discount, grand_total, status, split_type, bill_date, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+	`
+	_, err := r.Pool.Exec(ctx, query,
+		bill.ID, bill.UserID, bill.Title, bill.Merchant, bill.Category, bill.TotalAmount, bill.ServiceCharge, bill.ServiceMode,
+		bill.Tax, bill.TaxMode, bill.Discount, bill.GrandTotal, bill.Status,
+		bill.SplitType, bill.BillDate, bill.CreatedAt, bill.UpdatedAt)
+	return err
+}
+
+func (r *billRepository) GetByID(ctx context.Context, id string) (domain.Bill, error) {
+	query := `
+		SELECT id, user_id, title, merchant, category, total_amount, service_charge, service_mode, tax, tax_mode, discount, grand_total, status, split_type, bill_date::text, created_at, updated_at, group_id, receipt_mime
+		FROM bills WHERE id = $1
+	`
+	var bill domain.Bill
+	err := r.Pool.QueryRow(ctx, query, id).Scan(
+		&bill.ID, &bill.UserID, &bill.Title, &bill.Merchant, &bill.Category, &bill.TotalAmount, &bill.ServiceCharge, &bill.ServiceMode,
+		&bill.Tax, &bill.TaxMode, &bill.Discount, &bill.GrandTotal, &bill.Status,
+		&bill.SplitType, &bill.BillDate, &bill.CreatedAt, &bill.UpdatedAt, &bill.GroupID, &bill.ReceiptMime,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.Bill{}, domain.ErrNotFound
+	}
+	return bill, err
+}
+
+func (r *billRepository) GetByUserID(ctx context.Context, userID string, page, limit int, fromDate, toDate string) ([]domain.Bill, int, error) {
+	offset := (page - 1) * limit
+
+	baseQuery := `FROM bills WHERE (user_id = $1 OR id IN (SELECT bill_id FROM persons WHERE user_id = $1) OR group_id IN (SELECT group_id FROM group_members WHERE user_id = $1))`
+	args := []interface{}{userID}
+
+	if fromDate != "" {
+		baseQuery += fmt.Sprintf(" AND created_at >= $%d", len(args)+1)
+		args = append(args, fromDate)
+	}
+	if toDate != "" {
+		baseQuery += fmt.Sprintf(" AND created_at <= $%d", len(args)+1)
+		args = append(args, toDate)
+	}
+
+	countQuery := "SELECT COUNT(*) " + baseQuery
+	var total int
+	if err := r.Pool.QueryRow(ctx, countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	selectQuery := fmt.Sprintf(`
+		SELECT id, user_id, title, merchant, category, total_amount, service_charge, service_mode, tax, tax_mode, discount, grand_total, status, split_type, bill_date::text, created_at, updated_at, group_id, receipt_mime
+		%s ORDER BY created_at DESC, id DESC LIMIT $%d OFFSET $%d
+	`, baseQuery, len(args)+1, len(args)+2)
+	args = append(args, limit, offset)
+
+	rows, err := r.Pool.Query(ctx, selectQuery, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var bills []domain.Bill
+	for rows.Next() {
+		var bill domain.Bill
+		if err := rows.Scan(
+			&bill.ID, &bill.UserID, &bill.Title, &bill.Merchant, &bill.Category, &bill.TotalAmount, &bill.ServiceCharge, &bill.ServiceMode,
+			&bill.Tax, &bill.TaxMode, &bill.Discount, &bill.GrandTotal, &bill.Status,
+			&bill.SplitType, &bill.BillDate, &bill.CreatedAt, &bill.UpdatedAt, &bill.GroupID, &bill.ReceiptMime,
+		); err != nil {
+			return nil, 0, err
+		}
+		bills = append(bills, bill)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	return bills, total, nil
+}
+
+func (r *billRepository) GetByUserIDAndID(ctx context.Context, userID, billID string) (domain.Bill, error) {
+	query := `
+		SELECT id, user_id, title, merchant, category, total_amount, service_charge, service_mode, tax, tax_mode, discount, grand_total, status, split_type, bill_date::text, created_at, updated_at, group_id, receipt_mime, COALESCE(update_request_key::text,''), COALESCE(update_request_hash,''), COALESCE(updated_response,'{}'::jsonb)
+		FROM bills WHERE id = $1 AND (user_id = $2 OR id IN (SELECT bill_id FROM persons WHERE user_id = $2) OR group_id IN (SELECT group_id FROM group_members WHERE user_id = $2))
+	`
+	var bill domain.Bill
+	err := r.Pool.QueryRow(ctx, query, billID, userID).Scan(
+		&bill.ID, &bill.UserID, &bill.Title, &bill.Merchant, &bill.Category, &bill.TotalAmount, &bill.ServiceCharge, &bill.ServiceMode,
+		&bill.Tax, &bill.TaxMode, &bill.Discount, &bill.GrandTotal, &bill.Status,
+		&bill.SplitType, &bill.BillDate, &bill.CreatedAt, &bill.UpdatedAt, &bill.GroupID, &bill.ReceiptMime, &bill.UpdateRequestKey, &bill.UpdateRequestHash, &bill.UpdatedResponse,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.Bill{}, domain.ErrNotFound
+	}
+	return bill, err
+}
+
+func (r *billRepository) UpdateFull(ctx context.Context, bill *domain.Bill, items []domain.Item, persons []domain.Person, assignments []domain.ItemAssignment) error {
+	tx, err := r.Pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return fmt.Errorf("begin update tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, bill.UserID); err != nil {
+		return err
+	}
+	var oldHash string
+	var oldResponse []byte
+	err = tx.QueryRow(ctx, `SELECT COALESCE(update_request_hash,''),updated_response FROM bills WHERE id=$1 AND user_id=$2`, bill.ID, bill.UserID).Scan(&oldHash, &oldResponse)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+	var oldKey string
+	if err := tx.QueryRow(ctx, `SELECT COALESCE(update_request_key::text,'') FROM bills WHERE id=$1`, bill.ID).Scan(&oldKey); err != nil {
+		return err
+	}
+	if oldKey == bill.UpdateRequestKey && oldKey != "" {
+		if oldHash != bill.UpdateRequestHash {
+			return fmt.Errorf("%w: update request key already used for another payload", domain.ErrInvalidInput)
+		}
+		if len(oldResponse) > 0 {
+			return json.Unmarshal(oldResponse, bill)
+		}
+	}
+	var hasPaidPayment bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM payments WHERE bill_id=$1 AND is_paid=true)`, bill.ID).Scan(&hasPaidPayment); err != nil {
+		return err
+	}
+	if hasPaidPayment {
+		return fmt.Errorf("%w: bills with settled payments cannot be edited", domain.ErrInvalidInput)
+	}
+	type groupMapping struct{ groupID, memberID, userID, name string }
+	mappings := make([]groupMapping, 0)
+	mappingRows, err := tx.Query(ctx, `SELECT gbm.group_id,gbm.group_member_id,COALESCE(p.user_id::text,''),p.name FROM group_bill_members gbm JOIN persons p ON p.id=gbm.person_id WHERE gbm.bill_id=$1`, bill.ID)
+	if err != nil {
+		return err
+	}
+	for mappingRows.Next() {
+		var mapping groupMapping
+		if err := mappingRows.Scan(&mapping.groupID, &mapping.memberID, &mapping.userID, &mapping.name); err != nil {
+			mappingRows.Close()
+			return err
+		}
+		mappings = append(mappings, mapping)
+	}
+	if err := mappingRows.Err(); err != nil {
+		mappingRows.Close()
+		return err
+	}
+	mappingRows.Close()
+	if _, err := tx.Exec(ctx, `UPDATE bills SET title=$1,merchant=$2,total_amount=$3,service_charge=$4,service_mode=$5,tax=$6,tax_mode=$7,discount=$8,grand_total=$9,status=$10,split_type=$11,bill_date=$12,updated_at=$13,update_request_key=$14,update_request_hash=$15,receipt_image=CASE WHEN $16::bytea IS NULL THEN receipt_image ELSE $16 END,receipt_mime=CASE WHEN $17='' THEN receipt_mime ELSE $17 END,category=$18 WHERE id=$19 AND user_id=$20`, bill.Title, bill.Merchant, bill.TotalAmount, bill.ServiceCharge, bill.ServiceMode, bill.Tax, bill.TaxMode, bill.Discount, bill.GrandTotal, bill.Status, bill.SplitType, bill.BillDate, bill.UpdatedAt, bill.UpdateRequestKey, bill.UpdateRequestHash, nullableBytes(bill.ReceiptImage), bill.ReceiptMime, bill.Category, bill.ID, bill.UserID); err != nil {
+		return fmt.Errorf("update bill: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM notifications WHERE bill_id=$1`, bill.ID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM payments WHERE bill_id=$1`, bill.ID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM item_assignments WHERE item_id IN (SELECT id FROM items WHERE bill_id=$1)`, bill.ID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM items WHERE bill_id=$1`, bill.ID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM persons WHERE bill_id=$1`, bill.ID); err != nil {
+		return err
+	}
+
+	itemIDMap := make(map[string]string, len(items))
+	for i := range items {
+		oldID := items[i].ID
+		items[i].ID = uuid.NewString()
+		items[i].BillID = bill.ID
+		itemIDMap[oldID] = items[i].ID
+		qty := items[i].Quantity
+		if qty < 1 {
+			qty = 1
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO items(id,bill_id,name,price,quantity,created_at) VALUES($1,$2,$3,$4,$5,$6)`, items[i].ID, bill.ID, items[i].Name, items[i].Price, qty, items[i].CreatedAt); err != nil {
+			return err
+		}
+	}
+	personIDMap := make(map[string]string, len(persons))
+	for i := range persons {
+		oldID := persons[i].ID
+		persons[i].ID = uuid.NewString()
+		persons[i].BillID = bill.ID
+		personIDMap[oldID] = persons[i].ID
+		if persons[i].PaymentInfo == nil {
+			persons[i].PaymentInfo = map[string]interface{}{}
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO persons(id,bill_id,name,email,is_payer,percentage,payment_info,created_at,user_id,custom_amount,share_amount) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`, persons[i].ID, bill.ID, persons[i].Name, persons[i].Email, persons[i].IsPayer, persons[i].Percentage, persons[i].PaymentInfo, persons[i].CreatedAt, persons[i].UserID, persons[i].CustomAmount, persons[i].ShareAmount); err != nil {
+			return err
+		}
+	}
+	for _, mapping := range mappings {
+		for _, person := range persons {
+			matchesUser := mapping.userID != "" && person.UserID != nil && *person.UserID == mapping.userID
+			matchesName := mapping.userID == "" && person.Name == mapping.name
+			if matchesUser || matchesName {
+				if _, err := tx.Exec(ctx, `INSERT INTO group_bill_members(group_id,bill_id,group_member_id,person_id) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING`, mapping.groupID, bill.ID, mapping.memberID, person.ID); err != nil {
+					return err
+				}
+				break
+			}
+		}
+	}
+	for i := range assignments {
+		assignments[i].ID = uuid.NewString()
+		assignments[i].ItemID = itemIDMap[assignments[i].ItemID]
+		assignments[i].PersonID = personIDMap[assignments[i].PersonID]
+		if _, err := tx.Exec(ctx, `INSERT INTO item_assignments(id,item_id,person_id,created_at) VALUES($1,$2,$3,$4)`, assignments[i].ID, assignments[i].ItemID, assignments[i].PersonID, assignments[i].CreatedAt); err != nil {
+			return err
+		}
+	}
+	for i := range bill.Payments {
+		payment := &bill.Payments[i]
+		payment.ID = uuid.NewString()
+		payment.BillID = bill.ID
+		payment.FromPersonID = personIDMap[payment.FromPersonID]
+		payment.ToPersonID = personIDMap[payment.ToPersonID]
+		if _, err := tx.Exec(ctx, `INSERT INTO payments(id,bill_id,from_person_id,to_person_id,amount,is_paid,created_at) VALUES($1,$2,$3,$4,$5,false,$6)`, payment.ID, bill.ID, payment.FromPersonID, payment.ToPersonID, payment.Amount, payment.CreatedAt); err != nil {
+			return err
+		}
+	}
+	for _, person := range persons {
+		if person.UserID != nil && *person.UserID != bill.UserID && person.ShareAmount != nil && *person.ShareAmount > 0 {
+			if _, err := tx.Exec(ctx, `INSERT INTO notifications(id,user_id,actor_user_id,bill_id,amount) VALUES($1,$2,$3,$4,$5)`, uuid.NewString(), *person.UserID, bill.UserID, bill.ID, *person.ShareAmount); err != nil {
+				return err
+			}
+		}
+	}
+	bill.Items, bill.Persons = items, persons
+	snapshot, err := json.Marshal(bill)
+	if err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE bills SET updated_response=$1 WHERE id=$2`, snapshot, bill.ID); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func nullableBytes(data []byte) []byte {
+	if len(data) == 0 {
+		return nil
+	}
+	return data
+}
+
+func (r *billRepository) Update(ctx context.Context, bill *domain.Bill) error {
+	query := `
+		UPDATE bills SET title = $1, merchant = $2, total_amount = $3, service_charge = $4, service_mode = $5,
+		       tax = $6, tax_mode = $7, discount = $8, grand_total = $9, status = $10,
+		       split_type = $11, bill_date = $12, updated_at = $13, category = $14 WHERE id = $15
+	`
+	_, err := r.Pool.Exec(ctx, query, bill.Title, bill.Merchant, bill.TotalAmount, bill.ServiceCharge, bill.ServiceMode,
+		bill.Tax, bill.TaxMode, bill.Discount, bill.GrandTotal, bill.Status,
+		bill.SplitType, bill.BillDate, bill.UpdatedAt, bill.Category, bill.ID)
+	return err
+}
+
+func (r *billRepository) Delete(ctx context.Context, id string) error {
+	query := `DELETE FROM bills WHERE id = $1`
+	_, err := r.Pool.Exec(ctx, query, id)
+	return err
+}
+
+func (r *billRepository) CreateFull(ctx context.Context, bill *domain.Bill, items []domain.Item, persons []domain.Person, assignments []domain.ItemAssignment) error {
+	tx, err := r.Pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+	// Serialize retries before checking the committed request snapshot.
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, bill.UserID); err != nil {
+		return err
+	}
+	var previousHash string
+	var snapshot []byte
+	err = tx.QueryRow(ctx, `SELECT request_hash,saved_response FROM bills WHERE user_id=$1 AND request_key=$2`, bill.UserID, bill.RequestKey).Scan(&previousHash, &snapshot)
+	if err == nil {
+		if previousHash != bill.RequestHash {
+			return fmt.Errorf("%w: request key already used for another payload", domain.ErrInvalidInput)
+		}
+		return json.Unmarshal(snapshot, bill)
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return err
+	}
+	var limit, count int
+	if err := tx.QueryRow(ctx, `SELECT COALESCE(t.monthly_bill_limit,50),COALESCE(ut.count,0) FROM users u LEFT JOIN tier_limits t ON t.tier=CASE WHEN u.tier='premium' AND u.premium_expires_at>NOW() THEN 'premium' ELSE 'free' END LEFT JOIN usage_tracking ut ON ut.user_id=u.id AND ut.action='create_bill' AND ut.month=$2 WHERE u.id=$1`, bill.UserID, bill.CreatedAt.Format("2006-01")).Scan(&limit, &count); err != nil {
+		return err
+	}
+	if limit >= 0 && count >= limit {
+		return domain.ErrBillLimitExceeded
+	}
+
+	bill.ID = uuid.New().String()
+	billQuery := `
+		INSERT INTO bills (id, user_id, title, merchant, category, total_amount, service_charge, service_mode, tax, tax_mode, discount, grand_total, status, split_type, bill_date, created_at, updated_at,request_key,request_hash,group_id,receipt_image,receipt_mime)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17,$18,$19,$20,$21,$22)
+	`
+	if _, err := tx.Exec(ctx, billQuery,
+		bill.ID, bill.UserID, bill.Title, bill.Merchant, bill.Category, bill.TotalAmount, bill.ServiceCharge, bill.ServiceMode,
+		bill.Tax, bill.TaxMode, bill.Discount, bill.GrandTotal, bill.Status,
+		bill.SplitType, bill.BillDate, bill.CreatedAt, bill.UpdatedAt, bill.RequestKey, bill.RequestHash, bill.GroupID, bill.ReceiptImage, bill.ReceiptMime); err != nil {
+		return fmt.Errorf("insert bill: %w", err)
+	}
+
+	itemIDMap := make(map[string]string, len(items))
+	for i := range items {
+		oldID := items[i].ID
+		items[i].ID = uuid.New().String()
+		items[i].BillID = bill.ID
+		itemIDMap[oldID] = items[i].ID
+		qty := items[i].Quantity
+		if qty < 1 {
+			qty = 1
+		}
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO items (id, bill_id, name, price, quantity, created_at)
+			VALUES ($1, $2, $3, $4, $5, $6)
+		`, items[i].ID, items[i].BillID, items[i].Name, items[i].Price, qty, items[i].CreatedAt); err != nil {
+			return fmt.Errorf("insert item: %w", err)
+		}
+	}
+
+	personIDMap := make(map[string]string, len(persons))
+	for i := range persons {
+		if persons[i].PaymentInfo == nil {
+			persons[i].PaymentInfo = map[string]interface{}{}
+		}
+		oldID := persons[i].ID
+		persons[i].ID = uuid.New().String()
+		persons[i].BillID = bill.ID
+		personIDMap[oldID] = persons[i].ID
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO persons (id, bill_id, name, email, is_payer, percentage, payment_info, created_at,user_id,custom_amount,share_amount)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8,$9,$10,$11)
+		`, persons[i].ID, persons[i].BillID, persons[i].Name, persons[i].Email, persons[i].IsPayer, persons[i].Percentage, persons[i].PaymentInfo, persons[i].CreatedAt, persons[i].UserID, persons[i].CustomAmount, persons[i].ShareAmount); err != nil {
+			return fmt.Errorf("insert person: %w", err)
+		}
+	}
+
+	for i := range assignments {
+		assignments[i].ID = uuid.New().String()
+		if newItemID, ok := itemIDMap[assignments[i].ItemID]; ok {
+			assignments[i].ItemID = newItemID
+		}
+		if newPersonID, ok := personIDMap[assignments[i].PersonID]; ok {
+			assignments[i].PersonID = newPersonID
+		}
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO item_assignments (id, item_id, person_id, created_at)
+			VALUES ($1, $2, $3, $4)
+		`, assignments[i].ID, assignments[i].ItemID, assignments[i].PersonID, assignments[i].CreatedAt); err != nil {
+			return fmt.Errorf("insert assignment: %w", err)
+		}
+	}
+
+	for i := range bill.Payments {
+		p := &bill.Payments[i]
+		p.ID = uuid.NewString()
+		p.BillID = bill.ID
+		p.FromPersonID = personIDMap[p.FromPersonID]
+		p.ToPersonID = personIDMap[p.ToPersonID]
+		if _, err := tx.Exec(ctx, `INSERT INTO payments(id,bill_id,from_person_id,to_person_id,amount,is_paid,created_at) VALUES($1,$2,$3,$4,$5,false,$6)`, p.ID, bill.ID, p.FromPersonID, p.ToPersonID, p.Amount, p.CreatedAt); err != nil {
+			return err
+		}
+	}
+	for _, p := range persons {
+		if p.UserID != nil && *p.UserID != bill.UserID && p.ShareAmount != nil && *p.ShareAmount > 0 {
+			if _, err := tx.Exec(ctx, `INSERT INTO notifications(id,user_id,actor_user_id,bill_id,amount) VALUES($1,$2,$3,$4,$5)`, uuid.NewString(), *p.UserID, bill.UserID, bill.ID, *p.ShareAmount); err != nil {
+				return err
+			}
+		}
+	}
+	bill.Items = items
+	bill.Persons = persons
+	snapshot, err = json.Marshal(bill)
+	if err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE bills SET saved_response=$1 WHERE id=$2`, snapshot, bill.ID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO usage_tracking(user_id,action,count,month) VALUES($1,'create_bill',1,$2) ON CONFLICT(user_id,action,month) DO UPDATE SET count=usage_tracking.count+1`, bill.UserID, bill.CreatedAt.Format("2006-01")); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func (r *billRepository) GetReceipt(ctx context.Context, userID, billID string) ([]byte, string, error) {
+	var data []byte
+	var mime string
+	err := r.Pool.QueryRow(ctx, `
+		SELECT receipt_image, receipt_mime FROM bills
+		WHERE id = $1 AND (user_id = $2 OR id IN (SELECT bill_id FROM persons WHERE user_id = $2) OR group_id IN (SELECT group_id FROM group_members WHERE user_id = $2))
+	`, billID, userID).Scan(&data, &mime)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, "", domain.ErrNotFound
+	}
+	return data, mime, err
+}
+
+func (r *billRepository) FindRequest(ctx context.Context, userID, key, hash string) (*domain.Bill, error) {
+	var oldHash string
+	var data []byte
+	err := r.Pool.QueryRow(ctx, `SELECT request_hash,saved_response FROM bills WHERE user_id=$1 AND request_key=$2`, userID, key).Scan(&oldHash, &data)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if oldHash != hash {
+		return nil, fmt.Errorf("%w: request key already used for another payload", domain.ErrInvalidInput)
+	}
+	var bill domain.Bill
+	err = json.Unmarshal(data, &bill)
+	return &bill, err
+}
+
+func (r *billRepository) CreatePayments(ctx context.Context, billID string, payments []domain.Payment) error {
+	tx, err := r.Pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	for _, payment := range payments {
+		if payment.ID == "" {
+			payment.ID = uuid.New().String()
+		}
+		payment.BillID = billID
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO payments (id, bill_id, from_person_id, to_person_id, amount, is_paid, paid_at, created_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		`, payment.ID, payment.BillID, payment.FromPersonID, payment.ToPersonID,
+			payment.Amount, payment.IsPaid, payment.PaidAt, payment.CreatedAt); err != nil {
+			return fmt.Errorf("insert payment: %w", err)
+		}
+	}
+
+	return tx.Commit(ctx)
+}
